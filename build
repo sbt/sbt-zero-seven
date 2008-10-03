@@ -1,0 +1,2 @@
+scalac -d classes/ sbt/*.scala && \
+jar -cf sbt.jar scalac-plugin.xml -C classes sbt
