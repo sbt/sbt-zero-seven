@@ -60,12 +60,7 @@ class DefaultProject(val info: ProjectInfo, val analysis: ProjectAnalysis) exten
 	
 	def runOptions: Seq[String] = Nil
 	// TODO: move the plugin options to Project so that they are always present.
-	def compileOptions = (CompileOption("-Xplugin:" + jar.getCanonicalPath) ::
-		CompileOption("-P:sbt-analyzer:project:" + info.id.toString) ::
-		CompileOption("-P:sbt-analyzer:class:" + testClassName) ::
-		Deprecation :: Nil) ++
-		extraCompileOptions
-	def extraCompileOptions: Seq[CompileOption] = Nil
+	def compileOptions = Deprecation :: Nil
 	def documentOptions: Seq[ScaladocOption] =
 		LinkSource ::
 		documentTitle(info.name + " " + info.currentVersion + " API") ::

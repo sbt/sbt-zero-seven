@@ -271,7 +271,10 @@ trait Project extends Logger
 		{
 			val dependencies = dependencyPath ** "*.jar"
 			val classpathString = Path.makeString((outputDirectory +++ dependencies).get)
-			val r = Compile(dirtySources, classpathString, outputDirectory, options.map(_.asString), Project.this)
+			val allOptions = (CompileOption("-Xplugin:" + jar.getCanonicalPath) ::
+				CompileOption("-P:sbt-analyzer:project:" + info.id.toString) ::
+				CompileOption("-P:sbt-analyzer:class:" + testClassName) :: Nil) ++ options
+			val r = Compile(dirtySources, classpathString, outputDirectory, allOptions.map(_.asString), Project.this)
 			if(atLevel(Level.Debug))
 			{
 				val classes = scala.collection.mutable.HashSet(analysis.allClasses.toSeq: _*)

@@ -154,11 +154,9 @@ class Analyzer(val global: Global) extends Plugin
 	}
 	private def packagePath(outputPath: Path, s: Symbol): Path =
 	{
-		val basePath: Path =
-			if(s.owner.isRoot || s.owner.isEmptyPackageClass)
-				outputPath
-			else
-				packagePath(outputPath, s.owner.enclClass)
-		basePath / s.simpleName.toString
+		if(s.isEmptyPackageClass || s.isRoot)
+			outputPath
+		else
+			packagePath(outputPath, s.owner.enclClass) / s.simpleName.toString
 	}
 }
