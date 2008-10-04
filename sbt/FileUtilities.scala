@@ -140,6 +140,12 @@ object FileUtilities
 			}
 		}
 	}
+	def createDirectories(d: List[File], log: Logger): Option[String] =
+		d match
+		{
+			case Nil => None
+			case head :: tail => createDirectory(head, log) orElse createDirectories(tail, log)
+		}
 
 	def printableFilename(file: File) =
 	{

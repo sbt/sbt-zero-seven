@@ -4,7 +4,7 @@ import java.io.File
 import FileUtilities._
 
 final case class ProjectInfo(name: String, currentVersion: Version, builderClassName: String, projectDirectory: File)
-	(private[sbt] val id: Int) extends NotNull
+	(private[sbt] val id: Int, private[sbt] val initializeDirectories: Boolean) extends NotNull
 {
 	import ProjectInfo._
 	val projectPath = new ProjectDirectory(projectDirectory)
@@ -19,11 +19,15 @@ object ProjectInfo
 	val ProjectInfoFileName = "info"
 	
 	def write(info: ProjectInfo, log: Logger): Option[String] =
+		FileUtilities.createDirectory(info.builderPath.asFile, log) orElse doWrite(info, log)
+	private def doWrite(info: ProjectInfo, log: Logger): Option[String] =
 	{
 		import java.io.{BufferedWriter, FileWriter}
-		
 		val writerE: Either[String, BufferedWriter] =
-			try { Right(new BufferedWriter(new FileWriter(new File(info.builderPath.asFile, ProjectInfoFileName)))) }
+			try
+			{
+				Right(new BufferedWriter(new FileWriter(new File(info.builderPath.asFile, ProjectInfoFileName))))
+			}
 			catch { case e: Exception => log.trace(e); Left(e.getMessage) }
 		
 		writerE.right.flatMap( writer =>
@@ -45,28 +49,50 @@ object ProjectInfo
 			{
 				case e: Exception => log.trace(e); Left(e.getMessage)
 			}
+			finally { writer.close }
 		}).left.toOption
 	}
 	def load(projectDirectory: File, id: Int, log: Logger): Either[String, ProjectInfo] =
 	{
 		val builderDirectory = new File(projectDirectory, MetadataDirectoryName)
-		if(!builderDirectory.isDirectory)
-			Left("'" + printableFilename(builderDirectory) + "' is not a directory.")
-		else
+		checkBuilderDirectory(projectDirectory, builderDirectory, log).right.flatMap
 		{
-			val projectInfoFile = new File(builderDirectory, ProjectInfoFileName)
-			if(!projectInfoFile.exists)
-				Left("Project information file '" + printableFilename(projectInfoFile) + "' does not exist.")
-			else
+			(initializeDirectories: Boolean) =>
 			{
-				if(projectInfoFile.isDirectory)
-					Left("Project information file '" + printableFilename(projectInfoFile) + "' is a directory.")
+				if(!builderDirectory.isDirectory)
+					Left("'" + printableFilename(builderDirectory) + "' is not a directory.")
 				else
-					loadProjectInfo(projectDirectory, builderDirectory, projectInfoFile, id, log)
+				{
+					val projectInfoFile = new File(builderDirectory, ProjectInfoFileName)
+					if(!projectInfoFile.exists)
+						Left("Project information file '" + printableFilename(projectInfoFile) + "' does not exist.")
+					else
+					{
+						if(projectInfoFile.isDirectory)
+							Left("Project information file '" + printableFilename(projectInfoFile) + "' is a directory.")
+						else
+							loadProjectInfo(projectDirectory, builderDirectory, projectInfoFile,
+								id, initializeDirectories, log)
+					}
+				}
 			}
 		}
 	}
-	private def loadProjectInfo(workingDirectory: File, builderDirectory: File, projectInfoFile: File, id: Int, log: Logger) =
+	private def checkBuilderDirectory(projectDirectory: File, builderDirectory: File, log: Logger):
+		Either[String, Boolean] =
+	{
+		if(builderDirectory.exists)
+			Right(false)
+		else
+		{
+			if(setupProject(projectDirectory, log))
+				Right(true)
+			else
+				Left("No project found.")
+		}
+	}
+	private def loadProjectInfo(workingDirectory: File, builderDirectory: File,
+		projectInfoFile: File, id: Int, initialize: Boolean, log: Logger) =
 	{
 		import scala.io.Source
 		val linesE: Either[String, List[String]] =
@@ -91,10 +117,81 @@ object ProjectInfo
 				val name :: versionString :: tail = lines
 				val builderClassName = tail.firstOption.getOrElse(DefaultBuilderClassName)
 				for(version <- Version.fromString(versionString).right) yield
-					ProjectInfo(name, version, builderClassName, workingDirectory)(id)
+					ProjectInfo(name, version, builderClassName, workingDirectory)(id, initialize)
 			}
 			else
 				Left("Project information file invalid: expected name, version, and (optionally) builder class.")
 		})
 	}
+	private def setupProject(projectDirectory: File, log: Logger): Boolean =
+	{
+		if(confirmPrompt("No project found. Create new project?", false))
+		{
+			val name = trim(Console.readLine("Project Name: "))
+			if(name.length == 0)
+				false
+			else
+			{
+				readVersion(projectDirectory, log) match
+				{
+					case Some(version) =>
+						if(verifyCreateProject(name, version))
+							createProject(name, version, projectDirectory, log)
+						else
+							setupProject(projectDirectory, log)
+					case None => false
+				}
+			}
+		}
+		else
+			false
+	}
+	private def verifyCreateProject(name: String, version: Version): Boolean =
+		confirmPrompt("Create new project " + name + " " + version + " ?", true)
+	
+	private def confirmPrompt(question: String, defaultYes: Boolean) =
+	{
+		val choices = if(defaultYes) " (Y/n) " else " (y/N) "
+		val answer = trim(Console.readLine(question + choices))
+		val yes = "y" :: "yes" :: (if(defaultYes) List("") else Nil)
+		yes.contains(answer.toLowerCase)
+	}
+	
+	private def createProject(name: String, version: Version, projectDirectory: File, log: Logger): Boolean =
+	{
+		val tempInfo = ProjectInfo(name, version, DefaultBuilderClassName, projectDirectory)(-1, false)
+		write(tempInfo, log) match
+		{
+			case Some(errorMessage) =>
+			{
+				log.error("Could not write project info: " + errorMessage)
+				false
+			}
+			case None =>
+			{
+				log.info("Wrote project information to " + tempInfo.infoPath.relativePath)
+				true
+			}
+		}
+	}
+	
+	private def readVersion(projectDirectory: File, log: Logger): Option[Version] =
+	{
+		val version = trim(Console.readLine("Version: "))
+		if(version.length == 0)
+			None
+		else
+		{
+			Version.fromString(version) match
+			{
+				case Left(errorMessage) =>
+				{
+					log.error("Invalid version: " + errorMessage)
+					readVersion(projectDirectory, log)
+				}
+				case Right(v) => Some(v)
+			}
+		}
+	}
+	private def trim(s: String) = if(s == null) "" else s.trim
 }

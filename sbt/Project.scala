@@ -355,6 +355,26 @@ trait Project extends Logger
 		}
 	}
 	
+	def initializeDirectories()
+	{
+		val toCreate =
+			dependencyPath ::
+			sourcePath ::
+			mainSourcePath ::
+			mainScalaSourcePath ::
+			mainResourcesPath ::
+			testSourcePath ::
+			testScalaSourcePath ::
+			testResourcesPath ::
+			Nil
+		
+		FileUtilities.createDirectories(toCreate.map(_.asFile), this) match
+		{
+			case Some(errorMessage) => error("Could not initialize directory structure: " + errorMessage)
+			case None => success("Successfully initialized directory structure.")
+		}
+	}
+	
 	def testClassName = "org.scalacheck.Properties"
 	
 	def defaultJarBaseName = info.name + "-" + info.currentVersion.toString
@@ -433,6 +453,8 @@ object Project
 				require(classOf[Project].isAssignableFrom(builderClass), "Builder class '" + builderClass + "' does not extend Project.")
 				val constructor = builderClass.getDeclaredConstructor(classOf[ProjectInfo], classOf[ProjectAnalysis])
 				val project = constructor.newInstance(info, analysis).asInstanceOf[Project]
+				if(info.initializeDirectories)
+					project.initializeDirectories()
 				projectMap(info.id) = project
 				project
 			}
