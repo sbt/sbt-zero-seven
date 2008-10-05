@@ -1,6 +1,6 @@
 package sbt
 
-import java.io.{File, FileReader, FileWriter, Reader, Writer}
+import java.io.{File, FileInputStream, FileOutputStream, InputStream, OutputStream}
 import java.util.Properties
 import ProjectAnalysis._
 import scala.collection.mutable.{HashMap, HashSet, ListBuffer, Map, Set}
@@ -99,8 +99,11 @@ final class ProjectAnalysis
 		ProjectAnalysis.load(properties, from, log) orElse
 		{
 			val base = info.projectPath
-			for(name <- scala.collection.jcl.Set(properties.stringPropertyNames))
+			import java.util.Collections.list
+			import scala.collection.jcl.Conversions.convertList
+			for(nameKey <- convertList(list(properties.propertyNames)))
 			{
+				val name = nameKey.toString
 				val key = Path.fromString(base, name)
 				map.put(key, stringToSet(properties.getProperty(name)))
 			}
@@ -123,13 +126,13 @@ object ProjectAnalysis
 	val NoTimestamp = -1
 	
 	private def write(properties: Properties, label: String, to: Path, log: Logger) =
-		FileUtilities.write(to.asFile, log)((writer: Writer) => { properties.store(writer, label); None })
+		FileUtilities.writeStream(to.asFile, log)((output: OutputStream) => { properties.store(output, label); None })
 	
 	private def load(properties: Properties, from: Path, log: Logger): Option[String] =
 	{
 		val file = from.asFile
 		if(file.exists)
-			FileUtilities.read(file, log)( (reader: Reader) => { properties.load(reader); None })
+			FileUtilities.readStream(file, log)( (input: InputStream) => { properties.load(input); None })
 		else
 			None
 	}

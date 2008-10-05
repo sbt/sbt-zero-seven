@@ -194,30 +194,22 @@ object FileUtilities
 		}
 	}
 	
-	def fileWriter(file: File, log: Logger): Either[String, Writer] =
+	def open[T](file: File, log: Logger, constructor: File => T): Either[String, T] =
 	{
-		try { Right(new FileWriter(file)) }
+		try { Right(constructor(file)) }
 		catch
 		{
 			case e: Exception => 
 			{
 				log.trace(e)
-				Left("Error writing " + printableFilename(file) + ": " + e.getMessage)
+				Left("Error opening " + printableFilename(file) + ": " + e.getMessage)
 			}
 		}
 	}
-	def fileReader(file: File, log: Logger): Either[String, Reader] =
-	{
-		try { Right(new FileReader(file)) }
-		catch
-		{
-			case e: Exception => 
-			{
-				log.trace(e)
-				Left("Error reading " + printableFilename(file) + ": " + e.getMessage)
-			}
-		}
-	}
+	def fileInputStream(file: File, log: Logger) = open(file, log, (f: File) => new FileInputStream(f))
+	def fileOutputStream(file: File, log: Logger) = open(file, log, (f: File) => new FileOutputStream(f))
+	def fileWriter(file: File, log: Logger) = open(file, log, (f: File) => new FileWriter(f))
+	def fileReader(file: File, log: Logger) = open(file, log, (f: File) => new FileReader(f))
 	private def io[T <: Closeable](file: File, open: (File, Logger) => Either[String, T],
 		f: T => Option[String], op: String, log: Logger): Option[String] =
 	{
@@ -244,6 +236,11 @@ object FileUtilities
 		io(file, fileWriter, f, "writing", log)
 	def read(file: File, log: Logger)(f: Reader => Option[String]): Option[String] =
 		io(file, fileReader, f, "reading", log)
+		
+	def writeStream(file: File, log: Logger)(f: OutputStream => Option[String]): Option[String] =
+		io(file, fileOutputStream, f, "writing", log)
+	def readStream(file: File, log: Logger)(f: InputStream => Option[String]): Option[String] =
+		io(file, fileInputStream, f, "reading", log)
 	
 	def wrapNull(a: Array[File]): Array[File] =
 		if(a == null)
