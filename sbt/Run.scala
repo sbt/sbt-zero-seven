@@ -1,52 +1,60 @@
 package sbt
 
-import scala.tools.nsc.{interpreter, util, GenericRunnerCommand, InterpreterLoop, ObjectRunner}
+import scala.tools.nsc.{interpreter, util, GenericRunnerCommand, InterpreterLoop, ObjectRunner, Settings}
 import util.ClassPath
 import java.net.URL
 
 object Run
 {
 	def console(classpath: Iterable[Path], log: Logger) =
-	{
-		val command = new GenericRunnerCommand(Nil, message => log.error(message))
-		if(command.ok)
+		createSettings(log)
 		{
-			val settings = command.settings
-			settings.classpath.value = Path.makeString(classpath)
-			log.info("Starting scala interpreter...")
-			log.debug("  Classpath: " + settings.classpath.value)
-			log.info("")
-			try
+			(settings: Settings) =>
 			{
-				val loop = new InterpreterLoop
-				loop.main(settings)
-				// if JLine is used on a unix platform, we need to call restoreTerminal on
-				// the underlying UnixTerminal, otherwise inputted characters won't be echoed.
-				loop.in match
+				settings.classpath.value = Path.makeString(classpath)
+				log.info("Starting scala interpreter...")
+				log.debug("  Classpath: " + settings.classpath.value)
+				log.info("")
+				try
 				{
-					case reader: interpreter.JLineReader => restoreTerminal(reader)
-					case _ => ()
+					val loop = new InterpreterLoop
+					loop.main(settings)
+					// if JLine is used on a unix platform, we need to call restoreTerminal on
+					// the underlying UnixTerminal, otherwise inputted characters won't be echoed.
+					loop.in match
+					{
+						case reader: interpreter.JLineReader => restoreTerminal(reader)
+						case _ => ()
+					}
+					None
 				}
-				None
-			}
-			catch
-			{
-				case e: Exception => log.trace(e); Some("Error during run: " + e.getMessage)
+				catch
+				{
+					case e: Exception => log.trace(e); Some("Error during session: " + e.getMessage)
+				}
 			}
 		}
-		else
-			Some(command.usageMsg)
-	}
 	def run(mainClass: String, classpath: Iterable[Path], options: Seq[String], log: Logger) =
 	{
-		try
+		createSettings(log)
 		{
-			ObjectRunner.run(classpath.map(_.asFile.toURI.toURL).toList, mainClass, options.toList)
-			None
-		}
-		catch
-		{
-			case e: Exception => log.trace(e); Some("Error during run: " + e.getMessage)
+			(settings: Settings) =>
+			{
+				try
+				{
+					val classpathURLs = classpath.map(_.asURL).toList
+					val bootClasspath = FileUtilities.pathSplit(settings.bootclasspath.value)
+					val extraURLs =
+						for(pathString <- bootClasspath if pathString.length > 0) yield
+							(new java.io.File(pathString)).toURI.toURL
+					ObjectRunner.run(classpathURLs ++ extraURLs, mainClass, options.toList)
+					None
+				}
+				catch
+				{
+					case e: Exception => log.trace(e); Some("Error during run: " + e.getMessage)
+				}
+			}
 		}
 	}
 	def apply(mainClassOption: Option[String], classpath: Iterable[Path], options: Seq[String], log: Logger) =
@@ -56,6 +64,14 @@ object Run
 			case Some(mainClass) => run(mainClass, classpath, options, log)
 			case None => console(classpath, log)
 		}
+	}
+	private def createSettings(log: Logger)(f: Settings => Option[String]) =
+	{
+		val command = new GenericRunnerCommand(Nil, message => log.error(message))
+		if(command.ok)
+			f(command.settings)
+		else
+			Some(command.usageMsg)
 	}
 	private def restoreTerminal(reader: interpreter.JLineReader)
 	{
