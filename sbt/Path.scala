@@ -12,6 +12,7 @@ sealed abstract class Path extends PathFinder with NotNull
 	private[sbt] def addTo(buffer: Buffer[Path]) { buffer += this }
 	override def / (component: String): Path = if(component == ".") this else new RelativePath(this, component)
 	private[sbt] def asFile: File
+	private[sbt] def asURL = asFile.toURI.toURL
 	private[sbt] def relativePath: String
 	private[sbt] def prependTo(s: String): String
 	

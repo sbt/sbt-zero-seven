@@ -25,7 +25,7 @@ class DefaultProject(val info: ProjectInfo, val analysis: ProjectAnalysis) exten
 	
 	def run = RunAction(mainClass, compilePath +++ libraries, runOptions)
 	def console = ConsoleAction(compilePath +++ libraries)
-	def clean = CleanAction("target", ClearAnalysis :: Nil)
+	def clean = CleanAction(outputPath, ClearAnalysis :: Nil)
 	
 	def allSources = (sourcePath ##) ** "*.scala" - ".svn"
 	def mainSources = mainScalaSourcePath ** "*.scala" - ".svn"
@@ -59,7 +59,6 @@ class DefaultProject(val info: ProjectInfo, val analysis: ProjectAnalysis) exten
 		packageMain && packageTest && packageSource && packageDocs
 	
 	def runOptions: Seq[String] = Nil
-	// TODO: move the plugin options to Project so that they are always present.
 	def compileOptions = Deprecation :: Nil
 	def documentOptions: Seq[ScaladocOption] =
 		LinkSource ::

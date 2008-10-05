@@ -2,6 +2,7 @@
 /build -text
 /clean -text
 sbt/Analyzer.scala -text
+sbt/BuilderProject.scala -text
 sbt/Compile.scala -text
 sbt/DefaultProject.scala -text
 sbt/FileUtilities.scala -text

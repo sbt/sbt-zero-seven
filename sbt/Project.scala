@@ -79,7 +79,7 @@ trait Project extends Logger
 	{
 		def sources: PathFinder
 		def name: String
-		def run(changedSources: Iterable[Path]): Option[String]
+		def execute(changedSources: Iterable[Path]): Option[String]
 		
 		def run: Option[String] =
 		{
@@ -142,7 +142,7 @@ trait Project extends Logger
 				modified
 			}
 			
-			val result = run(dirtySources)
+			val result = execute(dirtySources)
 			info("  Post-analysis: " + analysis.allClasses.toSeq.length + " classes.")
 			if(result.isEmpty)
 				analysis.save(info, Project.this)
@@ -267,10 +267,12 @@ trait Project extends Logger
 		sources: PathFinder, outputDirectory: Path,
 		options: Iterable[CompileOption]) extends ConditionalAction
 	{
-		def run(dirtySources: Iterable[Path]): Option[String] =
+		def includeSbtInClasspath = false
+		def execute(dirtySources: Iterable[Path]): Option[String] =
 		{
 			val dependencies = dependencyPath ** "*.jar"
-			val classpathString = Path.makeString((outputDirectory +++ dependencies).get)
+			val classpathString = Path.makeString((outputDirectory +++ dependencies).get) +
+				(if(includeSbtInClasspath) File.pathSeparator + FileUtilities.containingJar else "")
 			val allOptions = (CompileOption("-Xplugin:" + jar.getCanonicalPath) ::
 				CompileOption("-P:sbt-analyzer:project:" + info.id.toString) ::
 				CompileOption("-P:sbt-analyzer:class:" + testClassName) :: Nil) ++ options
@@ -427,6 +429,7 @@ object Project
 	val DefaultResourcesDirectoryName = "resources"
 	val DefaultTestDirectoryName = "test"
 	val DefaultDependencyDirectoryName = "lib"
+	val BuilderProjectDirectoryName = "build"
 	
 	val MainClassKey = "Main-Class"
 	
@@ -447,9 +450,10 @@ object Project
 		try
 		{
 			for(info <- ProjectInfo.load(projectDirectory, getNextID, log).right;
-				analysis <- ProjectAnalysis.load(info, log).right) yield
+				analysis <- ProjectAnalysis.load(info, log).right;
+				loader <- getProjectClassLoader(info).right) yield
 			{
-				val builderClass = Class.forName(info.builderClassName)
+				val builderClass = Class.forName(info.builderClassName, false, loader)
 				require(classOf[Project].isAssignableFrom(builderClass), "Builder class '" + builderClass + "' does not extend Project.")
 				val constructor = builderClass.getDeclaredConstructor(classOf[ProjectInfo], classOf[ProjectAnalysis])
 				val project = constructor.newInstance(info, analysis).asInstanceOf[Project]
@@ -467,5 +471,30 @@ object Project
 				Left("Error loading project: " + e.getMessage)
 			}
 		}
+	}
+	private def getProjectClassLoader(info: ProjectInfo): Either[String, ClassLoader] =
+	{
+		val builderProjectPath = info.builderPath / BuilderProjectDirectoryName
+		if(builderProjectPath.asFile.isDirectory)
+		{
+			val builderInfo = ProjectInfo(info.name + " Builder", info.currentVersion,
+				classOf[BuilderProject].getName, builderProjectPath.asFile)(getNextID, false)
+			ProjectAnalysis.load(builderInfo, log).right flatMap
+			{
+				analysis =>
+				{
+					val builderProject = new BuilderProject(builderInfo, analysis)
+					projectMap(builderInfo.id) = builderProject
+					builderProject.compile.run.toLeft
+					{
+						val compileClassPath = Array(builderProject.compilePath.asURL)
+						import java.net.URLClassLoader
+						new URLClassLoader(compileClassPath, getClass.getClassLoader)
+					}
+				}
+			}
+		}
+		else
+			Right(getClass.getClassLoader)
 	}
 }

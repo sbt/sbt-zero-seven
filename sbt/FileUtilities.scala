@@ -251,5 +251,5 @@ object FileUtilities
 		else
 			a
 			
-	def containingJar: File = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
+	lazy val containingJar: File = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
 }
