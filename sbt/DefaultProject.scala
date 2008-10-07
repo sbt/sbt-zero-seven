@@ -2,31 +2,23 @@ package sbt
 
 class DefaultProject(val info: ProjectInfo, val analysis: ProjectAnalysis) extends Project with ConsoleLogger
 {
-	def actions = defaultActions
 	def mainClass: Option[String] = None
-	
-	def defaultActions =
-		scala.collection.immutable.TreeMap(
-			"clean" -> { clean },
-			"compile" -> { compile },
-			"console" -> { compile && console },
-			"doc" -> { compile && doc },
-			"doc-test" -> { compile && docTest },
-			"doc-all" -> { compile && doc && docTest },
-			"package" -> { compile && packageMain },
-			"package-test" -> { compile && packageTest },
-			"package-src" -> { compile && packageSource },
-			"package-docs" -> { compile && packageDocs },
-			"package-all" -> { compile && packageAll },
-			"test" -> { compile && test },
-			"release" -> { clean && compile && test && packageAll && doc },
-			"run" -> { compile && run }
-		)
-	
-	def run = RunAction(mainClass, compilePath +++ libraries, runOptions)
-	def console = ConsoleAction(compilePath +++ libraries)
-	def clean = CleanAction(outputPath, ClearAnalysis :: Nil)
-	
+
+  lazy val clean = cleanTask(outputPath, ClearAnalysis :: Nil);
+  lazy val compile = compileTask(mainSources +++ testSources, compilePath, compileOptions, false);
+  lazy val run = runTask(mainClass, compilePath +++ libraries, runOptions).dependsOn(compile);
+  lazy val console = consoleTask(compilePath +++ libraries).dependsOn(compile);
+  lazy val doc = scaladocTask(mainSources, mainDocPath, compilePath, documentOptions).dependsOn(compile);
+  lazy val docTest = scaladocTask(testSources, testDocPath, compilePath, documentOptions).dependsOn(compile);
+  lazy val test = testTask(compilePath +++ libraries, Nil).dependsOn(compile);
+  lazy val `package` = packageTask(getClasses(mainSources) +++ mainResources, mainClass.map(MainClassOption(_)).toList).dependsOn(compile);
+	lazy val packageTest = packageTask(getClasses(testSources) +++ testResources, JarName(defaultJarBaseName + "-test.jar") :: Nil).dependsOn(test);
+	lazy val packageDocs =	packageTask(mainDocPath ##, JarName(defaultJarBaseName + "-docs.jar") :: Nil).dependsOn(doc);
+  lazy val packageSrc = packageTask(allSources, JarName(defaultJarBaseName + "-src.jar") :: Nil)
+  lazy val docAll = doc && docTest;
+  lazy val packageAll = `package` && packageTest && packageSrc;
+  lazy val release = clean && compile && test && packageAll && doc 
+
 	def allSources = (sourcePath ##) ** "*.scala" - ".svn"
 	def mainSources = mainScalaSourcePath ** "*.scala" - ".svn"
 	def testSources = testScalaSourcePath ** "*.scala" - ".svn"
@@ -34,29 +26,7 @@ class DefaultProject(val info: ProjectInfo, val analysis: ProjectAnalysis) exten
 	def testResources = (testResourcesPath ##) -- ".svn"
 	def libraries = dependencyPath ** "*.jar" - ".svn"
 	
-	def compile = CompileAction("compile", mainSources +++ testSources, compilePath, compileOptions)
-	def doc = ScaladocAction("doc", mainSources, mainDocPath, compilePath, documentOptions)
-	def docTest = ScaladocAction("doc-test", testSources, testDocPath, compilePath, documentOptions)
-	
-	def test = TestAction(compilePath +++ libraries, Nil)
-	
 	import Project._
-	def packageMain: Action =
-	{
-		val sources = getClasses(mainSources) +++ mainResources
-		PackageAction(sources, mainClass.map(MainClassOption(_)).toList)
-	}
-	def packageTest: Action =
-	{
-		val sources = getClasses(testSources) +++ testResources
-		PackageAction(sources, JarName(defaultJarBaseName + "-test.jar") :: Nil)
-	}
-	def packageDocs: Action =
-		PackageAction(mainDocPath ##, JarName(defaultJarBaseName + "-docs.jar") :: Nil)
-	def packageSource: Action =
-		PackageAction(allSources, JarName(defaultJarBaseName + "-src.jar") :: Nil)
-	def packageAll =
-		packageMain && packageTest && packageSource && packageDocs
 	
 	def runOptions: Seq[String] = Nil
 	def compileOptions = Deprecation :: Nil

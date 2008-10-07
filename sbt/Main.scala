@@ -54,7 +54,10 @@ private object Build extends Build
 		command match
 		{
 			case "level" => Console.println("Current log level is " + project.getLevel)
-			case "actions" => project.actions.keys.map("\t" + _).foreach(Console.println)
+			case "actions" => project.tasks.map({case (name, task) => "\t" + 
+							name +
+							task.description.map(x => ": " + x).getOrElse("")
+						}).foreach(Console.println)
 			case action => 
 			{
 				Level(action) match

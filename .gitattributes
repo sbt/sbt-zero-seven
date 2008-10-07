@@ -4,6 +4,7 @@
 sbt/Analyzer.scala -text
 sbt/BuilderProject.scala -text
 sbt/Compile.scala -text
+sbt/Dag.scala -text
 sbt/DefaultProject.scala -text
 sbt/FileUtilities.scala -text
 sbt/Logger.scala -text
@@ -13,7 +14,9 @@ sbt/Path.scala -text
 sbt/Project.scala -text
 sbt/ProjectAnalysis.scala -text
 sbt/ProjectInfo.scala -text
+sbt/ReflectUtilities.scala -text
 sbt/Run.scala -text
 sbt/ScalaCheckTests.scala -text
+sbt/TaskManager.scala -text
 sbt/Version.scala -text
 /scalac-plugin.xml -text

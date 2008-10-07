@@ -2,21 +2,31 @@ package sbt
 
 import java.io.File
 import java.util.jar.{Attributes, Manifest}
+import scala.collection._
 import FileUtilities._
 import Project._
+import ReflectUtilities._
 
-trait Project extends Logger
+trait Project extends Logger with TaskManager
 {
 	val startTime = System.currentTimeMillis
 	val jar = containingJar
 	
 	def info: ProjectInfo
 	def analysis: ProjectAnalysis
-	def actions: Map[String, Action]
+	def tasks : Map[String, Task] = reflectiveTaskMappings;
+
+	def reflectiveTaskMappings : Map[String, Task] = {
+		val mappings = new mutable.OpenHashMap[String, Task];
+		for ((name, value) <- allVals[Task](this)){
+			mappings(camelCaseToActionName(name)) = value;
+		}
+		mappings;
+	}
 	
 	def act(name: String): Option[String] =
 	{
-		actions.get(name) match
+		tasks.get(name) match
 		{
 			case None => Some("Action '" + name + "' does not exist.")
 			case Some(action) => action.run
@@ -34,22 +44,6 @@ trait Project extends Logger
 				}
 		}
 	
-	trait Action extends NotNull
-	{ a =>
-	
-		def run: Option[String]
-		
-		def &&(next: => Action) =
-			new Action
-			{
-				def run = a.run orElse next.run
-			}
-		def ||(next: => Action) =
-			new Action
-			{
-				def run = a.run flatMap(errorMessage => next.run)
-			}
-	}
 	def isModified(source: Path) =
 	{
 		assert(source.asFile.exists, "Non-existing file " + source)
@@ -75,14 +69,9 @@ trait Project extends Logger
 			}
 		}
 	}
-	trait ConditionalAction extends Action
-	{
-		def sources: PathFinder
-		def name: String
-		def execute(changedSources: Iterable[Path]): Option[String]
-		
-		def run: Option[String] =
-		{
+
+	def conditionalAction(sources : PathFinder,
+												execute : Iterable[Path] => Option[String]) = task{
 			import scala.collection.mutable.HashSet
 			val sourcesSnapshot = sources.get
 			val dirtySources: Iterable[Path] =
@@ -150,11 +139,8 @@ trait Project extends Logger
 				analysis.load(info, Project.this)
 			result
 		}
-	}
-	case class ErrorAction(message: String) extends Action
-	{
-		def run = Some(message)
-	}
+
+	def errorTask(message: String) = task{ Some(message) }
 	
 	trait ActionOption extends NotNull
 	
@@ -222,19 +208,16 @@ trait Project extends Logger
 		val Default = Value("protected")
 		val Private = Value("private")
 	}
-	
-	case class ConsoleAction(classpath: PathFinder) extends Action
-	{
-		def run: Option[String] = Run.console(classpath.get, Project.this)
-	}
-	case class RunAction(mainClass: Option[String], classpath: PathFinder, options: Seq[String]) extends Action
-	{
-		def run: Option[String] = Run(mainClass, classpath.get, options, Project.this)
-	}
-	case class CleanAction(paths: PathFinder, options: Iterable[CleanOption]) extends Action
-	{
-		def run: Option[String] =
-		{
+
+	def consoleTask(classpath : PathFinder) = 
+		task { Run.console(classpath.get, Project.this) }
+
+	def runTask(mainClass : Option[String], classpath : PathFinder, options : Seq[String]) =	
+		task { Run(mainClass, classpath.get, options, Project.this) }
+
+
+	def cleanTask(paths: PathFinder, options: Iterable[CleanOption]) =
+		task {
 			val pathClean = FileUtilities.clean(paths.get, Project.this)
 			if(options.elements.contains(ClearAnalysis))
 			{
@@ -243,11 +226,9 @@ trait Project extends Logger
 			}
 			pathClean
 		}
-	}
-	case class TestAction(classpath: PathFinder, options: Iterable[TestOption]) extends Action
-	{
-		def run: Option[String] =
-		{
+
+	def testTask(classpath: PathFinder, options: Iterable[TestOption]) = 
+		task {
 			import scala.collection.mutable.HashSet
 			
 			val tests = HashSet.empty[String] ++ analysis.allTests
@@ -262,60 +243,54 @@ trait Project extends Logger
 			else
 				ScalaCheckTests(classpath.get, tests, Project.this)
 		}
-	}
-	case class CompileAction(name: String,
-		sources: PathFinder, outputDirectory: Path,
-		options: Iterable[CompileOption]) extends ConditionalAction
-	{
-		def includeSbtInClasspath = false
-		def execute(dirtySources: Iterable[Path]): Option[String] =
-		{
-			val dependencies = dependencyPath ** "*.jar"
-			val classpathString = Path.makeString((outputDirectory +++ dependencies).get) +
-				(if(includeSbtInClasspath) File.pathSeparator + FileUtilities.containingJar else "")
-			val allOptions = (CompileOption("-Xplugin:" + jar.getCanonicalPath) ::
-				CompileOption("-P:sbt-analyzer:project:" + info.id.toString) ::
-				CompileOption("-P:sbt-analyzer:class:" + testClassName) :: Nil) ++ options
-			val r = Compile(dirtySources, classpathString, outputDirectory, allOptions.map(_.asString), Project.this)
-			if(atLevel(Level.Debug))
-			{
-				val classes = scala.collection.mutable.HashSet(analysis.allClasses.toSeq: _*)
-				var missed = 0
-				for(c <- (outputDirectory ** "*.class").get)
+
+	def compileTask( sources: PathFinder, 
+									 outputDirectory: Path,
+			 						 options: Iterable[CompileOption],
+									 includeSbtInClasspath : Boolean) : Task = 
+		conditionalAction(sources, 
+			(dirtySources: Iterable[Path]) =>	{
+				val dependencies = dependencyPath ** "*.jar"
+				val classpathString = Path.makeString((outputDirectory +++ dependencies).get) +
+					(if(includeSbtInClasspath) File.pathSeparator + FileUtilities.containingJar else "")
+				val allOptions = (CompileOption("-Xplugin:" + jar.getCanonicalPath) ::
+					CompileOption("-P:sbt-analyzer:project:" + info.id.toString) ::
+					CompileOption("-P:sbt-analyzer:class:" + testClassName) :: Nil) ++ options
+				val r = Compile(dirtySources, classpathString, outputDirectory, allOptions.map(_.asString), Project.this)
+				if(atLevel(Level.Debug))
 				{
-					if(!classes.contains(c))
+					val classes = scala.collection.mutable.HashSet(analysis.allClasses.toSeq: _*)
+					var missed = 0
+					for(c <- (outputDirectory ** "*.class").get)
 					{
-						missed += 1
-						debug("Missed class: " + c)
+						if(!classes.contains(c))
+						{
+							missed += 1
+							debug("Missed class: " + c)
+						}
 					}
+					debug("Total missed classes: " + missed)
 				}
-				debug("Total missed classes: " + missed)
-			}
-			r
-		}
-	}
+				r
+			})
 	
-	case class ScaladocAction(name: String, sources: PathFinder, outputDirectory: Path,
-		compiledPaths: PathFinder, options: Iterable[ScaladocOption]) extends Action
-	{
-		def run: Option[String] =
-		{
-			val dependencies = dependencyPath ** "*.jar"
-			val classpathString = Path.makeString((compiledPaths +++ dependencies).get)
-			Scaladoc(sources.get, classpathString, outputDirectory, options.flatMap(_.asList), Project.this)
+	def scaladocTask(sources: PathFinder, outputDirectory: Path,
+									 compiledPaths: PathFinder, options: Iterable[ScaladocOption]) = task{
+				val dependencies = dependencyPath ** "*.jar"
+				val classpathString = Path.makeString((compiledPaths +++ dependencies).get)
+				Scaladoc(sources.get, classpathString, outputDirectory, options.flatMap(_.asList), Project.this)
 		}
-	}
-	case class PackageAction(sources: PathFinder, options: Iterable[PackageOption]) extends Action
-	{
-		import scala.collection.jcl.Map
-		/** Copies the mappings in a2 to a1, mutating a1. */
-		private def mergeAttributes(a1: Attributes, a2: Attributes)
-		{
-			for( (key, value) <- Map(a2))
-				a1.put(key, value)
-		}
-		def run: Option[String] =
-		{
+
+	def packageTask(sources: PathFinder, options: Iterable[PackageOption]) =
+		task{
+			import scala.collection.jcl.Map
+			/** Copies the mappings in a2 to a1, mutating a1. */
+			def mergeAttributes(a1: Attributes, a2: Attributes)
+			{
+				for( (key, value) <- Map(a2))
+					a1.put(key, value)
+			}
+
 			import scala.collection.mutable.ListBuffer
 			val manifest = new Manifest
 			var jarName: Option[String] = None
@@ -355,7 +330,6 @@ trait Project extends Logger
 			val jarPath = outputDirectory.getOrElse(path(DefaultOutputDirectoryName)) / jarName.getOrElse(defaultJarName)
 			FileUtilities.pack(sources.get, jarPath, manifest, Project.this)
 		}
-	}
 	
 	def initializeDirectories()
 	{

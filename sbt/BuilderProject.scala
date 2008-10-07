@@ -13,10 +13,7 @@ class BuilderProject(val info: ProjectInfo, val analysis: ProjectAnalysis) exten
 	
 	def mainSources = sourcePath ** "*.scala" - ".svn"
 	def compileOptions = Deprecation :: Nil
-	def compile =
-		new CompileAction("compile", mainSources, compilePath, compileOptions)
-		{
-			override def includeSbtInClasspath = true
-		}
-	def clean = CleanAction(outputPath, ClearAnalysis :: Nil)
+
+  val compile = compileTask(mainSources, compilePath, compileOptions, true)
+  val clean = cleanTask(outputPath, ClearAnalysis :: Nil)
 }
