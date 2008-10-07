@@ -1,3 +1,6 @@
+/* sbt -- Simple Build Tool
+ * Copyright 2008 Mark Harrah
+ */
 package sbt
 
 trait Logger extends NotNull

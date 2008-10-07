@@ -1,3 +1,6 @@
+/* sbt -- Simple Build Tool
+ * Copyright 2008 Mark Harrah, David MacIver
+ */
 package sbt
 
 import java.io.File

@@ -1,3 +1,6 @@
+/* sbt -- Simple Build Tool
+ * Copyright 2008 Mark Harrah
+ */
 package sbt
 
 import scala.tools.nsc.{interpreter, util, GenericRunnerCommand, InterpreterLoop, ObjectRunner, Settings}
