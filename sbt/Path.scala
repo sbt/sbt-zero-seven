@@ -121,10 +121,10 @@ object Path
 		
 		val cp = baseFile.getCanonicalPath
 		assert(cp.length > 0)
-		if(cp.charAt(cp.length - 1) == '/')
+		if(cp.charAt(cp.length - 1) == File.separatorChar)
 			cp
 		else
-			cp + '/'
+			cp + File.separatorChar
 	}
 }
 
