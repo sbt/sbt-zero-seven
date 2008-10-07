@@ -18,14 +18,25 @@ object ReflectUtilities{
 		buffer.toString;
 	}
 
+	def ancestry(clazz : Class[_]) : List[Class[_]] = 
+		if (clazz == classOf[AnyRef] || !classOf[AnyRef].isAssignableFrom(clazz)) List(clazz)
+		else clazz :: ancestry(clazz.getSuperclass);
+
+	def fields(clazz : Class[_]) = 
+		mutable.OpenHashMap(ancestry(clazz).
+			flatMap(_.getDeclaredFields).
+			map(f => (f.getName, f)):_*)
+	
 	def allVals[T](self : AnyRef)(implicit mt : scala.reflect.Manifest[T]) : Map[String, T] = {
 		val mappings = new mutable.OpenHashMap[String, T];
+		val correspondingFields = fields(self.getClass)
 
 		for (method <- self.getClass.getMethods){
-			if ((method.getTypeParameters.length == 0) &&
+			if ((method.getParameterTypes.length == 0) &&
 					mt.erasure.isAssignableFrom(method.getReturnType) &&
-					(try { self.getClass.getDeclaredField(method.getName).getType == method.getReturnType }
-					 catch { case (e : java.lang.NoSuchFieldException) => false })){
+					(correspondingFields.get(method.getName) match {
+							case Some(field) => field.getType == method.getReturnType
+							case None => false })){
 				mappings(method.getName) = method.invoke(self).asInstanceOf[T];
 			}
 		}
