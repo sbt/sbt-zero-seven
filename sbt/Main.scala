@@ -12,7 +12,7 @@ trait Build
 		for(project <- Project.loadProject.right)
 		{
 			val i = project.info
-			project.info("Building project " + i.name + " " + i.currentVersion.toString + " using " + i.builderClassName)
+			project.info("Building project " + i.name + " " + i.currentVersion.toString + " using " + project.getClass.getName)
 			if(args.length == 0)
 			{
 				interactive(project)

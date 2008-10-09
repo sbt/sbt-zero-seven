@@ -77,6 +77,7 @@ object FileUtilities
 			jarStream = Some(new JarOutputStream(fileStream, manifest))
 			jarStream
 		}
+		catch { case e: Exception => None }
 		finally
 		{
 			if(jarStream.isEmpty)

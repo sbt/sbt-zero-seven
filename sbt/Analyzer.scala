@@ -16,36 +16,29 @@ class Analyzer(val global: Global) extends Plugin
 	import global._
 	
 	val name = "sbt-analyzer"
-	val description = "A plugin to find all concrete instances of a given class"
+	val description = "A plugin to find all concrete instances of a given class and extract dependency information."
 	val components = List[PluginComponent](Component)
 	
-	var className: Option[String] = None
 	var projectOption: Option[Project] = None
-	val ClassOptionName = "class:"
 	val ProjectIDOptionName = "project:"
 	
 	override def processOptions(options: List[String], error: String => Unit)
 	{
 		for(option <- options)
 		{
-			if(option.startsWith(ClassOptionName))
-				className = Some(option.substring(ClassOptionName.length))
-			else if(option.startsWith(ProjectIDOptionName))
+			if(option.startsWith(ProjectIDOptionName))
 				projectOption = Some(Project.project(option.substring(ProjectIDOptionName.length).toInt))
 			else
 				error("Option not understood: " + option)
 		}
-		if(className.isEmpty)
-			error("Class name not specified.")
-		else if(projectOption.isEmpty)
+		if(projectOption.isEmpty)
 			error("Project ID not specified.")
 	}
 
 	override val optionsHelp: Option[String] = 
 	{
 		val prefix = "  -P:" + name + ":"
-		Some(prefix + ClassOptionName +"<className>             Set the name of the class to find to className.\n" +
-		     prefix + ProjectIDOptionName + "<project-id>            Set the directory containing (or to contain) the metadata.\n")
+		Some(prefix + ProjectIDOptionName + "<project-id>            Set the directory containing (or to contain) the metadata.\n")
 	}
 	
 	private object Component extends PluginComponent
@@ -73,10 +66,14 @@ class Analyzer(val global: Global) extends Plugin
 				error("Output directory " + printableFilename(outputDir) + " must be in the project directory.")
 			val outputPath = outputPathOption.get
 			
-			val propertiesName = newTermName(className.get)
-			val propertiesClassOption =
-				try { Some(global.definitions.getClass(propertiesName)) }
-				catch { case fe: scala.tools.nsc.FatalError => None }
+			val superclassNames = project.superclassNames.map(newTermName)
+			val superclassesAll =
+				for(name <- superclassNames) yield
+				{
+					try { Some(global.definitions.getClass(name)) }
+					catch { case fe: scala.tools.nsc.FatalError => None }
+				}
+			val superclasses = superclassesAll.filter(_.isDefined).map(_.get)
 			
 			for(unit <- currentRun.units)
 			{
@@ -99,13 +96,15 @@ class Analyzer(val global: Global) extends Plugin
 				analysis.removeSelfDependency(sourcePath)
 				
 				// build list of tests if ScalaCheck is on the classpath
-				for(propertiesClass <- propertiesClassOption;
-					clazz @ ClassDef(mods, n, _, _) <- unit.body)
+				for(clazz @ ClassDef(mods, n, _, _) <- unit.body)
 				{
 					val sym = clazz.symbol
-					if(mods.isPublic && !mods.isDeferred && sym.isModuleClass && !sym.isImplClass && sym.isStatic)
-					if(sym.isSubClass(propertiesClass))
-						analysis.addTest(sourcePath, sym.fullNameString)
+					if(mods.isPublic && !mods.isDeferred && !sym.isImplClass)
+					{
+						val isModule = sym.isModuleClass && sym.isStatic
+						for(superclass <- superclasses.filter(sym.isSubClass))
+							project.foundSubclass(sourcePath, sym.fullNameString, superclass.fullNameString, isModule)
+					}
 				}
 				
 				// build list of generated classes

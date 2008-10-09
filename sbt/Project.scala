@@ -47,6 +47,13 @@ trait Project extends Logger with TaskManager
 				}
 		}
 	
+	def superclassNames: Iterable[String] = List(ScalaCheckPropertiesClassName)
+	def foundSubclass(sourcePath: Path, subclassName: String, superclassName: String, isModule: Boolean)
+	{
+		if(superclassName == ScalaCheckPropertiesClassName && isModule)
+			analysis.addTest(sourcePath, subclassName)
+	}
+	
 	def isModified(source: Path) =
 	{
 		assert(source.asFile.exists, "Non-existing file " + source)
@@ -72,9 +79,8 @@ trait Project extends Logger with TaskManager
 			}
 		}
 	}
-
-	def conditionalAction(sources : PathFinder,
-												execute : Iterable[Path] => Option[String]) = task{
+	def conditionalAction(sources : PathFinder, execute : Iterable[Path] => Option[String]) =
+		task{
 			import scala.collection.mutable.HashSet
 			val sourcesSnapshot = sources.get
 			val dirtySources: Iterable[Path] =
@@ -257,8 +263,7 @@ trait Project extends Logger with TaskManager
 				val classpathString = Path.makeString((outputDirectory +++ dependencies).get) +
 					(if(includeSbtInClasspath) File.pathSeparator + FileUtilities.containingJar else "")
 				val allOptions = (CompileOption("-Xplugin:" + jar.getCanonicalPath) ::
-					CompileOption("-P:sbt-analyzer:project:" + info.id.toString) ::
-					CompileOption("-P:sbt-analyzer:class:" + testClassName) :: Nil) ++ options
+					CompileOption("-P:sbt-analyzer:project:" + info.id.toString) :: Nil) ++ options
 				val r = Compile(dirtySources, classpathString, outputDirectory, allOptions.map(_.asString), Project.this)
 				if(atLevel(Level.Debug))
 				{
@@ -278,10 +283,11 @@ trait Project extends Logger with TaskManager
 			})
 	
 	def scaladocTask(sources: PathFinder, outputDirectory: Path,
-									 compiledPaths: PathFinder, options: Iterable[ScaladocOption]) = task{
-				val dependencies = dependencyPath ** "*.jar"
-				val classpathString = Path.makeString((compiledPaths +++ dependencies).get)
-				Scaladoc(sources.get, classpathString, outputDirectory, options.flatMap(_.asList), Project.this)
+			compiledPaths: PathFinder, options: Iterable[ScaladocOption]) =
+		task{
+			val dependencies = dependencyPath ** "*.jar"
+			val classpathString = Path.makeString((compiledPaths +++ dependencies).get)
+			Scaladoc(sources.get, classpathString, outputDirectory, options.flatMap(_.asList), Project.this)
 		}
 
 	def packageTask(sources: PathFinder, options: Iterable[PackageOption]) =
@@ -354,8 +360,6 @@ trait Project extends Logger with TaskManager
 		}
 	}
 	
-	def testClassName = "org.scalacheck.Properties"
-	
 	def defaultJarBaseName = info.name + "-" + info.currentVersion.toString
 	def defaultJarName = defaultJarBaseName + ".jar"
 	
@@ -410,6 +414,9 @@ object Project
 	
 	val MainClassKey = "Main-Class"
 	
+	val ScalaCheckPropertiesClassName = "org.scalacheck.Properties"
+	val ProjectClassName = classOf[Project].getName
+	
 	import scala.collection.mutable.{HashMap, Map}
 	private val projectMap: Map[Int, Project] = new HashMap
 	private var nextID = 0
@@ -428,9 +435,10 @@ object Project
 		{
 			for(info <- ProjectInfo.load(projectDirectory, getNextID, log).right;
 				analysis <- ProjectAnalysis.load(info, log).right;
-				loader <- getProjectClassLoader(info).right) yield
+				classAndLoader <- getProjectDefinition(info).right) yield
 			{
-				val builderClass = Class.forName(info.builderClassName, false, loader)
+				val (builderClassName, loader) = classAndLoader
+				val builderClass = Class.forName(builderClassName, false, loader)
 				require(classOf[Project].isAssignableFrom(builderClass), "Builder class '" + builderClass + "' does not extend Project.")
 				val constructor = builderClass.getDeclaredConstructor(classOf[ProjectInfo], classOf[ProjectAnalysis])
 				val project = constructor.newInstance(info, analysis).asInstanceOf[Project]
@@ -449,7 +457,7 @@ object Project
 			}
 		}
 	}
-	private def getProjectClassLoader(info: ProjectInfo): Either[String, ClassLoader] =
+	private def getProjectDefinition(info: ProjectInfo): Either[String, (String, ClassLoader)] =
 	{
 		val builderProjectPath = info.builderPath / BuilderProjectDirectoryName
 		if(builderProjectPath.asFile.isDirectory)
@@ -466,12 +474,17 @@ object Project
 					{
 						val compileClassPath = Array(builderProject.compilePath.asURL)
 						import java.net.URLClassLoader
-						new URLClassLoader(compileClassPath, getClass.getClassLoader)
+						val loader = new URLClassLoader(compileClassPath, getClass.getClassLoader)
+						builderProject.projectDefinition match
+						{
+							case Some(definition) => (definition, loader)
+							case None => (info.builderClassName, loader)
+						}
 					}
 				}
 			}
 		}
 		else
-			Right(getClass.getClassLoader)
+			Right((info.builderClassName, getClass.getClassLoader))
 	}
 }
