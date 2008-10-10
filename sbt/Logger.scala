@@ -87,3 +87,24 @@ object Level extends Enumeration with NotNull
 	
 	def apply(s: String) = elements.find(s == _.toString)
 }
+
+trait LineReader extends NotNull
+{
+	def readLine(prompt: String): Option[String]
+}
+class JLineReader(completions: Iterable[String]) extends LineReader
+{
+	import jline.{ConsoleReader,SimpleCompletor}
+	private val reader =
+	{
+		val cr = new ConsoleReader
+		cr.addCompletor(new SimpleCompletor(completions.toList.toArray))
+		cr
+	}
+	def readLine(prompt: String) =
+		reader.readLine(prompt) match
+		{
+			case null => None
+			case x => Some(x)
+		}
+}

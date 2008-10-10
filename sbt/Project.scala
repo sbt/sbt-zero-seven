@@ -18,6 +18,7 @@ trait Project extends Logger with TaskManager
 	def info: ProjectInfo
 	def analysis: ProjectAnalysis
 	def tasks : Map[String, Task] = reflectiveTaskMappings;
+	def taskNames: Iterable[String] = tasks.keys.toList
 
 	def reflectiveTaskMappings : Map[String, Task] = {
 		val mappings = new mutable.OpenHashMap[String, Task];

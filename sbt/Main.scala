@@ -3,9 +3,8 @@
  */
 package sbt
 
-trait Build
+object Main
 {
-	import Build._
 	def main(args: Array[String])
 	{
 		val startTime = System.currentTimeMillis
@@ -29,39 +28,45 @@ trait Build
 			}
 		}
 	}
+	
+	val ShowLevel = "level"
+	val ShowActions = "actions"
+	protected def interactiveCommands: Iterable[String] =
+		ShowActions :: ShowLevel :: Level.elements.map(_.toString).toList
+		
 	def interactive(project: Project)
 	{
 		project.info("No actions specified, interactive session started.")
+		
+		val reader = new JLineReader(project.taskNames ++ interactiveCommands)
 		def loop()
 		{
-			val line = Console.readLine("> ")
-			if(line != null)
+			reader.readLine("> ") match
 			{
-				val trimmed = line.trim
-				if(isExitCommand(trimmed))
-					()
-				else
-				{
-					handleCommand(project, trimmed)
-					loop()
-				}
+				case Some(line) =>
+					val trimmed = line.trim
+					if(isExitCommand(trimmed))
+						()
+					else
+					{
+						handleCommand(project, trimmed)
+						loop()
+					}
+				case None => ()
 			}
 		}
 		loop()
 	}
-}
-private object Build extends Build
-{
+	
 	private def handleCommand(project: Project, command: String)
 	{
 		command match
 		{
-			case "level" => Console.println("Current log level is " + project.getLevel)
-			case "actions" => project.tasks.map({case (name, task) => "\t" + 
-							name +
-							task.description.map(x => ": " + x).getOrElse("")
-						}).foreach(Console.println)
-			case action => 
+			case ShowLevel => Console.println("Current log level is " + project.getLevel)
+			case ShowActions => 
+				for( (name, task) <- project.tasks)
+					Console.println("\t" + name + task.description.map(x => ": " + x).getOrElse(""))
+			case action =>
 			{
 				Level(action) match
 				{
@@ -103,4 +108,3 @@ private object Build extends Build
 		project.info("Total " + ss + "time: " + (endTime - startTime) / 1000 + " s")
 	}
 }
-object Main extends Build
