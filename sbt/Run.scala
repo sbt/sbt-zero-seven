@@ -22,13 +22,6 @@ object Run
 				{
 					val loop = new InterpreterLoop
 					loop.main(settings)
-					// if JLine is used on a unix platform, we need to call restoreTerminal on
-					// the underlying UnixTerminal, otherwise inputted characters won't be echoed.
-					loop.in match
-					{
-						case reader: interpreter.JLineReader => restoreTerminal(reader)
-						case _ => ()
-					}
 					None
 				}
 				catch
@@ -75,19 +68,5 @@ object Run
 			f(command.settings)
 		else
 			Some(command.usageMsg)
-	}
-	private def restoreTerminal(reader: interpreter.JLineReader)
-	{
-		val terminal = reader.consoleReader.getTerminal
-		try
-		{
-			type UnixTerminal = { def restoreTerminal: Unit }
-			terminal.asInstanceOf[UnixTerminal].restoreTerminal
-		}
-		catch
-		{
-			// ignore ClassCastExceptions that will happen on Windows
-			case e: Exception => ()
-		}
 	}
 }
