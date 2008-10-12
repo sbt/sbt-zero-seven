@@ -108,3 +108,23 @@ class JLineReader(completions: Iterable[String]) extends LineReader
 			case x => Some(x)
 		}
 }
+
+trait DelegatingLogger extends Logger
+{
+	protected def delegate: Logger
+	
+	def getLevel = delegate.getLevel
+	def setLevel(newLevel: Level.Value)
+	{
+		delegate.setLevel(newLevel)
+	}
+	override def atLevel(level: Level.Value) = delegate.atLevel(level)
+	
+	def trace(t: => Throwable): Unit = delegate.trace(t)
+	override def debug(message: => String): Unit = delegate.debug(message)
+	override def info(message: => String): Unit = delegate.info(message)
+	override def warn(message: => String): Unit = delegate.warn(message)
+	override def error(message: => String): Unit = delegate.error(message)
+	override def success(message: => String): Unit = delegate.success(message)
+	def log(level: Level.Value, message: => String) = delegate.log(level, message)
+}

@@ -1,6 +1,7 @@
 * text=auto !eol
 /build -text
 /clean -text
+sbt/AnalysisCallback.scala -text
 sbt/Analyzer.scala -text
 sbt/BuilderProject.scala -text
 sbt/Compile.scala -text
@@ -17,6 +18,7 @@ sbt/ProjectInfo.scala -text
 sbt/ReflectUtilities.scala -text
 sbt/Run.scala -text
 sbt/ScalaCheckTests.scala -text
+sbt/ScalaProject.scala -text
 sbt/TaskManager.scala -text
 sbt/Version.scala -text
 /scalac-plugin.xml -text

@@ -138,7 +138,7 @@ sealed abstract class PathFinder extends NotNull
 	def -(expression: String): PathFinder = error("Can only exclude from a search path; this path is explicitly specified.")
 	def --(expression: String): PathFinder = new DescendentPathFinder(this, None, Some(expression))
 	
-	def get: Iterable[Path] =
+	final def get: Iterable[Path] =
 	{
 		val buffer = new ListBuffer[Path]
 		addTo(buffer)

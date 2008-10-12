@@ -7,7 +7,7 @@ import java.io.File
 import FileUtilities._
 
 final case class ProjectInfo(name: String, currentVersion: Version, builderClassName: String, projectDirectory: File)
-	(private[sbt] val id: Int, private[sbt] val initializeDirectories: Boolean) extends NotNull
+	(private[sbt] val initializeDirectories: Boolean) extends NotNull
 {
 	import ProjectInfo._
 	val projectPath = new ProjectDirectory(projectDirectory)
@@ -55,7 +55,7 @@ object ProjectInfo
 			finally { writer.close }
 		}).left.toOption
 	}
-	def load(projectDirectory: File, id: Int, log: Logger): Either[String, ProjectInfo] =
+	def load(projectDirectory: File, log: Logger): Either[String, ProjectInfo] =
 	{
 		val builderDirectory = new File(projectDirectory, MetadataDirectoryName)
 		checkBuilderDirectory(projectDirectory, builderDirectory, log).right.flatMap
@@ -74,8 +74,7 @@ object ProjectInfo
 						if(projectInfoFile.isDirectory)
 							Left("Project information file '" + printableFilename(projectInfoFile) + "' is a directory.")
 						else
-							loadProjectInfo(projectDirectory, builderDirectory, projectInfoFile,
-								id, initializeDirectories, log)
+							loadProjectInfo(projectDirectory, builderDirectory, projectInfoFile, initializeDirectories, log)
 					}
 				}
 			}
@@ -95,14 +94,14 @@ object ProjectInfo
 		}
 	}
 	private def loadProjectInfo(workingDirectory: File, builderDirectory: File,
-		projectInfoFile: File, id: Int, initialize: Boolean, log: Logger) =
+		projectInfoFile: File, initialize: Boolean, log: Logger) =
 	{
 		import scala.io.Source
 		val linesE: Either[String, List[String]] =
 			try
 			{
 				Right(Source.fromFile(projectInfoFile).getLines.toList.map(_.trim).filter(line =>
-					!line.isEmpty && line.charAt(0) != '#'))
+					line.length > 0 && line.charAt(0) != '#'))
 			}
 			catch
 			{
@@ -120,7 +119,7 @@ object ProjectInfo
 				val name :: versionString :: tail = lines
 				val builderClassName = tail.firstOption.getOrElse(DefaultBuilderClassName)
 				for(version <- Version.fromString(versionString).right) yield
-					ProjectInfo(name, version, builderClassName, workingDirectory)(id, initialize)
+					ProjectInfo(name, version, builderClassName, workingDirectory)(initialize)
 			}
 			else
 				Left("Project information file invalid: expected name, version, and (optionally) builder class.")
@@ -131,7 +130,7 @@ object ProjectInfo
 		if(confirmPrompt("No project found. Create new project?", false))
 		{
 			val name = trim(Console.readLine("Project Name: "))
-			if(name.length == 0)
+			if(name.isEmpty)
 				false
 			else
 			{
@@ -162,7 +161,7 @@ object ProjectInfo
 	
 	private def createProject(name: String, version: Version, projectDirectory: File, log: Logger): Boolean =
 	{
-		val tempInfo = ProjectInfo(name, version, DefaultBuilderClassName, projectDirectory)(-1, false)
+		val tempInfo = ProjectInfo(name, version, DefaultBuilderClassName, projectDirectory)(false)
 		write(tempInfo, log) match
 		{
 			case Some(errorMessage) =>
@@ -181,7 +180,7 @@ object ProjectInfo
 	private def readVersion(projectDirectory: File, log: Logger): Option[Version] =
 	{
 		val version = trim(Console.readLine("Version: "))
-		if(version.length == 0)
+		if(version.isEmpty)
 			None
 		else
 		{

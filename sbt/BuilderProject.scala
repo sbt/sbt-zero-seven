@@ -3,7 +3,7 @@
  */
 package sbt
 
-class BuilderProject(val info: ProjectInfo, val analysis: ProjectAnalysis) extends Project with ConsoleLogger
+final class BuilderProject(val info: ProjectInfo) extends ScalaProject with ConsoleLogger
 {
 	setLevel(Level.Warn)
 	
@@ -26,19 +26,23 @@ class BuilderProject(val info: ProjectInfo, val analysis: ProjectAnalysis) exten
 		}
 	}
 	
-	override def superclassNames: Iterable[String] = List(Project.ProjectClassName)
-	override def foundSubclass(sourcePath: Path, subclassName: String, superclassName: String, isModule: Boolean)
-	{
-		if(superclassName == Project.ProjectClassName && !isModule)
+	override def analysisCallback: AnalysisCallback =
+		new BasicAnalysisCallback(info.projectPath, List(Project.ProjectClassName), analysis)
 		{
-			debug("Found project definition " + subclassName)
-			analysis.addProjectDefinition(sourcePath, subclassName)
+			def foundSubclass(sourcePath: Path, subclassName: String, superclassName: String, isModule: Boolean)
+			{
+				if(superclassName == Project.ProjectClassName && !isModule)
+				{
+					debug("Found project definition " + subclassName)
+					analysis.addProjectDefinition(sourcePath, subclassName)
+				}
+			}
 		}
-	}
 	
 	def mainSources = sourcePath ** "*.scala" - ".svn"
 	def compileOptions = Deprecation :: Nil
 	override def tasks = Map.empty
+	def dependencies = Nil
 
 	lazy val compile = compileTask(mainSources, compilePath, compileOptions, true)
 	lazy val clean = cleanTask(outputPath, ClearAnalysis :: Nil)

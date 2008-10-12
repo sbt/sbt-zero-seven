@@ -8,7 +8,7 @@ import java.util.Properties
 import ProjectAnalysis._
 import scala.collection.mutable.{HashMap, HashSet, ListBuffer, Map, Set}
 
-final class ProjectAnalysis
+final class ProjectAnalysis extends NotNull
 {
 	private val dependencies = new HashMap[Path, Set[Path]]
 	private val tests = new HashMap[Path, Set[String]]

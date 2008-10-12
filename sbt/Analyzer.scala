@@ -19,26 +19,26 @@ class Analyzer(val global: Global) extends Plugin
 	val description = "A plugin to find all concrete instances of a given class and extract dependency information."
 	val components = List[PluginComponent](Component)
 	
-	var projectOption: Option[Project] = None
-	val ProjectIDOptionName = "project:"
+	var callbackOption: Option[AnalysisCallback] = None
+	val CallbackIDOptionName = "callback:"
 	
 	override def processOptions(options: List[String], error: String => Unit)
 	{
 		for(option <- options)
 		{
-			if(option.startsWith(ProjectIDOptionName))
-				projectOption = Some(Project.project(option.substring(ProjectIDOptionName.length).toInt))
+			if(option.startsWith(CallbackIDOptionName))
+				callbackOption = AnalysisCallback(option.substring(CallbackIDOptionName.length).toInt)
 			else
 				error("Option not understood: " + option)
 		}
-		if(projectOption.isEmpty)
-			error("Project ID not specified.")
+		if(callbackOption.isEmpty)
+			error("Callback ID not specified.")
 	}
 
 	override val optionsHelp: Option[String] = 
 	{
 		val prefix = "  -P:" + name + ":"
-		Some(prefix + ProjectIDOptionName + "<project-id>            Set the directory containing (or to contain) the metadata.\n")
+		Some(prefix + CallbackIDOptionName + "<callback-id>            Set the callback id.\n")
 	}
 	
 	private object Component extends PluginComponent
@@ -54,9 +54,8 @@ class Analyzer(val global: Global) extends Plugin
 		def name = Analyzer.this.name
 		def run
 		{
-			val project = projectOption.get
-			val analysis = project.analysis
-			val projectPath = project.info.projectPath
+			val callback = callbackOption.get
+			val projectPath = callback.basePath
 			val projectPathString = Path.basePathString(projectPath)
 			def relativize(file: File) = Path.relativize(projectPath, projectPathString, file)
 			
@@ -66,12 +65,12 @@ class Analyzer(val global: Global) extends Plugin
 				error("Output directory " + printableFilename(outputDir) + " must be in the project directory.")
 			val outputPath = outputPathOption.get
 			
-			val superclassNames = project.superclassNames.map(newTermName)
+			val superclassNames = callback.superclassNames.map(newTermName)
 			val superclassesAll =
 				for(name <- superclassNames) yield
 				{
 					try { Some(global.definitions.getClass(name)) }
-					catch { case fe: scala.tools.nsc.FatalError => None }
+					catch { case fe: scala.tools.nsc.FatalError => callback.superclassNotFound(name.toString); None }
 				}
 			val superclasses = superclassesAll.filter(_.isDefined).map(_.get)
 			
@@ -83,17 +82,17 @@ class Analyzer(val global: Global) extends Plugin
 				if(sourcePathOption.isEmpty)
 					error("Source file " + printableFilename(sourceFile) + " must be in the project directory.")
 				val sourcePath = sourcePathOption.get
-				analysis.markSource(sourcePath)
+				callback.beginSource(sourcePath)
 				for(on <- unit.depends)
 				{
 					val onSource = on.sourceFile
 					if(onSource != null) // possibly add jar dependencies here
 					{
 						for(depPath <- relativize(onSource.file))
-							analysis.addDependency(depPath, sourcePath)
+							callback.dependency(depPath, sourcePath)
 					}
 				}
-				analysis.removeSelfDependency(sourcePath)
+				//analysis.removeSelfDependency(sourcePath)
 				
 				// build list of tests if ScalaCheck is on the classpath
 				for(clazz @ ClassDef(mods, n, _, _) <- unit.body)
@@ -103,7 +102,7 @@ class Analyzer(val global: Global) extends Plugin
 					{
 						val isModule = sym.isModuleClass && sym.isStatic
 						for(superclass <- superclasses.filter(sym.isSubClass))
-							project.foundSubclass(sourcePath, sym.fullNameString, superclass.fullNameString, isModule)
+							callback.foundSubclass(sourcePath, sym.fullNameString, superclass.fullNameString, isModule)
 					}
 				}
 				
@@ -117,19 +116,20 @@ class Analyzer(val global: Global) extends Plugin
 						{
 							val classPath = pathOfClass(outputPath, sym, false)
 							checkPath(unit, classPath)
-							analysis.addGeneratedClass(sourcePath, classPath)
+							callback.generatedClass(sourcePath, classPath)
 						}
 						val modulePath = pathOfClass(outputPath, sym, true)
 						checkPath(unit, modulePath)
-						analysis.addGeneratedClass(sourcePath, modulePath)
+						callback.generatedClass(sourcePath, modulePath)
 					}
 					else
 					{
 						val classPath = pathOfClass(outputPath, sym, false)
 						checkPath(unit, classPath)
-						analysis.addGeneratedClass(sourcePath, classPath)
+						callback.generatedClass(sourcePath, classPath)
 					}
 				}
+				callback.endSource(sourcePath)
 			}
 		}
 	}

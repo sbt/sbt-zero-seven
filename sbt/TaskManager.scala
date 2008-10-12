@@ -1,9 +1,7 @@
 /* sbt -- Simple Build Tool
  * Copyright 2008 David MacIver
  */
-package sbt;
-import scala.collection._;
-import mutable.OpenHashMap;
+package sbt
 
 trait TaskManager{
 	def task(action : => Option[String]) = 

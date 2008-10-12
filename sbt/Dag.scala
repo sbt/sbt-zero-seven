@@ -13,7 +13,6 @@ trait Dag[Node <: Dag[Node]]{
 	def topologicalSort = {
 		val discovered = new mutable.HashSet[Node];
 		val finished = new jcl.LinkedHashSet[Node];
-		var time = 0;
 
 		def visit(dag : Node){
 			if (!discovered(dag)) {

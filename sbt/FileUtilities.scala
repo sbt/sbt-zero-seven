@@ -15,7 +15,7 @@ object FileUtilities
 
 	def pathSplit(s: String) = PathSeparatorPattern.split(s)
 	
-	def pack(sources: Iterable[Path], outputJar: Path, manifest: Manifest, log: Logger) =
+	def pack(sources: Iterable[Path], outputJar: Path, manifest: Manifest, recursive: Boolean, log: Logger) =
 	{
 		log.info("Packaging " + outputJar + " ...")
 		val outputFile = outputJar.asFile
@@ -25,20 +25,23 @@ object FileUtilities
 		{
 			val outputDir = outputFile.getParentFile
 			val result = createDirectory(outputDir, log) orElse
-				openJar(outputFile, manifest).flatMap(output => writeJar(sources, output, log))
+				openJar(outputFile, manifest).flatMap(output => writeJar(sources, output, recursive, log))
 			if(result.isEmpty)
 				log.info("Packaging complete.")
 			result
 		}
 	}
 	
-	private def writeJar(sources: Iterable[Path], output: JarOutputStream, log: Logger) =
+	private def writeJar(sources: Iterable[Path], output: JarOutputStream, recursive: Boolean, log: Logger) =
 	{
 		def add(source: Path)
 		{
 			val sourceFile = source.asFile
 			if(sourceFile.isDirectory)
-				wrapNull(sourceFile.listFiles).foreach(file => add(source / file.getName))
+			{
+				if(recursive)
+					wrapNull(sourceFile.listFiles).foreach(file => add(source / file.getName))
+			}
 			else if(sourceFile.exists)
 			{
 				log.debug("\tAdding " + source + " ...")
@@ -252,5 +255,5 @@ object FileUtilities
 		else
 			a
 			
-	lazy val containingJar: File = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
+	lazy val sbtJar: File = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
 }

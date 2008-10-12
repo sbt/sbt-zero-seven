@@ -3,9 +3,10 @@
  */
 package sbt
 
-class DefaultProject(val info: ProjectInfo, val analysis: ProjectAnalysis) extends Project with ConsoleLogger
+class DefaultProject(val info: ProjectInfo, val dependencies: Iterable[Project]) extends BasicScalaProject
+abstract class BasicScalaProject extends ScalaProject with ReflectiveProject with ConsoleLogger
 {
-	import DefaultProject._
+	import BasicScalaProject._
 	def mainClass: Option[String] = None
 
 	lazy val clean = cleanTask(outputPath, ClearAnalysis :: Nil) describedAs CleanDescription
@@ -17,18 +18,17 @@ class DefaultProject(val info: ProjectInfo, val analysis: ProjectAnalysis) exten
 	lazy val test = testTask(compilePath +++ libraries, Nil).dependsOn(compile) describedAs TestDescription
 	lazy val `package` = packageTask(getClasses(mainSources) +++ mainResources, mainClass.map(MainClassOption(_)).toList).dependsOn(compile) describedAs PackageDescription
 	lazy val packageTest = packageTask(getClasses(testSources) +++ testResources, JarName(defaultJarBaseName + "-test.jar") :: Nil).dependsOn(test) describedAs TestPackageDescription
-	lazy val packageDocs = packageTask(mainDocPath ##, JarName(defaultJarBaseName + "-docs.jar") :: Nil).dependsOn(doc) describedAs DocPackageDescription
+	lazy val packageDocs = packageTask(mainDocPath ##, Recursive :: JarName(defaultJarBaseName + "-docs.jar") :: Nil).dependsOn(doc) describedAs DocPackageDescription
 	lazy val packageSrc = packageTask(allSources, JarName(defaultJarBaseName + "-src.jar") :: Nil) describedAs SourcePackageDescription
 	lazy val docAll = (doc && docTest) describedAs DocAllDescription
 	lazy val packageAll = (`package` && packageTest && packageSrc) describedAs PackageAllDescription
 	lazy val release = clean && compile && test && packageAll && doc 
 
-	def allSources = (sourcePath ##) ** "*.scala" - ".svn"
+	def allSources = (sourcePath ##) -- ".svn"
 	def mainSources = mainScalaSourcePath ** "*.scala" - ".svn"
 	def testSources = testScalaSourcePath ** "*.scala" - ".svn"
 	def mainResources = (mainResourcesPath ##) -- ".svn"
 	def testResources = (testResourcesPath ##) -- ".svn"
-	def libraries = dependencyPath ** "*.jar" - ".svn"
 	
 	import Project._
 	
@@ -41,7 +41,7 @@ class DefaultProject(val info: ProjectInfo, val analysis: ProjectAnalysis) exten
 		Nil
 }
 
-object DefaultProject
+object BasicScalaProject
 {
 	val CleanDescription =
 		"Deletes all generated files (the target directory and the metadata/analysis directory)."

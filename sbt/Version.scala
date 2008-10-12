@@ -22,7 +22,7 @@ object Version
 	def fromString(v: String): Either[String, Version] =
 	{
 		val trimmed = v.trim
-		if(trimmed.isEmpty)
+		if(trimmed.isEmpty)//length == 0)
 			Left("No project version specified")
 		else if(trimmed.charAt(0) == '"')
 		{
