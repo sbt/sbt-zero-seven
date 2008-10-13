@@ -9,6 +9,7 @@ sbt/Compile.scala -text
 sbt/Dag.scala -text
 sbt/DefaultProject.scala -text
 sbt/FileUtilities.scala -text
+sbt/LineReader.scala -text
 sbt/Logger.scala -text
 sbt/Main.scala -text
 sbt/ModuleUtilities.scala -text
