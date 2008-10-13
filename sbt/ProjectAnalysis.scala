@@ -14,17 +14,20 @@ final class ProjectAnalysis extends NotNull
 	private val tests = new HashMap[Path, Set[String]]
 	private val generatedClasses = new HashMap[Path, Set[Path]]
 	private val projectDefinitions = new HashMap[Path, Set[String]]
-	private def allMaps = List(dependencies, tests, generatedClasses, projectDefinitions)
+	private val externalDependencies = new HashMap[File, Set[Path]]
+	private def maps = List(dependencies, tests, generatedClasses, projectDefinitions)
 	
 	def clear =
-		for(map <- allMaps)
+	{
+		for(map <- maps)
 			map.clear
-	
+		externalDependencies.clear
+	}
 	def removeSource(source: Path, log: Logger)
 	{
 		for(classes <- generatedClasses.get(source))
 			FileUtilities.clean(classes, true, log)
-		for(map <- allMaps)
+		for(map <- maps)
 			map -= source
 	}
 	def removeSelfDependency(source: Path)
@@ -36,8 +39,12 @@ final class ProjectAnalysis extends NotNull
 	{
 		for(deps <- dependencies.values)
 			deps -= source
+		for(deps <- externalDependencies.values)
+			deps -= source
 	}
 	def removeDependencies(source: Path) = dependencies.removeKey(source)
+	def removeExternalDependency(dep: File) = externalDependencies.removeKey(dep)
+	
 	def getDependencies(source: Path) = dependencies.get(source)
 	def getClasses(sources: Iterable[Path]): Iterable[Path] =
 	{
@@ -52,9 +59,11 @@ final class ProjectAnalysis extends NotNull
 	def allTests = all(tests)
 	def allClasses = all(generatedClasses)
 	def allProjects = all(projectDefinitions)
+	def allExternalDependencies = externalDependencies.elements.toList
 	
 	def addTest(source: Path, testClassName: String) = add(source, testClassName, tests)
-	def addDependency(on: Path, from: Path) = add(on, from, dependencies)
+	def addSourceDependency(on: Path, from: Path) = add(on, from, dependencies)
+	def addExternalDependency(on: File, from: Path) = add(on, from, externalDependencies)
 	def addGeneratedClass(source: Path, file: Path) = add(source, file, generatedClasses)
 	def addProjectDefinition(source: Path, className: String) = add(source, className, projectDefinitions)
 	def markSource(source: Path) =
@@ -70,7 +79,8 @@ final class ProjectAnalysis extends NotNull
 		loadPaths(dependencies, analysisPath / DependenciesFileName, info, log) orElse
 			loadStrings(tests, analysisPath / TestsFileName, info, log) orElse
 			loadPaths(generatedClasses, analysisPath / GeneratedFileName, info, log) orElse
-			loadStrings(projectDefinitions, analysisPath / ProjectDefinitionsName, info, log)
+			loadStrings(projectDefinitions, analysisPath / ProjectDefinitionsName, info, log) orElse
+			loadFilePaths(externalDependencies, analysisPath / ExternalDependenciesFileName, info, log)
 	}
 	
 	def save(info: ProjectInfo, log: Logger): Option[String] =
@@ -80,7 +90,8 @@ final class ProjectAnalysis extends NotNull
 			writePaths(dependencies, DependenciesLabel, analysisPath / DependenciesFileName, log) orElse
 			writeStrings(tests, TestsLabel, analysisPath / TestsFileName, log) orElse
 			writePaths(generatedClasses, GeneratedLabel, analysisPath / GeneratedFileName, log) orElse
-			writeStrings(projectDefinitions, ProjectDefinitionsLabel, analysisPath / ProjectDefinitionsName, log)
+			writeStrings(projectDefinitions, ProjectDefinitionsLabel, analysisPath / ProjectDefinitionsName, log) orElse
+			writeFilePaths(externalDependencies, ExternalDependenciesLabel, analysisPath / ExternalDependenciesFileName, log)
 	}
 	
 }
@@ -92,11 +103,13 @@ object ProjectAnalysis
 	val DependenciesFileName = "dependencies"
 	val TestsFileName = "tests"
 	val ProjectDefinitionsName = "projects"
+	val ExternalDependenciesFileName = "external"
 	
 	val GeneratedLabel = "Generated Classes"
 	val DependenciesLabel = "Source Dependencies"
 	val TestsLabel = "Tests"
 	val ProjectDefinitionsLabel = "Project Definitions"
+	val ExternalDependenciesLabel = "External Dependencies"
 	
 	private[sbt] def write(properties: Properties, label: String, to: Path, log: Logger) =
 		FileUtilities.writeStream(to.asFile, log)((output: OutputStream) => { properties.store(output, label); None })
@@ -123,7 +136,7 @@ object ProjectAnalysis
 	private[sbt] def all[Value](map: Map[Path, Set[Value]]): Iterable[Value] =
 		map.values.toList.flatMap(set => set.toList)
 	
-	private[sbt] def add[Value](key: Path, value: Value, map: Map[Path, Set[Value]])
+	private[sbt] def add[Key, Value](key: Key, value: Value, map: Map[Key, Set[Value]])
 	{
 		map.getOrElseUpdate(key, new HashSet[Value]) + value
 	}
@@ -141,11 +154,21 @@ object ProjectAnalysis
 			properties.setProperty(path.relativePath, valuesToString(set))
 		write(properties, label, to, log)
 	}
+	private[sbt] def writeFilePaths(map: Map[File, Set[Path]], label: String, to: Path, log: Logger) =
+	{
+		val properties = new Properties
+		for( (file, set) <- map)
+			properties.setProperty(file.getCanonicalPath, Path.makeRelativeString(set))
+		write(properties, label, to, log)
+	}
+	
+	private def pathSetFromString(info: ProjectInfo)(s: String): Set[Path] =
+		(new HashSet[Path]) ++ Path.splitString(info.projectPath, s)
 	
 	private[sbt] def loadStrings(map: Map[Path, Set[String]], from: Path, info: ProjectInfo, log: Logger) =
 		load(map, (s: String) => (new HashSet[String]) ++ FileUtilities.pathSplit(s), from, info, log)
 	private[sbt] def loadPaths(map: Map[Path, Set[Path]], from: Path, info: ProjectInfo, log: Logger) =
-		load(map, (s: String) => (new HashSet[Path]) ++ Path.splitString(info.projectPath, s), from, info, log)
+		load(map, pathSetFromString(info)(_), from, info, log)
 	private[sbt] def load[Value](map: Map[Path, Set[Value]], stringToSet: String => Set[Value],
 		from: Path, info: ProjectInfo, log: Logger): Option[String] =
 	{
@@ -161,6 +184,22 @@ object ProjectAnalysis
 				val name = nameKey.toString
 				val key = Path.fromString(base, name)
 				map.put(key, stringToSet(properties.getProperty(name)))
+			}
+			None
+		}
+	}
+	private[sbt] def loadFilePaths(map: Map[File, Set[Path]], from: Path, info: ProjectInfo, log: Logger) =
+	{
+		map.clear
+		val properties = new Properties
+		load(properties, from, log) orElse
+		{
+			import java.util.Collections.list
+			import scala.collection.jcl.Conversions.convertList
+			for(nameKey <- convertList(list(properties.propertyNames)))
+			{
+				val name = nameKey.toString
+				map.put(new File(name), pathSetFromString(info)(properties.getProperty(name)))
 			}
 			None
 		}

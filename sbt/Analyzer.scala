@@ -5,7 +5,8 @@ package sbt
 
 import FileUtilities.printableFilename
 
-import scala.tools.nsc.{plugins, Global, Phase}
+import scala.tools.nsc.{io, plugins, Global, Phase}
+import io.{AbstractFile, PlainFile, ZipArchive}
 import plugins.{Plugin, PluginComponent}
 import scala.collection.mutable.{HashMap, HashSet, Map, Set}
 
@@ -86,13 +87,33 @@ class Analyzer(val global: Global) extends Plugin
 				for(on <- unit.depends)
 				{
 					val onSource = on.sourceFile
-					if(onSource != null) // possibly add jar dependencies here
+					if(onSource == null)
+					{
+						classFile(on) match
+						{
+							case Some(f) =>
+							{
+								f match
+								{
+									case ze: ZipArchive#Entry => callback.jarDependency(new File(ze.getArchive.getName), sourcePath)
+									case pf: PlainFile =>
+									{
+										 // ignore dependencies in the output directory: these are handled by source dependencies
+										if(Path.relativize(outputPath, pf.file).isEmpty)
+											callback.classDependency(pf.file, sourcePath)
+									}
+									case _ => ()
+								}
+							}
+							case None => ()
+						}
+					}
+					else
 					{
 						for(depPath <- relativize(onSource.file))
-							callback.dependency(depPath, sourcePath)
+							callback.sourceDependency(depPath, sourcePath)
 					}
 				}
-				//analysis.removeSelfDependency(sourcePath)
 				
 				// build list of tests if ScalaCheck is on the classpath
 				for(clazz @ ClassDef(mods, n, _, _) <- unit.body)
@@ -132,6 +153,17 @@ class Analyzer(val global: Global) extends Plugin
 				callback.endSource(sourcePath)
 			}
 		}
+	}
+	
+	private def classFile(sym: Symbol): Option[AbstractFile] =
+	{
+		import scala.tools.nsc.symtab.Flags
+		val name = sym.fullNameString(java.io.File.separatorChar) + (if (sym.hasFlag(Flags.MODULE)) "$" else "")
+		val entry = classPath.root.find(name, false)
+		if (entry ne null)
+			Some(entry.classFile)
+		else
+			None
 	}
 	
 	private def checkPath(unit: CompilationUnit, path: Path)

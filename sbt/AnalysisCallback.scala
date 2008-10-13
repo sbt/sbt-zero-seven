@@ -3,6 +3,8 @@
  */
 package sbt
 
+import java.io.File
+
 object AnalysisCallback
 {
 	private val map = new scala.collection.mutable.HashMap[Int, AnalysisCallback]
@@ -30,7 +32,9 @@ trait AnalysisCallback extends NotNull
 	
 	def beginSource(sourcePath: Path): Unit
 	def foundSubclass(sourcePath: Path, subclassName: String, superclassName: String, isModule: Boolean): Unit
-	def dependency(dependsOnPath: Path, sourcePath: Path): Unit
+	def sourceDependency(dependsOnPath: Path, sourcePath: Path): Unit
+	def jarDependency(jarPath: File, sourcePath: Path): Unit
+	def classDependency(classFile: File, sourcePath: Path): Unit
 	def generatedClass(sourcePath: Path, modulePath: Path): Unit
 	def endSource(sourcePath: Path): Unit
 }
@@ -43,9 +47,17 @@ abstract class BasicAnalysisCallback(val basePath: Path, val superclassNames: It
 	{
 		analysis.markSource(sourcePath)
 	}
-	def dependency(dependsOnPath: Path, sourcePath: Path)
+	def sourceDependency(dependsOnPath: Path, sourcePath: Path)
 	{
-		analysis.addDependency(dependsOnPath, sourcePath)
+		analysis.addSourceDependency(dependsOnPath, sourcePath)
+	}
+	def jarDependency(jarFile: File, sourcePath: Path)
+	{
+		analysis.addExternalDependency(jarFile, sourcePath)
+	}
+	def classDependency(classFile: File, sourcePath: Path)
+	{
+		analysis.addExternalDependency(classFile, sourcePath)
 	}
 	def generatedClass(sourcePath: Path, modulePath: Path)
 	{

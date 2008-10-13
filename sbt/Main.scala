@@ -97,7 +97,7 @@ object Main
 	}
 	private def setLevel(project: Project, level: Level.Value)
 	{
-		project.setLevel(level)
+		project.topologicalSort.foreach(_.setLevel(level))
 		Console.println("Set log level to " + project.getLevel)
 	}
 	private def printTime(project: Project, startTime: Long, s: String)

@@ -114,9 +114,18 @@ object Path
 		else
 			None
 	}
-	def basePathString(basePath: Path): String =
+	private[sbt] def relativize(baseFile: File, file: File): Option[String] =
 	{
-		val baseFile = basePath.asFile
+		val pathString = file.getCanonicalPath
+		val baseString = baseFileString(baseFile)
+		if(pathString.startsWith(baseString))
+			Some(pathString.substring(baseString.length))
+		else
+			None
+	}
+	def basePathString(basePath: Path): String = baseFileString(basePath.asFile)
+	private def baseFileString(baseFile: File): String =
+	{
 		require(baseFile.isDirectory)
 		
 		val cp = baseFile.getCanonicalPath

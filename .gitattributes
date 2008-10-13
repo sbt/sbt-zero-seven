@@ -4,6 +4,7 @@
 sbt/AnalysisCallback.scala -text
 sbt/Analyzer.scala -text
 sbt/BuilderProject.scala -text
+sbt/ClasspathUtilities.scala -text
 sbt/Compile.scala -text
 sbt/Dag.scala -text
 sbt/DefaultProject.scala -text

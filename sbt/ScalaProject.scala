@@ -96,6 +96,36 @@ trait ScalaProject extends Project
 				}
 				val directlyModifiedCount = modified.size
 				
+				val (classpathJars, classpathDirs) = ClasspathUtilities.buildSearchPaths(fullClasspath.get)
+				for((externalDependency, dependentSources) <- analysis.allExternalDependencies)
+				{
+					if(externalDependency.exists &&
+						ClasspathUtilities.onClasspath(classpathJars, classpathDirs, externalDependency))
+					{
+						val dependencyLastModified = externalDependency.lastModified
+						for(dependentSource <- dependentSources; classes <- analysis.getClasses(dependentSource))
+						{
+							classes.find(_.asFile.lastModified < dependencyLastModified) match
+							{
+								case Some(modifiedClass) => 
+								{
+									debug("Class " + modifiedClass + " older than external dependency " + externalDependency.getCanonicalPath)
+									unmodified -= dependentSource
+									modified += dependentSource
+								}
+								case None => ()
+							}
+						}
+					}
+					else
+					{
+						debug("External dependency " + externalDependency + " not on classpath")
+						unmodified --= dependentSources
+						modified ++= dependentSources
+						analysis.removeExternalDependency(externalDependency)
+					}
+				}
+				
 				def markDependenciesModified(changed: Iterable[Path]): List[Path] =
 				{
 					var newChanges: List[Path] = Nil
@@ -355,7 +385,7 @@ trait ScalaProject extends Project
 		Path.lazyPathFinder
 		{
 			val set = new scala.collection.jcl.LinkedHashSet[Path]
-			for(project <- topologicalSort.reverse)
+			for(project <- topologicalSort)
 			{
 				project match
 				{
