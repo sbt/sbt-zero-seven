@@ -15,13 +15,13 @@ trait Project extends Logger with TaskManager with Dag[Project]
 	def tasks: Map[String, Task]
 	/** The names of available tasks that may be called through `act`.  These include
 	* the names of the Tasks in `tasks` and in those of all dependencies.*/
-	def taskNames: Iterable[String] =
+	def taskNames: Iterable[String] = deepTasks.keys.toList
+	def deepTasks: Map[String, Project#Task] =
 	{
-		val names = new mutable.HashSet[String]
-		names ++= tasks.keys
+		val tasks = new jcl.TreeMap[String, Project#Task]
 		for(dependentProject <- topologicalSort)
-			names ++= dependentProject.tasks.keys
-		names.toList
+			tasks ++= dependentProject.tasks.elements
+		tasks
 	}
 	def subProjects: Map[String, Project] = immutable.Map.empty
 	def projectNames: Iterable[String] =

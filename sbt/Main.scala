@@ -3,6 +3,8 @@
  */
 package sbt
 
+import scala.collection.immutable.TreeSet
+
 object Main
 {
 	def main(args: Array[String])
@@ -14,6 +16,7 @@ object Main
 			project.info("Building project " + i.name + " " + i.currentVersion.toString + " using " + project.getClass.getName)
 			if(args.length == 0)
 			{
+				project.info("No actions specified, interactive session started.")
 				interactive(project)
 				printTime(project, startTime, "session")
 			}
@@ -29,17 +32,19 @@ object Main
 		}
 	}
 	
-	val ShowLevel = "level"
+	val ShowCurrent = "current"
 	val ShowActions = "actions"
-	protected def interactiveCommands: Iterable[String] =
-		ShowActions :: ShowLevel :: Level.elements.map(_.toString).toList
-		
-	def interactive(project: Project)
+	val ProjectAction = "project"
+	val ShowProjectsAction = "projects"
+	
+	protected def interactiveCommands: Iterable[String] = basicCommands.toList ++ logLevels.toList
+	private def logLevels: Iterable[String] = TreeSet.empty[String] ++ Level.elements.map(_.toString)
+	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent)
+	
+	def interactive(baseProject: Project)
 	{
-		project.info("No actions specified, interactive session started.")
-		
-		val reader = new JLineReader(project.taskNames ++ interactiveCommands)
-		def loop()
+		val reader = new JLineReader(baseProject, ProjectAction, interactiveCommands)
+		def loop(currentProject: Project)
 		{
 			reader.readLine("> ") match
 			{
@@ -47,24 +52,56 @@ object Main
 					val trimmed = line.trim
 					if(isExitCommand(trimmed))
 						()
+					else if(trimmed == ShowProjectsAction)
+					{
+						baseProject.topologicalSort.foreach(listProject)
+						loop(currentProject)
+					}
+					else if(trimmed.startsWith(ProjectAction + " "))
+					{
+						val projectName = trimmed.substring(ProjectAction.length + 1)
+						baseProject.topologicalSort.find(_.info.name == projectName) match
+						{
+							case Some(newProject) =>
+							{
+								printProject("Set current project to ", newProject)
+								reader.changeProject(newProject)
+								loop(newProject)
+							}
+							case None =>
+							{
+								currentProject.error("Invalid project name '" + projectName + "' (type 'projects' to list available projects).")
+								loop(currentProject)
+							}
+						}
+					}
 					else
 					{
-						handleCommand(project, trimmed)
-						loop()
+						handleCommand(currentProject, trimmed)
+						loop(currentProject)
 					}
 				case None => ()
 			}
 		}
-		loop()
+		loop(baseProject)
+	}
+	private def listProject(p: Project) = printProject("\t", p)
+	private def printProject(prefix: String, p: Project)
+	{
+		Console.println(prefix + p.info.name + " " + p.info.currentVersion)
 	}
 	
 	private def handleCommand(project: Project, command: String)
 	{
 		command match
 		{
-			case ShowLevel => Console.println("Current log level is " + project.getLevel)
-			case ShowActions => 
-				for( (name, task) <- project.tasks)
+			case ShowCurrent =>
+			{
+				printProject("Current project is ", project)
+				Console.println("Current log level is " + project.getLevel)
+			}
+			case ShowActions =>
+				for( (name, task) <- project.deepTasks)
 					Console.println("\t" + name + task.description.map(x => ": " + x).getOrElse(""))
 			case action =>
 			{
@@ -108,3 +145,4 @@ object Main
 		project.info("Total " + ss + "time: " + (endTime - startTime) / 1000 + " s")
 	}
 }
+

@@ -177,14 +177,8 @@ object ProjectAnalysis
 		load(properties, from, log) orElse
 		{
 			val base = info.projectPath
-			import java.util.Collections.list
-			import scala.collection.jcl.Conversions.convertList
-			for(nameKey <- convertList(list(properties.propertyNames)))
-			{
-				val name = nameKey.toString
-				val key = Path.fromString(base, name)
-				map.put(key, stringToSet(properties.getProperty(name)))
-			}
+			for(name <- propertyNames(properties))
+				map.put(Path.fromString(base, name), stringToSet(properties.getProperty(name)))
 			None
 		}
 	}
@@ -194,14 +188,15 @@ object ProjectAnalysis
 		val properties = new Properties
 		load(properties, from, log) orElse
 		{
-			import java.util.Collections.list
-			import scala.collection.jcl.Conversions.convertList
-			for(nameKey <- convertList(list(properties.propertyNames)))
-			{
-				val name = nameKey.toString
+			for(name <- propertyNames(properties))
 				map.put(new File(name), pathSetFromString(info)(properties.getProperty(name)))
-			}
 			None
 		}
+	}
+	private def propertyNames(properties: Properties): Iterable[String] =
+	{
+		import java.util.Collections.list
+		import scala.collection.jcl.Conversions.convertList
+		convertList(list(properties.propertyNames)).map(_.toString)
 	}
 }
