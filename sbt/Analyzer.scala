@@ -131,24 +131,20 @@ class Analyzer(val global: Global) extends Plugin
 				for(iclass <- unit.icode)
 				{
 					val sym = iclass.symbol
-					if(sym.isModuleClass && !sym.isImplClass)
+					def addGenerated(separatorRequired: Boolean)
 					{
-						if(isTopLevelModule(sym) && sym.linkedClassOfModule == NoSymbol)
-						{
-							val classPath = pathOfClass(outputPath, sym, false)
-							checkPath(unit, classPath)
-							callback.generatedClass(sourcePath, classPath)
-						}
-						val modulePath = pathOfClass(outputPath, sym, true)
-						checkPath(unit, modulePath)
-						callback.generatedClass(sourcePath, modulePath)
-					}
-					else
-					{
-						val classPath = pathOfClass(outputPath, sym, false)
+						val classPath = pathOfClass(outputPath, sym, separatorRequired)
 						checkPath(unit, classPath)
 						callback.generatedClass(sourcePath, classPath)
 					}
+					if(sym.isModuleClass && !sym.isImplClass)
+					{
+						if(isTopLevelModule(sym) && sym.linkedClassOfModule == NoSymbol)
+							addGenerated(false)
+						addGenerated(true)
+					}
+					else
+						addGenerated(false)
 				}
 				callback.endSource(sourcePath)
 			}
