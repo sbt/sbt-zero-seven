@@ -10,25 +10,30 @@ object Main
 	def main(args: Array[String])
 	{
 		val startTime = System.currentTimeMillis
-		for(project <- Project.loadProject.right)
+		Project.loadProject match
 		{
-			val i = project.info
-			project.info("Building project " + i.name + " " + i.currentVersion.toString + " using " + project.getClass.getName)
-			if(args.length == 0)
+			case Left(errorMessage) => println(errorMessage)
+			case Right(project) => startProject(project, args, startTime)
+		}
+	}
+	private def startProject(project: Project, args: Array[String], startTime: Long)
+	{
+		val i = project.info
+		project.info("Building project " + i.name + " " + i.currentVersion.toString + " using " + project.getClass.getName)
+		if(args.length == 0)
+		{
+			project.info("No actions specified, interactive session started.")
+			interactive(project)
+			printTime(project, startTime, "session")
+		}
+		else
+		{
+			((None: Option[String]) /: args)( (errorMessage, arg) => errorMessage orElse project.act(arg) ) match
 			{
-				project.info("No actions specified, interactive session started.")
-				interactive(project)
-				printTime(project, startTime, "session")
+				case None => project.success("Build completed successfully.")
+				case Some(errorMessage) => project.error("Error during build: " + errorMessage)
 			}
-			else
-			{
-				((None: Option[String]) /: args)( (errorMessage, arg) => errorMessage orElse project.act(arg) ) match
-				{
-					case None => project.success("Build completed successfully.")
-					case Some(errorMessage) => project.error("Error during build: " + errorMessage)
-				}
-				printTime(project, startTime, "build")
-			}
+			printTime(project, startTime, "build")
 		}
 	}
 	
@@ -142,7 +147,7 @@ object Main
 		val endTime = System.currentTimeMillis()
 		project.info("")
 		val ss = if(s.isEmpty) "" else s + " "
-		project.info("Total " + ss + "time: " + (endTime - startTime) / 1000 + " s")
+		project.info("Total " + ss + "time: " + (endTime - startTime + 500) / 1000 + " s")
 	}
 }
 

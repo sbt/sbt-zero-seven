@@ -4,13 +4,14 @@
 package sbt
 
 class DefaultProject(val info: ProjectInfo, val dependencies: Iterable[Project]) extends BasicScalaProject
+
 abstract class BasicScalaProject extends ScalaProject with ReflectiveProject with ConsoleLogger
 {
 	import BasicScalaProject._
 	def mainClass: Option[String] = None
 
 	lazy val clean = cleanTask(outputPath, ClearAnalysis :: Nil) describedAs CleanDescription
-	lazy val compile = compileTask(mainSources +++ testSources, compilePath, compileOptions, false) describedAs CompileDescription
+	lazy val compile = compileTask(mainSources +++ testSources, compilePath, compileOptions) describedAs CompileDescription
 	lazy val run = runTask(mainClass, compilePath +++ libraries, runOptions).dependsOn(compile) describedAs RunDescription
 	lazy val console = consoleTask(compilePath +++ libraries).dependsOn(compile) describedAs ConsoleDescription
 	lazy val doc = scaladocTask(mainSources, mainDocPath, compilePath, documentOptions).dependsOn(compile) describedAs DocDescription

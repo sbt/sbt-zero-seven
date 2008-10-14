@@ -79,9 +79,27 @@ trait Project extends Logger with TaskManager with Dag[Project]
 	
 	implicit def path(component: String): Path = info.projectPath / component
 	
-	def project(path: Path) = getProject(Project.loadProject(path, Nil), path)
-	def project(path: Path, dep0: Project, deps: Project*) =
+	def project(path: Path): Project = getProject(Project.loadProject(path, Nil), path)
+	def project(path: Path, dep0: Project, deps: Project*): Project =
 		getProject(Project.loadProject(path, dep0 :: deps.toList), path)
+	def project(path: Path, name: String, deps: Project*): Project = 
+		project(path, name, ProjectInfo.DefaultBuilderClass, deps: _*)
+	def project[P <: Project](path: Path, name: String, builderClass: Class[P], deps: Project*): Project =
+	{
+		require(builderClass != this.getClass, "Cannot recursively construct projects of same type: " + builderClass.getName)
+		val newInfo = new ProjectInfo(name, info.currentVersion, builderClass.getName, path.asFile)(false)
+		Project.loadProject(newInfo, builderClass, deps)
+	}
+	def project(path: Path, name: String, construct: ProjectInfo => Project): Project =
+	{
+		val newInfo = new ProjectInfo(name, info.currentVersion, "", path.asFile)(false)
+		construct(newInfo)
+	}
+	def project(path: Path, name: String, construct: (ProjectInfo, Iterable[Project]) => Project, deps: Iterable[Project]): Project =
+	{
+		val newInfo = new ProjectInfo(name, info.currentVersion, "", path.asFile)(false)
+		construct(newInfo, deps)
+	}
 	
 	def initializeDirectories() {}
 	
@@ -135,11 +153,7 @@ object Project
 				val (builderClassName, loader) = classAndLoader
 				val builderClass = Class.forName(builderClassName, false, loader)
 				require(classOf[Project].isAssignableFrom(builderClass), "Builder class '" + builderClass + "' does not extend Project.")
-				val constructor = builderClass.getDeclaredConstructor(classOf[ProjectInfo], classOf[Iterable[Project]])
-				val project = constructor.newInstance(info, deps).asInstanceOf[Project]
-				if(info.initializeDirectories)
-					project.initializeDirectories()
-				project
+				loadProject(info, builderClass.asSubclass(classOf[Project]), deps)
 			}
 		}
 		catch
@@ -147,9 +161,17 @@ object Project
 			case e: Exception =>
 			{
 				log.trace(e)
-				Left("Error loading project: " + e.getMessage)
+				Left("Error loading project: " + e.toString)
 			}
 		}
+	}
+	private def loadProject[P <: Project](info: ProjectInfo, builderClass: Class[P], deps: Iterable[Project]): Project =
+	{
+		val constructor = builderClass.getConstructor(classOf[ProjectInfo], classOf[Iterable[Project]])
+		val project = constructor.newInstance(info, deps)
+		if(info.initializeDirectories)
+			project.initializeDirectories()
+		project
 	}
 	private def getProjectDefinition(info: ProjectInfo): Either[String, (String, ClassLoader)] =
 	{

@@ -21,6 +21,8 @@ object ProjectInfo
 	val MetadataDirectoryName = "metadata"
 	val ProjectInfoFileName = "info"
 	
+	val DefaultBuilderClass = Class.forName(DefaultBuilderClassName).asSubclass(classOf[Project])
+	
 	def write(info: ProjectInfo, log: Logger): Option[String] =
 		FileUtilities.createDirectory(info.builderPath.asFile, log) orElse doWrite(info, log)
 	private def doWrite(info: ProjectInfo, log: Logger): Option[String] =

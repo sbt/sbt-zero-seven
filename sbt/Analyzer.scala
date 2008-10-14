@@ -115,13 +115,13 @@ class Analyzer(val global: Global) extends Plugin
 					}
 				}
 				
-				// build list of tests if ScalaCheck is on the classpath
+				// find subclasses
 				for(clazz @ ClassDef(mods, n, _, _) <- unit.body)
 				{
 					val sym = clazz.symbol
-					if(mods.isPublic && !mods.isDeferred && !sym.isImplClass)
+					if(mods.isPublic && !mods.isDeferred && !sym.isImplClass && sym.isStatic)
 					{
-						val isModule = sym.isModuleClass && sym.isStatic
+						val isModule = sym.isModuleClass
 						for(superclass <- superclasses.filter(sym.isSubClass))
 							callback.foundSubclass(sourcePath, sym.fullNameString, superclass.fullNameString, isModule)
 					}

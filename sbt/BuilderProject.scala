@@ -39,11 +39,13 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject with Cons
 			}
 		}
 	
+	override def projectClasspath = super.projectClasspath +++
+		Path.lazyPathFinder { new ProjectDirectory(FileUtilities.sbtJar) :: Nil }
 	def mainSources = sourcePath ** "*.scala" - ".svn"
-	def compileOptions = Deprecation :: Nil
+	def compileOptions = Deprecation :: Unchecked :: Nil
 	override def tasks = Map.empty
 	def dependencies = Nil
 
-	lazy val compile = compileTask(mainSources, compilePath, compileOptions, true)
+	lazy val compile = compileTask(mainSources, compilePath, compileOptions)
 	lazy val clean = cleanTask(outputPath, ClearAnalysis :: Nil)
 }

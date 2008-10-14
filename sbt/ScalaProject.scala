@@ -270,12 +270,11 @@ trait ScalaProject extends Project
 				ScalaCheckTests(classpath.get, tests, this)
 		}
 
-	def compileTask( sources: PathFinder, outputDirectory: Path, options: Iterable[CompileOption], includeSbtInClasspath: Boolean): Task =
+	def compileTask( sources: PathFinder, outputDirectory: Path, options: Iterable[CompileOption]): Task =
 		conditionalAction(sources, 
 			(dirtySources: Iterable[Path]) =>
 			{
-				val classpathString = Path.makeString(fullClasspath.get) +
-					(if(includeSbtInClasspath) File.pathSeparator + sbtJar else "")
+				val classpathString = Path.makeString(fullClasspath.get)
 				val id = AnalysisCallback.register(analysisCallback)
 				val allOptions = (CompileOption("-Xplugin:" + sbtJar.getCanonicalPath) ::
 					CompileOption("-P:sbt-analyzer:callback:" + id.toString) :: Nil) ++ options
