@@ -19,8 +19,14 @@ trait Project extends Logger with TaskManager with Dag[Project]
 	def taskNames: Iterable[String] = deepTasks.keys.toList
 	/** A description of all available tasks in this project and all dependencies.  If there
 	* are different tasks with the same name, only one will be included. */
-	def taskList: String = deepTasks.foldLeft("")(_ + "\t" + name + task.description.map(x => ": " + x).getOrElse(""))
-	private def deepTasks: Map[String, Project#Task] =
+	def taskList: String =
+	{
+		val buffer = new StringBuilder
+		for((name, task) <- deepTasks)
+			buffer.append("\t" + name + task.description.map(x => ": " + x).getOrElse("") + "\n")
+		buffer.toString
+	}
+	private[sbt] def deepTasks: Map[String, Project#Task] =
 	{
 		val tasks = new jcl.TreeMap[String, Project#Task]
 		for(dependentProject <- topologicalSort)
