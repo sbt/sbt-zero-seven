@@ -5,8 +5,14 @@ package sbt
 
 import scala.collection.immutable.TreeSet
 
+/** This class is the entry point for sbt.  If it is given any arguments, it interprets them
+* as actions, executes the corresponding actions, and exits.  If there were no arguments provided,
+* sbt enters interactive mode.*/
 object Main
 {
+	/** The entry point for sbt.  If arguments are specified, they are interpreted as actions, executed,
+	* and then the program terminates.  If no arguments are specified, the program enters interactive
+	* mode.*/
 	def main(args: Array[String])
 	{
 		val startTime = System.currentTimeMillis
@@ -37,13 +43,23 @@ object Main
 		}
 	}
 	
+	/** The name of the action that shows the current project and logging level of that project.*/
 	val ShowCurrent = "current"
+	/** The name of the action that shows all available actions.*/
 	val ShowActions = "actions"
+	/** The name of the action that sets the currently active project.*/
 	val ProjectAction = "project"
+	/** The name of the action that shows all available projects.*/
 	val ShowProjectsAction = "projects"
+	/** The list of lowercase action names that may be used to terminate the program.*/
+	val TerminateActions: Iterable[String] = "exit" :: "quit" :: Nil
 	
+	/** The list of all available commands at the interactive prompt in addition to the tasks defined
+	* by a project.*/
 	protected def interactiveCommands: Iterable[String] = basicCommands.toList ++ logLevels.toList
+	/** The list of logging levels.*/
 	private def logLevels: Iterable[String] = TreeSet.empty[String] ++ Level.elements.map(_.toString)
+	/** The list of all interactive commands other than logging level.*/
 	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent)
 	
 	def interactive(baseProject: Project)
@@ -55,7 +71,7 @@ object Main
 			{
 				case Some(line) =>
 					val trimmed = line.trim
-					if(isExitCommand(trimmed))
+					if(TerminateActions.contains(trimmed.toLowerCase))
 						()
 					else if(trimmed == ShowProjectsAction)
 					{
@@ -132,11 +148,6 @@ object Main
 			}
 		}
 	}
-	private def isExitCommand(v: String) =
-	{
-		val s = v.toLowerCase
-		s == "exit" || s == "quit"
-	}
 	private def setLevel(project: Project, level: Level.Value)
 	{
 		project.topologicalSort.foreach(_.setLevel(level))
@@ -150,4 +161,3 @@ object Main
 		project.info("Total " + ss + "time: " + (endTime - startTime + 500) / 1000 + " s")
 	}
 }
-
