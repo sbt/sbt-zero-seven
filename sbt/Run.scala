@@ -21,15 +21,31 @@ object Run
 				try
 				{
 					val loop = new InterpreterLoop
-					loop.main(settings)
-					None
+					executeTrapExit(loop.main(settings), log)
 				}
 				catch
 				{
-					case e: Exception => log.trace(e); Some("Error during session: " + e.getMessage)
+					case e: Exception => log.trace(e); Some("Error during session: " + e.toString)
 				}
 			}
 		}
+	private def executeTrapExit(f: => Unit, log: Logger): Option[String] =
+	{
+		TrapExit(f, log) match
+		{
+			case Left(exitCode) =>
+			{
+				if(exitCode == 0)
+				{
+					log.debug("Exited with code 0")
+					None
+				}
+				else
+					Some("Nonzero exit code: " + exitCode)
+			}
+			case _ => None
+		}
+	}
 	def run(mainClass: String, classpath: Iterable[Path], options: Seq[String], log: Logger) =
 	{
 		createSettings(log)
@@ -43,12 +59,12 @@ object Run
 					val extraURLs =
 						for(pathString <- bootClasspath if pathString.length > 0) yield
 							(new java.io.File(pathString)).toURI.toURL
-					ObjectRunner.run(classpathURLs ++ extraURLs, mainClass, options.toList)
-					None
+					log.info("Running " + mainClass + " ...")
+					executeTrapExit( ObjectRunner.run(classpathURLs ++ extraURLs, mainClass, options.toList), log )
 				}
 				catch
 				{
-					case e: Exception => log.trace(e); Some("Error during run: " + e.getMessage)
+					case e: Exception => log.trace(e); Some("Error during run: " + e.toString)
 				}
 			}
 		}

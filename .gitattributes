@@ -1,4 +1,7 @@
 * text=auto !eol
+/LICENSE -text
+/LICENSE_Apache -text
+/NOTICE -text
 /build -text
 /clean -text
 sbt/AnalysisCallback.scala -text
@@ -22,5 +25,6 @@ sbt/Run.scala -text
 sbt/ScalaCheckTests.scala -text
 sbt/ScalaProject.scala -text
 sbt/TaskManager.scala -text
+sbt/TrapExit.scala -text
 sbt/Version.scala -text
 /scalac-plugin.xml -text
