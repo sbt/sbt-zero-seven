@@ -8,7 +8,7 @@ import java.util.Properties
 import ProjectAnalysis._
 import scala.collection.mutable.{HashMap, HashSet, ListBuffer, Map, Set}
 
-final class ProjectAnalysis extends NotNull
+final class ProjectAnalysis(analysisPath: Path, projectPath: Path, log: Logger) extends NotNull
 {
 	private val dependencies = new HashMap[Path, Set[Path]]
 	private val tests = new HashMap[Path, Set[String]]
@@ -17,13 +17,13 @@ final class ProjectAnalysis extends NotNull
 	private val externalDependencies = new HashMap[File, Set[Path]]
 	private def maps = List(dependencies, tests, generatedClasses, projectDefinitions)
 	
-	def clear =
+	def clear() =
 	{
 		for(map <- maps)
 			map.clear
 		externalDependencies.clear
 	}
-	def removeSource(source: Path, log: Logger)
+	def removeSource(source: Path)
 	{
 		for(classes <- generatedClasses.get(source))
 			FileUtilities.clean(classes, true, log)
@@ -75,21 +75,18 @@ final class ProjectAnalysis extends NotNull
 		mark(source, dependencies)
 		mark(source, generatedClasses)
 	}
-	def getAnalysisPath(info: ProjectInfo) = info.builderPath / AnalysisDirectoryName
-		
-	def load(info: ProjectInfo, log: Logger): Option[String] =
+	
+	def load(): Option[String] =
 	{
-		val analysisPath = getAnalysisPath(info)
-		loadPaths(dependencies, analysisPath / DependenciesFileName, info, log) orElse
-			loadStrings(tests, analysisPath / TestsFileName, info, log) orElse
-			loadPaths(generatedClasses, analysisPath / GeneratedFileName, info, log) orElse
-			loadStrings(projectDefinitions, analysisPath / ProjectDefinitionsName, info, log) orElse
-			loadFilePaths(externalDependencies, analysisPath / ExternalDependenciesFileName, info, log)
+		loadPaths(dependencies, analysisPath / DependenciesFileName, projectPath, log) orElse
+			loadStrings(tests, analysisPath / TestsFileName, projectPath, log) orElse
+			loadPaths(generatedClasses, analysisPath / GeneratedFileName, projectPath, log) orElse
+			loadStrings(projectDefinitions, analysisPath / ProjectDefinitionsName, projectPath, log) orElse
+			loadFilePaths(externalDependencies, analysisPath / ExternalDependenciesFileName, projectPath, log)
 	}
 	
-	def save(info: ProjectInfo, log: Logger): Option[String] =
+	def save(): Option[String] =
 	{
-		val analysisPath = getAnalysisPath(info)
 		FileUtilities.createDirectory(analysisPath.asFile, log) orElse
 			writePaths(dependencies, DependenciesLabel, analysisPath / DependenciesFileName, log) orElse
 			writeStrings(tests, TestsLabel, analysisPath / TestsFileName, log) orElse
@@ -100,9 +97,7 @@ final class ProjectAnalysis extends NotNull
 	
 }
 object ProjectAnalysis
-{
-	val AnalysisDirectoryName = "analysis"
-	
+{	
 	val GeneratedFileName = "generated_files"
 	val DependenciesFileName = "dependencies"
 	val TestsFileName = "tests"
@@ -132,10 +127,10 @@ object ProjectAnalysis
 			map.put(source, new HashSet[Path])
 	}
 	
-	def load(info: ProjectInfo, log: Logger): Either[String, ProjectAnalysis] =
+	def load(analysisPath: Path, projectPath: Path, log: Logger): Either[String, ProjectAnalysis] =
 	{
-		val analysis = new ProjectAnalysis
-		analysis.load(info, log).toLeft(analysis)
+		val analysis = new ProjectAnalysis(analysisPath, projectPath, log)
+		analysis.load().toLeft(analysis)
 	}
 	private[sbt] def all[Value](map: Map[Path, Set[Value]]): Iterable[Value] =
 		map.values.toList.flatMap(set => set.toList)
@@ -166,34 +161,33 @@ object ProjectAnalysis
 		write(properties, label, to, log)
 	}
 	
-	private def pathSetFromString(info: ProjectInfo)(s: String): Set[Path] =
-		(new HashSet[Path]) ++ Path.splitString(info.projectPath, s)
+	private def pathSetFromString(projectPath: Path)(s: String): Set[Path] =
+		(new HashSet[Path]) ++ Path.splitString(projectPath, s)
 	
-	private[sbt] def loadStrings(map: Map[Path, Set[String]], from: Path, info: ProjectInfo, log: Logger) =
-		load(map, (s: String) => (new HashSet[String]) ++ FileUtilities.pathSplit(s), from, info, log)
-	private[sbt] def loadPaths(map: Map[Path, Set[Path]], from: Path, info: ProjectInfo, log: Logger) =
-		load(map, pathSetFromString(info)(_), from, info, log)
+	private[sbt] def loadStrings(map: Map[Path, Set[String]], from: Path, projectPath: Path, log: Logger) =
+		load(map, (s: String) => (new HashSet[String]) ++ FileUtilities.pathSplit(s), from, projectPath, log)
+	private[sbt] def loadPaths(map: Map[Path, Set[Path]], from: Path, projectPath: Path, log: Logger) =
+		load(map, pathSetFromString(projectPath)(_), from, projectPath, log)
 	private[sbt] def load[Value](map: Map[Path, Set[Value]], stringToSet: String => Set[Value],
-		from: Path, info: ProjectInfo, log: Logger): Option[String] =
+		from: Path, projectPath: Path, log: Logger): Option[String] =
 	{
 		map.clear
 		val properties = new Properties
 		load(properties, from, log) orElse
 		{
-			val base = info.projectPath
 			for(name <- propertyNames(properties))
-				map.put(Path.fromString(base, name), stringToSet(properties.getProperty(name)))
+				map.put(Path.fromString(projectPath, name), stringToSet(properties.getProperty(name)))
 			None
 		}
 	}
-	private[sbt] def loadFilePaths(map: Map[File, Set[Path]], from: Path, info: ProjectInfo, log: Logger) =
+	private[sbt] def loadFilePaths(map: Map[File, Set[Path]], from: Path, projectPath: Path, log: Logger) =
 	{
 		map.clear
 		val properties = new Properties
 		load(properties, from, log) orElse
 		{
 			for(name <- propertyNames(properties))
-				map.put(new File(name), pathSetFromString(info)(properties.getProperty(name)))
+				map.put(new File(name), pathSetFromString(projectPath)(properties.getProperty(name)))
 			None
 		}
 	}

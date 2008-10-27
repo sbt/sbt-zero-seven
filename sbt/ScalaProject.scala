@@ -12,8 +12,8 @@ trait ScalaProject extends Project
 	import ScalaProject._
 	lazy val analysis: ProjectAnalysis =
 	{
-		val a = new ProjectAnalysis
-		for(errorMessage <- a.load(info, this))
+		val a = new ProjectAnalysis(info.builderPath / AnalysisDirectoryName, info.projectPath, this)
+		for(errorMessage <- a.load())
 			error(errorMessage)
 		a
 	}
@@ -71,9 +71,9 @@ trait ScalaProject extends Project
 			val result = execute(dirtySources(sources, classpath))
 			info("  Post-analysis: " + analysis.allClasses.toSeq.length + " classes.")
 			if(result.isEmpty)
-				analysis.save(info, this)
+				analysis.save()
 			else
-				analysis.load(info, this)
+				analysis.load()
 			result
 		}
 		
@@ -158,7 +158,7 @@ trait ScalaProject extends Project
 		
 		propagateChanges(modified ++ markDependenciesModified(removedSources))
 		for(changed <- removedSources ++ modified)
-			analysis.removeSource(changed, this)
+			analysis.removeSource(changed)
 		
 		info("  Source analysis: " + directlyModifiedCount + " new/modifed, " +
 			(modified.size-directlyModifiedCount) + " indirectly invalidated, " +
@@ -244,8 +244,8 @@ trait ScalaProject extends Project
 			val pathClean = FileUtilities.clean(paths.get, this)
 			if(options.elements.contains(ClearAnalysis))
 			{
-				analysis.clear
-				analysis.save(info, this)
+				analysis.clear()
+				analysis.save()
 			}
 			pathClean
 		}
@@ -382,6 +382,7 @@ trait ManagedScalaProject extends ScalaProject
 }
 object ScalaProject
 {
+	val AnalysisDirectoryName = "analysis"
 	val MainClassKey = "Main-Class"
 	val ScalaCheckPropertiesClassName = "org.scalacheck.Properties" 
 }
