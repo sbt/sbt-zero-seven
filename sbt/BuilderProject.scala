@@ -7,10 +7,22 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject with Cons
 {
 	setLevel(Level.Warn)
 	
-	// flatten the source file hierarchy a bit
-	override def mainSourcePath = sourcePath
-	override def mainScalaSourcePath = sourcePath
-	override def mainResourcesPath = path(resourcesDirectoryName)
+	import BasicProjectPaths._
+	
+	def outputPath = path(DefaultOutputDirectoryName)
+	def compilePath = outputPath / DefaultCompileDirectoryName
+	def sourcePath = path(DefaultSourceDirectoryName)
+	def mainResourcesPath = path(DefaultResourcesDirectoryName)
+	def dependencyPath = path(DefaultDependencyDirectoryName)
+	
+	def defaultExcludes = ".svn" | ".cvs"
+	def defaultIncludeAll = -defaultExcludes
+	def mainSources = sourcePath ** defaultIncludeAll * "*.scala"
+	def libraries = dependencyPath ** defaultIncludeAll * "*.jar"
+	
+	def compileOptions = Deprecation :: Unchecked :: Nil
+	override def tasks = Map.empty
+	def dependencies = Nil
 	
 	def projectDefinition: Option[String] =
 	{
@@ -39,13 +51,9 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject with Cons
 			}
 		}
 	
-	override def projectClasspath = super.projectClasspath +++
+	def projectClasspath = compilePath +++ libraries +++
 		Path.lazyPathFinder { new ProjectDirectory(FileUtilities.sbtJar) :: Nil }
-	def mainSources = sourcePath ** "*.scala" - ".svn"
-	def compileOptions = Deprecation :: Unchecked :: Nil
-	override def tasks = Map.empty
-	def dependencies = Nil
 
-	lazy val compile = compileTask(mainSources, compilePath, compileOptions)
-	lazy val clean = cleanTask(outputPath, ClearAnalysis :: Nil)
+	lazy val compile = compileTask(mainSources, compilePath, projectClasspath, compileOptions: _*)
+	lazy val clean = cleanTask(outputPath, ClearAnalysis)
 }

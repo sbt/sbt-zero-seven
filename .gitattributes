@@ -12,11 +12,14 @@ sbt/ClasspathUtilities.scala -text
 sbt/Compile.scala -text
 sbt/Dag.scala -text
 sbt/DefaultProject.scala -text
+sbt/DotGraph.scala -text
 sbt/FileUtilities.scala -text
 sbt/LineReader.scala -text
 sbt/Logger.scala -text
 sbt/Main.scala -text
+sbt/ManageDependencies.scala -text
 sbt/ModuleUtilities.scala -text
+sbt/NameFilter.scala -text
 sbt/Path.scala -text
 sbt/Project.scala -text
 sbt/ProjectAnalysis.scala -text

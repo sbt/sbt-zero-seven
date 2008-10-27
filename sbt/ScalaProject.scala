@@ -18,10 +18,10 @@ trait ScalaProject extends Project
 		a
 	}
 	
-	def getClasses(sources: PathFinder): PathFinder =
+	def getClasses(sources: PathFinder, outputDirectory: Path): PathFinder =
 		Path.lazyPathFinder
 		{
-			val basePath = (compilePath ##)
+			val basePath = (outputDirectory ##)
 			for(c <- analysis.getClasses(sources.get)) yield
 				Path.relativize(basePath, c) match
 				{
@@ -65,98 +65,10 @@ trait ScalaProject extends Project
 			}
 		}
 	}
-	def conditionalAction(sources : PathFinder, execute : Iterable[Path] => Option[String]) =
-		task{
-			import scala.collection.mutable.HashSet
-			val sourcesSnapshot = sources.get
-			val dirtySources: Iterable[Path] =
-			{
-				val removedSources = new HashSet[Path]
-				removedSources ++= analysis.allSources
-				removedSources --= sourcesSnapshot
-				val removedCount = removedSources.size
-				for(removed <- removedSources)
-					analysis.removeDependent(removed)
-				
-				val unmodified = new HashSet[Path]
-				val modified = new HashSet[Path]
-				
-				for(source <- sourcesSnapshot)
-				{
-					if(isModified(source))
-					{
-						debug("Source " + source + " directly modified.")
-						modified += source
-					}
-					else
-					{
-						debug("Source " + source + " unmodified.")
-						unmodified += source
-					}
-				}
-				val directlyModifiedCount = modified.size
-				
-				val (classpathJars, classpathDirs) = ClasspathUtilities.buildSearchPaths(fullClasspath.get)
-				for((externalDependency, dependentSources) <- analysis.allExternalDependencies)
-				{
-					if(externalDependency.exists &&
-						ClasspathUtilities.onClasspath(classpathJars, classpathDirs, externalDependency))
-					{
-						val dependencyLastModified = externalDependency.lastModified
-						for(dependentSource <- dependentSources; classes <- analysis.getClasses(dependentSource))
-						{
-							classes.find(_.asFile.lastModified < dependencyLastModified) match
-							{
-								case Some(modifiedClass) => 
-								{
-									debug("Class " + modifiedClass + " older than external dependency " + externalDependency.getCanonicalPath)
-									unmodified -= dependentSource
-									modified += dependentSource
-								}
-								case None => ()
-							}
-						}
-					}
-					else
-					{
-						debug("External dependency " + externalDependency + " not on classpath")
-						unmodified --= dependentSources
-						modified ++= dependentSources
-						analysis.removeExternalDependency(externalDependency)
-					}
-				}
-				
-				def markDependenciesModified(changed: Iterable[Path]): List[Path] =
-				{
-					var newChanges: List[Path] = Nil
-					for(changedPath <- changed; dependencies <- analysis.removeDependencies(changedPath);
-						dependsOnChanged <- dependencies)
-					{
-						unmodified -= dependsOnChanged
-						modified += dependsOnChanged
-						newChanges = dependsOnChanged :: newChanges
-					}
-					newChanges
-				}
-				def propagateChanges(changed: Iterable[Path])
-				{
-					val newChanges = markDependenciesModified(changed)
-					if(newChanges.length > 0)
-						propagateChanges(newChanges)
-				}
-				
-				propagateChanges(modified ++ markDependenciesModified(removedSources))
-				for(changed <- removedSources ++ modified)
-					analysis.removeSource(changed, this)
-				
-				info("  Source analysis: " + directlyModifiedCount + " new/modifed, " +
-					(modified.size-directlyModifiedCount) + " indirectly invalidated, " +
-					removedCount + " removed.")
-				
-				modified
-			}
-			
-			val result = execute(dirtySources)
+	def conditionalAction(sources: PathFinder, classpath: PathFinder, execute: Iterable[Path] => Option[String]) =
+		task
+		{
+			val result = execute(dirtySources(sources, classpath))
 			info("  Post-analysis: " + analysis.allClasses.toSeq.length + " classes.")
 			if(result.isEmpty)
 				analysis.save(info, this)
@@ -164,6 +76,96 @@ trait ScalaProject extends Project
 				analysis.load(info, this)
 			result
 		}
+		
+	private def dirtySources(sources: PathFinder, classpath: PathFinder): Iterable[Path] =
+	{
+		import scala.collection.mutable.HashSet
+		
+		val sourcesSnapshot = sources.get
+		val removedSources = new HashSet[Path]
+		removedSources ++= analysis.allSources
+		removedSources --= sourcesSnapshot
+		val removedCount = removedSources.size
+		for(removed <- removedSources)
+			analysis.removeDependent(removed)
+		
+		val unmodified = new HashSet[Path]
+		val modified = new HashSet[Path]
+		
+		for(source <- sourcesSnapshot)
+		{
+			if(isModified(source))
+			{
+				debug("Source " + source + " directly modified.")
+				modified += source
+			}
+			else
+			{
+				debug("Source " + source + " unmodified.")
+				unmodified += source
+			}
+		}
+		val directlyModifiedCount = modified.size
+		
+		val (classpathJars, classpathDirs) = ClasspathUtilities.buildSearchPaths(classpath.get)
+		for((externalDependency, dependentSources) <- analysis.allExternalDependencies)
+		{
+			if(externalDependency.exists &&
+				ClasspathUtilities.onClasspath(classpathJars, classpathDirs, externalDependency))
+			{
+				val dependencyLastModified = externalDependency.lastModified
+				for(dependentSource <- dependentSources; classes <- analysis.getClasses(dependentSource))
+				{
+					classes.find(_.asFile.lastModified < dependencyLastModified) match
+					{
+						case Some(modifiedClass) => 
+						{
+							debug("Class " + modifiedClass + " older than external dependency " + externalDependency.getCanonicalPath)
+							unmodified -= dependentSource
+							modified += dependentSource
+						}
+						case None => ()
+					}
+				}
+			}
+			else
+			{
+				debug("External dependency " + externalDependency + " not on classpath")
+				unmodified --= dependentSources
+				modified ++= dependentSources
+				analysis.removeExternalDependency(externalDependency)
+			}
+		}
+		
+		def markDependenciesModified(changed: Iterable[Path]): List[Path] =
+		{
+			var newChanges: List[Path] = Nil
+			for(changedPath <- changed; dependencies <- analysis.removeDependencies(changedPath);
+				dependsOnChanged <- dependencies)
+			{
+				unmodified -= dependsOnChanged
+				modified += dependsOnChanged
+				newChanges = dependsOnChanged :: newChanges
+			}
+			newChanges
+		}
+		def propagateChanges(changed: Iterable[Path])
+		{
+			val newChanges = markDependenciesModified(changed)
+			if(newChanges.length > 0)
+				propagateChanges(newChanges)
+		}
+		
+		propagateChanges(modified ++ markDependenciesModified(removedSources))
+		for(changed <- removedSources ++ modified)
+			analysis.removeSource(changed, this)
+		
+		info("  Source analysis: " + directlyModifiedCount + " new/modifed, " +
+			(modified.size-directlyModifiedCount) + " indirectly invalidated, " +
+			removedCount + " removed.")
+		
+		modified
+	}
 
 	def errorTask(message: String) = task{ Some(message) }
 	
@@ -183,11 +185,6 @@ trait ScalaProject extends Project
 		assert(m != null)
 	}
 	case class MainClassOption(mainClassName: String) extends PackageOption
-	case class JarName(name: String) extends PackageOption
-	{
-		Path.checkComponent(name)
-	}
-	case class OutputDirectory(path: Path) extends PackageOption
 	case object Recursive extends PackageOption
 	
 	val Deprecation = CompileOption("-deprecation")
@@ -238,11 +235,11 @@ trait ScalaProject extends Project
 	def consoleTask(classpath : PathFinder) = 
 		task { Run.console(classpath.get, this) }
 
-	def runTask(mainClass : Option[String], classpath : PathFinder, options : Seq[String]) =	
+	def runTask(mainClass: Option[String], classpath: PathFinder, options: String*) =	
 		task { Run(mainClass, classpath.get, options, this) }
 
 
-	def cleanTask(paths: PathFinder, options: Iterable[CleanOption]) =
+	def cleanTask(paths: PathFinder, options: CleanOption*) =
 		task {
 			val pathClean = FileUtilities.clean(paths.get, this)
 			if(options.elements.contains(ClearAnalysis))
@@ -253,7 +250,7 @@ trait ScalaProject extends Project
 			pathClean
 		}
 
-	def testTask(classpath: PathFinder, options: Iterable[TestOption]) = 
+	def testTask(classpath: PathFinder, options: TestOption*) = 
 		task {
 			import scala.collection.mutable.HashSet
 			
@@ -270,11 +267,11 @@ trait ScalaProject extends Project
 				ScalaCheckTests(classpath.get, tests, this)
 		}
 
-	def compileTask( sources: PathFinder, outputDirectory: Path, options: Iterable[CompileOption]): Task =
-		conditionalAction(sources, 
+	def compileTask( sources: PathFinder, outputDirectory: Path, classpath: PathFinder, options: CompileOption*): Task =
+		conditionalAction(sources, classpath,
 			(dirtySources: Iterable[Path]) =>
 			{
-				val classpathString = Path.makeString(fullClasspath.get)
+				val classpathString = Path.makeString(classpath.get)
 				val id = AnalysisCallback.register(analysisCallback)
 				val allOptions = (CompileOption("-Xplugin:" + sbtJar.getCanonicalPath) ::
 					CompileOption("-P:sbt-analyzer:callback:" + id.toString) :: Nil) ++ options
@@ -282,6 +279,7 @@ trait ScalaProject extends Project
 				AnalysisCallback.unregister(id)
 				if(atLevel(Level.Debug))
 				{
+					/** This checks that the plugin accounted for all classes in the output directory.*/
 					val classes = scala.collection.mutable.HashSet(analysis.allClasses.toSeq: _*)
 					var missed = 0
 					for(c <- (outputDirectory ** "*.class").get)
@@ -296,15 +294,15 @@ trait ScalaProject extends Project
 				}
 				r
 			})
-	
-	def scaladocTask(sources: PathFinder, outputDirectory: Path, compiledPaths: PathFinder, options: Iterable[ScaladocOption]) =
+	def graphTask(outputDirectory: Path) = task { DotGraph(analysis, outputDirectory, this) }
+	def scaladocTask(sources: PathFinder, outputDirectory: Path, classpath: PathFinder, options: ScaladocOption*) =
 		task
 		{
-			val classpathString = Path.makeString(fullClasspath.get)
+			val classpathString = Path.makeString(classpath.get)
 			Scaladoc(sources.get, classpathString, outputDirectory, options.flatMap(_.asList), this)
 		}
 
-	def packageTask(sources: PathFinder, options: Iterable[PackageOption]) =
+	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: String, options: PackageOption*) =
 		task
 		{
 			import scala.collection.jcl.Map
@@ -317,8 +315,6 @@ trait ScalaProject extends Project
 
 			import scala.collection.mutable.ListBuffer
 			val manifest = new Manifest
-			var jarName: Option[String] = None
-			var outputDirectory: Option[Path] = None
 			var recursive = false
 			for(option <- options)
 			{
@@ -339,109 +335,53 @@ trait ScalaProject extends Project
 					}
 					case Recursive => recursive = true
 					case MainClassOption(mainClassName) => manifest.getMainAttributes.putValue(MainClassKey, mainClassName)
-					case JarName(name) =>
-						if(jarName.isEmpty)
-							jarName = Some(name)
-						else
-							warn("Ignored duplicate jar name option " + name)
-					case OutputDirectory(path) =>
-						if(outputDirectory.isEmpty)
-							outputDirectory = Some(path)
-						else
-							warn("Ignored duplicate output directory option " + path.toString)
 					case _ => warn("Ignored unknown package option " + option)
 				}
 			}
 			
-			val jarPath = outputDirectory.getOrElse(path(DefaultOutputDirectoryName)) / jarName.getOrElse(defaultJarName)
+			val jarPath = outputDirectory / jarName
 			FileUtilities.pack(sources.get, jarPath, manifest, recursive, this)
 		}
-	
-	override def initializeDirectories()
-	{
-		val toCreate =
-			dependencyPath ::
-			sourcePath ::
-			mainSourcePath ::
-			mainScalaSourcePath ::
-			mainResourcesPath ::
-			testSourcePath ::
-			testScalaSourcePath ::
-			testResourcesPath ::
-			Nil
-		
-		FileUtilities.createDirectories(toCreate.map(_.asFile), this) match
-		{
-			case Some(errorMessage) => error("Could not initialize directory structure: " + errorMessage)
-			case None => success("Successfully initialized directory structure.")
-		}
-	}
-	
-	def libraries = dependencyPath ** "*.jar" - ".svn"
-	def projectClasspath: PathFinder = compilePath +++ libraries
-	// includes classpaths of dependencies
-	def fullClasspath: PathFinder =
-		Path.lazyPathFinder
-		{
-			val set = new scala.collection.jcl.LinkedHashSet[Path]
-			for(project <- topologicalSort)
-			{
-				project match
-				{
-					case sp: ScalaProject => set ++= sp.projectClasspath.get
-					case _ => ()
-				}
-			}
-			set.toList
-		}
-	
-	def defaultJarBaseName = info.name + "-" + info.currentVersion.toString
-	def defaultJarName = defaultJarBaseName + ".jar"
-	
-	def outputDirectoryName = DefaultOutputDirectoryName
-	def sourceDirectoryName = DefaultSourceDirectoryName
-	def mainDirectoryName = DefaultMainDirectoryName
-	def scalaDirectoryName = DefaultScalaDirectoryName
-	def resourcesDirectoryName = DefaultResourcesDirectoryName
-	def testDirectoryName = DefaultTestDirectoryName
-	def compileDirectoryName = DefaultCompileDirectoryName
-	def dependencyDirectoryName = DefaultDependencyDirectoryName
-	def docDirectoryName = DefaultDocDirectoryName
-	def apiDirectoryName = DefaultAPIDirectoryName
-	
-	def dependencyPath = path(dependencyDirectoryName)
-	def outputPath = path(outputDirectoryName)
-	def sourcePath = path(sourceDirectoryName)
-	
-	def mainSourcePath = sourcePath / mainDirectoryName
-	def mainScalaSourcePath = mainSourcePath / scalaDirectoryName
-	def mainResourcesPath = mainSourcePath / resourcesDirectoryName
-	def mainDocPath = docPath / mainDirectoryName / apiDirectoryName
-	
-	def testSourcePath = sourcePath / testDirectoryName
-	def testScalaSourcePath = testSourcePath / scalaDirectoryName
-	def testResourcesPath = testSourcePath / resourcesDirectoryName
-	def testDocPath = docPath / testDirectoryName / apiDirectoryName
-	
-	def compilePath = outputPath / compileDirectoryName
-	def docPath = outputPath / docDirectoryName
 }
 
+trait ManagedScalaProject extends ScalaProject
+{
+	trait ManagedOption extends ActionOption
+	object Synchronize extends ManagedOption
+	object Validate extends ManagedOption
+	final case class LibraryManager(m: Manager) extends ManagedOption
+	
+	def updateTask(outputPattern: String, managedDependencyPath: Path, options: ManagedOption*) =
+		task
+		{
+			var synchronize = false
+			var validate = false
+			var manager: Manager = AutoDetectManager
+			for(option <- options)
+			{
+				option match
+				{
+					case Synchronize => synchronize = true
+					case Validate => validate = true
+					case LibraryManager(m) => manager = m
+					case _ => warn("Ignored unknown managed option " + option)
+				}
+			}
+			try
+			{
+				ManageDependencies.update(info.projectPath, outputPattern, managedDependencyPath, manager,
+					validate, synchronize, this)
+			}
+			catch
+			{
+				case e: NoClassDefFoundError =>
+					trace(e)
+					Some("Apache Ivy is required for dependency management (" + e.toString + ")")
+			}
+		}
+}
 object ScalaProject
 {
-	val DefaultSourceDirectoryName = "src"
-	val DefaultOutputDirectoryName = "target"
-	val DefaultCompileDirectoryName = "classes"
-	val DefaultDocDirectoryName = "doc"
-	val DefaultAPIDirectoryName = "api"
-	
-	val DefaultMainDirectoryName = "main"
-	val DefaultScalaDirectoryName = "scala"
-	val DefaultResourcesDirectoryName = "resources"
-	val DefaultTestDirectoryName = "test"
-	val DefaultDependencyDirectoryName = "lib"
-	
 	val MainClassKey = "Main-Class"
-	
-	val ScalaCheckPropertiesClassName = "org.scalacheck.Properties"
+	val ScalaCheckPropertiesClassName = "org.scalacheck.Properties" 
 }

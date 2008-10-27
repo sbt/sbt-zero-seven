@@ -59,7 +59,11 @@ final class ProjectAnalysis extends NotNull
 	def allTests = all(tests)
 	def allClasses = all(generatedClasses)
 	def allProjects = all(projectDefinitions)
-	def allExternalDependencies = externalDependencies.elements.toList
+	def allExternalDependencies = readOnlyIterable(externalDependencies)
+	def allDependencies = readOnlyIterable(dependencies)
+	
+	private def readOnlyIterable[Key, Value](i: Map[Key, Set[Value]]): Iterable[(Key, scala.collection.Set[Value])] =
+		for( (key, set) <- i.elements.toList) yield (key, set.readOnly)
 	
 	def addTest(source: Path, testClassName: String) = add(source, testClassName, tests)
 	def addSourceDependency(on: Path, from: Path) = add(on, from, dependencies)

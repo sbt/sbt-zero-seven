@@ -6,7 +6,6 @@ package sbt
 import Path._
 import FileUtilities.wrapNull
 import java.io.{File, FileFilter}
-import java.util.regex.Pattern
 import scala.collection.mutable.{Buffer, ListBuffer}
 
 sealed abstract class Path extends PathFinder with NotNull
@@ -140,12 +139,11 @@ object Path
 sealed abstract class PathFinder extends NotNull
 {
 	def +++(paths: PathFinder): PathFinder = new Paths(this, paths)
-	def **(expression: String): PathFinder = new DescendentPathFinder(this, Some(expression), None)
-	def *(expression: String): PathFinder = new ChildPathFinder(this, Some(expression), None)
-	def / (literal: String): PathFinder = new ChildPathFinder(this, Some(Pattern.quote(literal)), None)
+	def ***(filter: NameFilter): PathFinder = new DescendentPathFinder(this, filter, false)
+	def **(filter: NameFilter): PathFinder = new DescendentPathFinder(this, filter, true)
+	def *(filter: NameFilter): PathFinder = new ChildPathFinder(this, filter)
+	def / (literal: String): PathFinder = new ChildPathFinder(this, new ExactFilter(literal))
 	final def \ (literal: String): PathFinder = this / literal
-	def -(expression: String): PathFinder = error("Can only exclude from a search path; this path is explicitly specified.")
-	def --(expression: String): PathFinder = new DescendentPathFinder(this, None, Some(expression))
 	
 	final def get: Iterable[Path] =
 	{
@@ -158,17 +156,12 @@ sealed abstract class PathFinder extends NotNull
 private abstract class FilterPath extends PathFinder with FileFilter
 {
 	def parent: PathFinder
-	def include: Option[String]
-	def exclude: Option[String]
-	private lazy val includePattern = include.map(PathFinder.makePattern)
-	private lazy val excludePattern = exclude.map(PathFinder.makePattern)
-	def matches(name: String) = PathFinder.matches(name, includePattern, excludePattern)
+	def filter: NameFilter
+	final def accept(file: File) = filter.accept(file.getName)
 	
-	final def accept(file: File) = matches(file.getName)
-	
-	object DirectoryFilter extends FileFilter
+	protected object DirectoryFilter extends FileFilter
 	{
-		def accept(file: File) = file.isDirectory && !PathFinder.matches(file.getName, excludePattern, false)
+		def accept(file: File) = file.isDirectory && FilterPath.this.accept(file)
 	}
 	protected def handlePath(path: Path, buffer: Buffer[Path])
 	{
@@ -176,20 +169,16 @@ private abstract class FilterPath extends PathFinder with FileFilter
 			buffer += path / matchedFile.getName
 	}
 }
-private class DescendentPathFinder(val parent: PathFinder, val include: Option[String],
-	val exclude: Option[String]) extends FilterPath
+private class DescendentPathFinder(val parent: PathFinder, val filter: NameFilter, val includeSelf: Boolean) extends FilterPath
 {
-	override def -(expression: String): PathFinder =
-	{
-		if(exclude.isEmpty)
-			new DescendentPathFinder(parent, include, Some(expression))
-		else
-			error("Exclusion for this path already specified (" + exclude.get +").")
-	}
 	private[sbt] def addTo(buffer: Buffer[Path])
 	{
 		for(path <- parent.get)
+		{
+			if(includeSelf && accept(path.asFile))
+				buffer += path
 			handlePathDescendent(path, buffer)
+		}
 	}
 	private def handlePathDescendent(path: Path, buffer: Buffer[Path])
 	{
@@ -198,20 +187,12 @@ private class DescendentPathFinder(val parent: PathFinder, val include: Option[S
 			handlePathDescendent(path / childDirectory.getName, buffer)
 	}
 }
-private class ChildPathFinder(val parent: PathFinder, val include: Option[String],
-	val exclude: Option[String]) extends FilterPath
+private class ChildPathFinder(val parent: PathFinder, val filter: NameFilter) extends FilterPath
 {
 	private[sbt] def addTo(buffer: Buffer[Path])
 	{
 		for(path <- parent.get)
 			handlePath(path, buffer)
-	}
-	override def -(expression: String): PathFinder =
-	{
-		if(exclude.isEmpty)
-			new ChildPathFinder(parent, include, Some(expression))
-		else
-			error("Exclusion for this path already specified (" + exclude.get +").")
 	}
 }
 private class Paths(a: PathFinder, b: PathFinder) extends PathFinder
@@ -221,13 +202,4 @@ private class Paths(a: PathFinder, b: PathFinder) extends PathFinder
 		a.addTo(buffer)
 		b.addTo(buffer)
 	}
-}
-private object PathFinder
-{
-	def makePattern(expression: String) =
-		Pattern.compile(expression.split("\\*").map(Pattern.quote).mkString(".*"))
-	def matches(name: String, include: Option[Pattern], exclude: Option[Pattern]): Boolean =
-		matches(name, include, true) && !matches(name, exclude, false)
-	def matches(name: String, pattern: Option[Pattern], default: Boolean): Boolean =
-		pattern.map(_.matcher(name).matches).getOrElse(default)
 }

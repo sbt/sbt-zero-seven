@@ -5,41 +5,96 @@ package sbt
 
 class DefaultProject(val info: ProjectInfo, val dependencies: Iterable[Project]) extends BasicScalaProject
 
-abstract class BasicScalaProject extends ScalaProject with ReflectiveProject with ConsoleLogger
+abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveProject with ConsoleLogger
 {
 	import BasicScalaProject._
 	def mainClass: Option[String] = None
 
-	lazy val clean = cleanTask(outputPath, ClearAnalysis :: Nil) describedAs CleanDescription
-	lazy val compile = compileTask(mainSources +++ testSources, compilePath, compileOptions) describedAs CompileDescription
-	lazy val run = runTask(mainClass, compilePath +++ libraries, runOptions).dependsOn(compile) describedAs RunDescription
-	lazy val console = consoleTask(compilePath +++ libraries).dependsOn(compile) describedAs ConsoleDescription
-	lazy val doc = scaladocTask(mainSources, mainDocPath, compilePath, documentOptions).dependsOn(compile) describedAs DocDescription
-	lazy val docTest = scaladocTask(testSources, testDocPath, compilePath, documentOptions).dependsOn(compile) describedAs TestDocDescription
-	lazy val test = testTask(compilePath +++ libraries, Nil).dependsOn(compile) describedAs TestDescription
-	lazy val `package` = packageTask(getClasses(mainSources) +++ mainResources, mainClass.map(MainClassOption(_)).toList).dependsOn(compile) describedAs PackageDescription
-	lazy val packageTest = packageTask(getClasses(testSources) +++ testResources, JarName(defaultJarBaseName + "-test.jar") :: Nil).dependsOn(test) describedAs TestPackageDescription
-	lazy val packageDocs = packageTask(mainDocPath ##, Recursive :: JarName(defaultJarBaseName + "-docs.jar") :: Nil).dependsOn(doc) describedAs DocPackageDescription
-	lazy val packageSrc = packageTask(allSources, JarName(defaultJarBaseName + "-src.jar") :: Nil) describedAs SourcePackageDescription
+	def getClasses(sources: PathFinder): PathFinder = getClasses(sources, compilePath)
+
+	lazy val clean = cleanTask(outputPath, ClearAnalysis) describedAs CleanDescription
+	lazy val compile = compileTask(mainSources +++ testSources, compilePath, compileClasspath, compileOptions: _*) describedAs CompileDescription
+	lazy val run = runTask(mainClass, runClasspath, runOptions: _*).dependsOn(compile) describedAs RunDescription
+	lazy val console = consoleTask(consoleClasspath).dependsOn(compile) describedAs ConsoleDescription
+	lazy val doc = scaladocTask(mainSources, mainDocPath, docClasspath, documentOptions: _*).dependsOn(compile) describedAs DocDescription
+	lazy val docTest = scaladocTask(testSources, testDocPath, docClasspath, documentOptions: _*).dependsOn(compile) describedAs TestDocDescription
+	lazy val test = testTask(testClasspath).dependsOn(compile) describedAs TestDescription
+	lazy val `package` = packageTask(getClasses(mainSources) +++ mainResources, outputPath, defaultJarName, mainClass.map(MainClassOption(_)).toList: _*).dependsOn(compile) describedAs PackageDescription
+	lazy val packageTest = packageTask(getClasses(testSources) +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(test) describedAs TestPackageDescription
+	lazy val packageDocs = packageTask(mainDocPath ##, outputPath, defaultJarBaseName + "-docs.jar", Recursive).dependsOn(doc) describedAs DocPackageDescription
+	lazy val packageSrc = packageTask(allSources, outputPath, defaultJarBaseName + "-src.jar") describedAs SourcePackageDescription
 	lazy val docAll = (doc && docTest) describedAs DocAllDescription
 	lazy val packageAll = (`package` && packageTest && packageSrc) describedAs PackageAllDescription
 	lazy val release = clean && compile && test && packageAll && doc 
+	lazy val graph = graphTask(graphPath).dependsOn(compile)
+	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, Validate, Synchronize)
 
-	def allSources = (sourcePath ##) -- ".svn"
-	def mainSources = mainScalaSourcePath ** "*.scala" - ".svn"
-	def testSources = testScalaSourcePath ** "*.scala" - ".svn"
-	def mainResources = (mainResourcesPath ##) -- ".svn"
-	def testResources = (testResourcesPath ##) -- ".svn"
+	def allSources = (sourcePath ##) ** defaultIncludeAll
+	def mainSources = mainScalaSourcePath ** defaultIncludeAll * "*.scala"
+	def testSources = testScalaSourcePath ** defaultIncludeAll * "*.scala"
+	def mainResources = (mainResourcesPath ##) ** defaultIncludeAll
+	def testResources = (testResourcesPath ##) ** defaultIncludeAll
+	
+	def defaultExcludes = ".svn" | ".cvs"
+	def defaultIncludeAll = -defaultExcludes
 	
 	import Project._
 	
 	def runOptions: Seq[String] = Nil
-	def compileOptions = Deprecation :: Nil
+	def compileOptions: Seq[CompileOption] = Deprecation :: Nil
 	def documentOptions: Seq[ScaladocOption] =
 		LinkSource ::
 		documentTitle(info.name + " " + info.currentVersion + " API") ::
 		windowTitle(info.name + " " + info.currentVersion + " API") ::
 		Nil
+		
+	override def initializeDirectories()
+	{
+		val toCreate =
+			dependencyPath ::
+			sourcePath ::
+			mainSourcePath ::
+			mainScalaSourcePath ::
+			mainResourcesPath ::
+			testSourcePath ::
+			testScalaSourcePath ::
+			testResourcesPath ::
+			Nil
+		
+		FileUtilities.createDirectories(toCreate.map(_.asFile), this) match
+		{
+			case Some(errorMessage) => error("Could not initialize directory structure: " + errorMessage)
+			case None => success("Successfully initialized directory structure.")
+		}
+	}
+	def consoleConfiguration = Configurations.Runtime
+	
+	def docClasspath = fullClasspath(Configurations.Compile)
+	def compileClasspath = fullClasspath(Configurations.Compile)
+	def testClasspath = fullClasspath(Configurations.Test)
+	def runClasspath = fullClasspath(Configurations.Runtime)
+	def consoleClasspath = fullClasspath(consoleConfiguration)
+	
+	def managedClasspath(config: String): PathFinder = managedDependencyPath / config ** defaultIncludeAll * "*.jar"
+	def unmanagedClasspath: PathFinder =
+		(dependencyPath * "*.jar") +++ ((dependencyPath * -managedDirectoryName) ** defaultIncludeAll * "*.jar")
+	def projectClasspath(config: String) = compilePath +++ unmanagedClasspath +++ managedClasspath(config)
+	
+	// includes classpaths of dependencies
+	def fullClasspath(config: String): PathFinder =
+		Path.lazyPathFinder
+		{
+			val set = new scala.collection.jcl.LinkedHashSet[Path]
+			for(project <- topologicalSort)
+			{
+				project match
+				{
+					case sp: BasicScalaProject => set ++= sp.projectClasspath(config).get
+					case _ => ()
+				}
+			}
+			set.toList
+		}
 }
 
 object BasicScalaProject
@@ -70,4 +125,61 @@ object BasicScalaProject
 		"Executes all package tasks."
 	val DocAllDescription =
 		"Generates both main and test documentation."
+}
+trait BasicProjectPaths extends Project
+{
+	import BasicProjectPaths._
+	
+	//////////// Paths ///////////
+		
+	def defaultJarBaseName = info.name + "-" + info.currentVersion.toString
+	def defaultJarName = defaultJarBaseName + ".jar"
+	
+	def outputDirectoryName = DefaultOutputDirectoryName
+	def sourceDirectoryName = DefaultSourceDirectoryName
+	def mainDirectoryName = DefaultMainDirectoryName
+	def scalaDirectoryName = DefaultScalaDirectoryName
+	def resourcesDirectoryName = DefaultResourcesDirectoryName
+	def testDirectoryName = DefaultTestDirectoryName
+	def compileDirectoryName = DefaultCompileDirectoryName
+	def dependencyDirectoryName = DefaultDependencyDirectoryName
+	def docDirectoryName = DefaultDocDirectoryName
+	def apiDirectoryName = DefaultAPIDirectoryName
+	def graphDirectoryName = DefaultGraphDirectoryName
+	def managedDirectoryName = DefaultManagedDirectoryName
+	
+	def dependencyPath = path(dependencyDirectoryName)
+	final def managedDependencyPath = dependencyPath / managedDirectoryName
+	def outputPath = path(outputDirectoryName)
+	def sourcePath = path(sourceDirectoryName)
+	
+	def mainSourcePath = sourcePath / mainDirectoryName
+	def mainScalaSourcePath = mainSourcePath / scalaDirectoryName
+	def mainResourcesPath = mainSourcePath / resourcesDirectoryName
+	def mainDocPath = docPath / mainDirectoryName / apiDirectoryName
+	
+	def testSourcePath = sourcePath / testDirectoryName
+	def testScalaSourcePath = testSourcePath / scalaDirectoryName
+	def testResourcesPath = testSourcePath / resourcesDirectoryName
+	def testDocPath = docPath / testDirectoryName / apiDirectoryName
+	
+	def compilePath = outputPath / compileDirectoryName
+	def docPath = outputPath / docDirectoryName
+	def graphPath = outputPath / graphDirectoryName
+}
+object BasicProjectPaths
+{
+	val DefaultSourceDirectoryName = "src"
+	val DefaultOutputDirectoryName = "target"
+	val DefaultCompileDirectoryName = "classes"
+	val DefaultDocDirectoryName = "doc"
+	val DefaultAPIDirectoryName = "api"
+	val DefaultGraphDirectoryName = "graph"
+	val DefaultManagedDirectoryName = "managed"
+	
+	val DefaultMainDirectoryName = "main"
+	val DefaultScalaDirectoryName = "scala"
+	val DefaultResourcesDirectoryName = "resources"
+	val DefaultTestDirectoryName = "test"
+	val DefaultDependencyDirectoryName = "lib"
 }

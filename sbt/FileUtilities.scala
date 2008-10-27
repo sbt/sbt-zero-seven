@@ -10,6 +10,7 @@ import java.util.jar.{JarEntry, JarOutputStream, Manifest}
 object FileUtilities
 {
 	val BufferSize = 8192
+	val Newline = System.getProperty("line.separator")
 	
 	val PathSeparatorPattern = java.util.regex.Pattern.compile("""[;:]""")
 
@@ -254,6 +255,12 @@ object FileUtilities
 			new Array[File](0)
 		else
 			a
+			
+	def writeLine(writer: Writer, line: String)
+	{
+		writer.write(line)
+		writer.write(Newline)
+	}
 			
 	lazy val sbtJar: File = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
 }

@@ -93,6 +93,8 @@ trait Project extends Logger with TaskManager with Dag[Project]
 	
 	/** Converts a String to a path relative to the project directory of this project. */
 	implicit def path(component: String): Path = info.projectPath / component
+	/** Converts a String to a simple name filter.  * has the special meaning: zero or more of any character */
+	implicit def filter(simplePattern: String): NameFilter = new GlobFilter(simplePattern)
 	
 	/** Loads the project at the given path and declares the project to have the given
 	* dependencies.  This method will configure the project according to 
