@@ -3,3 +3,14 @@ Copyright 2008 Mark Harrah, David MacIver
 
 Portions based on code by Pete Kirkham in Nailgun
 Copyright 2004, Martian Software, Inc
+
+Apache Ivy, licensed under the Apache License, Version 2.0
+is distributed with sbt and requires the following notice:
+
+This product includes software developed by
+The Apache Software Foundation (http://www.apache.org/).
+   
+Portions of Ivy were originally developed by
+Jayasoft SARL (http://www.jayasoft.fr/)
+and are licensed to the Apache Software Foundation under the
+"Software Grant License Agreement"
