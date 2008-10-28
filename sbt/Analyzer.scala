@@ -12,16 +12,21 @@ import scala.collection.mutable.{HashMap, HashSet, Map, Set}
 
 import java.io.File
 
+object Analyzer
+{
+	val PluginName = "sbt-analyzer"
+	val CallbackIDOptionName = "callback:"
+}
 class Analyzer(val global: Global) extends Plugin
 {
 	import global._
+	import Analyzer._
 	
-	val name = "sbt-analyzer"
+	val name = PluginName
 	val description = "A plugin to find all concrete instances of a given class and extract dependency information."
 	val components = List[PluginComponent](Component)
 	
 	var callbackOption: Option[AnalysisCallback] = None
-	val CallbackIDOptionName = "callback:"
 	
 	override def processOptions(options: List[String], error: String => Unit)
 	{
