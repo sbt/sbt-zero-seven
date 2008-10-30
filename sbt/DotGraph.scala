@@ -7,7 +7,7 @@ import java.io.{File, Writer}
 
 object DotGraph
 {
-	def apply(analysis: ProjectAnalysis, outputDirectory: Path, log: Logger) =
+	def apply(analysis: CompileAnalysis, outputDirectory: Path, log: Logger) =
 	{
 		val outputDir = outputDirectory.asFile
 		
@@ -28,9 +28,9 @@ object DotGraph
 			}
 		}
 		FileUtilities.createDirectory(outputDir, log) orElse
-		generateGraph(ProjectAnalysis.DependenciesFileName, "dependencies", analysis.allDependencies,
+		generateGraph(BasicAnalysis.DependenciesFileName, "dependencies", analysis.allDependencies,
 			sourceToString, sourceToString) orElse
-		generateGraph(ProjectAnalysis.ExternalDependenciesFileName, "externalDependencies", analysis.allExternalDependencies,
+		generateGraph(BasicAnalysis.ExternalDependenciesFileName, "externalDependencies", analysis.allExternalDependencies,
 			fileToString, sourceToString)
 	}
 	private def sourceToString(source: Path) = fileToString(source.asFile)

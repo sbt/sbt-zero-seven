@@ -5,11 +5,13 @@
 /build -text
 /clean -text
 lib/ivy-2.0.0-rc1.jar -text
+sbt/Analysis.scala -text
 sbt/AnalysisCallback.scala -text
 sbt/Analyzer.scala -text
 sbt/BuilderProject.scala -text
 sbt/ClasspathUtilities.scala -text
 sbt/Compile.scala -text
+sbt/Conditional.scala -text
 sbt/Dag.scala -text
 sbt/DefaultProject.scala -text
 sbt/DotGraph.scala -text
@@ -22,7 +24,6 @@ sbt/ModuleUtilities.scala -text
 sbt/NameFilter.scala -text
 sbt/Path.scala -text
 sbt/Project.scala -text
-sbt/ProjectAnalysis.scala -text
 sbt/ProjectInfo.scala -text
 sbt/ReflectUtilities.scala -text
 sbt/Run.scala -text

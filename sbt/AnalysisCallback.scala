@@ -39,13 +39,13 @@ trait AnalysisCallback extends NotNull
 	def endSource(sourcePath: Path): Unit
 }
 abstract class BasicAnalysisCallback(val basePath: Path, val superclassNames: Iterable[String],
-	protected val analysis: ProjectAnalysis) extends AnalysisCallback
+	protected val analysis: CompileAnalysis) extends AnalysisCallback
 {
 	def superclassNotFound(superclassName: String) {}
 	
 	def beginSource(sourcePath: Path)
 	{
-		analysis.markSource(sourcePath)
+		analysis.addSource(sourcePath)
 	}
 	def sourceDependency(dependsOnPath: Path, sourcePath: Path)
 	{
@@ -61,7 +61,7 @@ abstract class BasicAnalysisCallback(val basePath: Path, val superclassNames: It
 	}
 	def generatedClass(sourcePath: Path, modulePath: Path)
 	{
-		analysis.addGeneratedClass(sourcePath, modulePath)
+		analysis.addProduct(sourcePath, modulePath)
 	}
 	def endSource(sourcePath: Path)
 	{
