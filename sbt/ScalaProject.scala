@@ -165,6 +165,7 @@ trait ManagedScalaProject extends ScalaProject
 	trait ManagedOption extends ActionOption
 	object Synchronize extends ManagedOption
 	object Validate extends ManagedOption
+	object QuietUpdate extends ManagedOption
 	final case class LibraryManager(m: Manager) extends ManagedOption
 	
 	def updateTask(outputPattern: String, managedDependencyPath: Path, options: ManagedOption*) =
@@ -172,6 +173,7 @@ trait ManagedScalaProject extends ScalaProject
 		{
 			var synchronize = false
 			var validate = false
+			var quiet = false
 			var manager: Manager = AutoDetectManager
 			for(option <- options)
 			{
@@ -180,13 +182,14 @@ trait ManagedScalaProject extends ScalaProject
 					case Synchronize => synchronize = true
 					case Validate => validate = true
 					case LibraryManager(m) => manager = m
+					case QuietUpdate => quiet = true
 					case _ => warn("Ignored unknown managed option " + option)
 				}
 			}
 			try
 			{
 				ManageDependencies.update(info.projectPath, outputPattern, managedDependencyPath, manager,
-					validate, synchronize, this)
+					validate, synchronize, quiet, this)
 			}
 			catch
 			{

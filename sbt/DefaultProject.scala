@@ -110,7 +110,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val packageAll = (`package` && packageTest && packageSrc) describedAs PackageAllDescription
 	lazy val release = clean && compile && test && packageAll && doc 
 	lazy val graph = graphTask(graphPath, analysis).dependsOn(compile)
-	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, Validate, Synchronize)
+	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, Validate, Synchronize, QuietUpdate)
 	lazy val cleanLib = cleanLibTask(managedDependencyPath)
 }
 
