@@ -30,6 +30,20 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject with Cons
 	val compileConditional =
 		new CompileConditional(compileConfiguration)
 		{
+			override protected def execute(cAnalysis: ConditionalAnalysis): Option[String] =
+			{
+				if(cAnalysis.dirtySources.isEmpty)
+					None
+				else
+				{
+					val oldLevel = getLevel
+					setLevel(Level.Info)
+					info("Recompiling project definition...")
+					info("\t" + cAnalysis.toString)
+					setLevel(oldLevel)
+					super.execute(cAnalysis)
+				}
+			}
 			override def analysisCallback: AnalysisCallback =
 				new BasicAnalysisCallback(info.projectPath, List(Project.ProjectClassName), analysis)
 				{

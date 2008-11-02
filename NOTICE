@@ -3,6 +3,11 @@ Copyright 2008 Mark Harrah, David MacIver
 
 Portions based on code by Pete Kirkham in Nailgun
 Copyright 2004, Martian Software, Inc
+Licensed under the Apache License, Version 2.0
+
+Portions based on code from the Scala compiler
+Copyright 2002-2008 EPFL, Lausanne
+Licensed under BSD-style license (see LICENSE_Scala)
 
 Apache Ivy, licensed under the Apache License, Version 2.0
 is distributed with sbt and requires the following notice:

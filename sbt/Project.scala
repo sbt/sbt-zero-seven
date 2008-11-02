@@ -55,27 +55,46 @@ trait Project extends Logger with TaskManager with Dag[Project]
 	{
 		val ordered = topologicalSort
 		val multiProject = ordered.length > 1
-		if(multiProject && atLevel(Level.Debug))
-			showBuildOrder(ordered)
 		
-		def run(projects: List[Project], actionExists: Boolean): Option[String] =
-			projects match
-			{
-				case Nil => if(actionExists) None else Some("Action '" + name + "' does not exist.")
-				case project :: remaining =>
-					project.tasks.get(name) match
-					{
-						case None => run(remaining, actionExists)
-						case Some(task) =>
+		def runSequentially =
+		{
+			if(multiProject && atLevel(Level.Debug))
+				showBuildOrder(ordered)
+			
+			def run(projects: List[Project]): Option[String] =
+				projects match
+				{
+					case Nil => None
+					case project :: remaining =>
+						project.tasks.get(name) match
 						{
-							if(multiProject)
-								showProjectHeader(project)
-							task.run orElse run(remaining, true)
+							case None => run(remaining)
+							case Some(task) =>
+							{
+								if(multiProject)
+									showProjectHeader(project)
+								task.run orElse run(remaining)
+							}
 						}
-					}
-			}
+				}
+			run(ordered)
+		}
 
-		run(ordered, false)
+		val definedTasks = ordered.flatMap(_.tasks.get(name).toList)
+		if(definedTasks.isEmpty)
+			Some("Action '" + name + "' does not exist.")
+		else if(!tasks.contains(name) && definedTasks.forall(_.interactive))
+			Some("Action '" + name + "' is not defined on this project and is declared as interactive on all dependencies.")
+		else if(multiProject && parallelExecution)
+		{
+			ParallelRunner.run(this, name, Runtime.getRuntime.availableProcessors) match
+			{
+				case Nil => None
+				case x => Some(x.mkString("\n"))
+			}
+		}
+		else
+			runSequentially
 	}
 	private def showBuildOrder(order: Iterable[Project])
 	{
@@ -110,6 +129,7 @@ trait Project extends Logger with TaskManager with Dag[Project]
 	* deps. Any metadata/info file for the project is ignored.*/
 	def project[P <: Project](path: Path, name: String, builderClass: Class[P], deps: Project*): Project =
 	{
+		checkDependencies(name, deps)
 		require(builderClass != this.getClass, "Cannot recursively construct projects of same type: " + builderClass.getName)
 		val newInfo = new ProjectInfo(name, info.currentVersion, builderClass.getName, path.asFile)(false)
 		Project.loadProject(newInfo, builderClass, deps)
@@ -127,12 +147,16 @@ trait Project extends Logger with TaskManager with Dag[Project]
 	* is ignored.  The construct function is passed the dependencies given by deps.*/
 	def project(path: Path, name: String, construct: (ProjectInfo, Iterable[Project]) => Project, deps: Iterable[Project]): Project =
 	{
+		checkDependencies(name, deps)
 		val newInfo = new ProjectInfo(name, info.currentVersion, "", path.asFile)(false)
 		construct(newInfo, deps)
 	}
 	
 	/** Initializes the project directories when a user has requested that sbt create a new project.*/
 	def initializeDirectories() {}
+	/** True if projects should be run in parallel, false if they should run sequentially.
+	*  This only has an effect for multi-projects.*/
+	def parallelExecution = false
 	
 	private def getProject(e: Either[String,Project], path: Path): Project =
 		e.fold(m => Predef.error("Error getting project " + path + " : " + m), x => x)
@@ -167,7 +191,7 @@ class ParentProject(val info: ProjectInfo, protected val deps: Iterable[Project]
 object Project
 {
 	private val log = new ConsoleLogger {}
-	log.setLevel(Level.Debug)
+	log.setLevel(Level.Trace)
 	
 	val BuilderProjectDirectoryName = "build"
 	val ProjectClassName = classOf[Project].getName
@@ -198,6 +222,7 @@ object Project
 	}
 	private def loadProject[P <: Project](info: ProjectInfo, builderClass: Class[P], deps: Iterable[Project]): Project =
 	{
+		checkDependencies(info.name, deps)
 		val constructor = builderClass.getConstructor(classOf[ProjectInfo], classOf[Iterable[Project]])
 		val project = constructor.newInstance(info, deps)
 		if(info.initializeDirectories)
@@ -226,5 +251,13 @@ object Project
 		}
 		else
 			Right((info.builderClassName, getClass.getClassLoader))
+	}
+	private def checkDependencies(forProject: String, deps: Iterable[Project])
+	{
+		for(nullDep <- deps.find(_ == null))
+		{
+			log.error("Project " + forProject + " had a null dependency.  This is probably an initialization problem and might be due to a circular dependency.")
+			throw new RuntimeException("Null dependency in project " + forProject)
+		}
 	}
 }

@@ -1,6 +1,7 @@
 * text=auto !eol
 /LICENSE -text
 /LICENSE_Apache -text
+/LICENSE_Scala -text
 /NOTICE -text
 /build -text
 /clean -text
@@ -22,6 +23,7 @@ sbt/Main.scala -text
 sbt/ManageDependencies.scala -text
 sbt/ModuleUtilities.scala -text
 sbt/NameFilter.scala -text
+sbt/Parallel.scala -text
 sbt/Path.scala -text
 sbt/Project.scala -text
 sbt/ProjectInfo.scala -text

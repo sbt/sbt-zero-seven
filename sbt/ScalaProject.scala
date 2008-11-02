@@ -77,10 +77,10 @@ trait ScalaProject extends Project
 	}
 
 	def consoleTask(classpath : PathFinder) = 
-		task { Run.console(classpath.get, this) }
+		interactiveTask { Run.console(classpath.get, this) }
 
 	def runTask(mainClass: Option[String], classpath: PathFinder, options: String*) =	
-		task { Run(mainClass, classpath.get, options, this) }
+		interactiveTask { Run(mainClass, classpath.get, options, this) }
 
 	def cleanTask(paths: PathFinder, options: CleanOption*) =
 		task {
