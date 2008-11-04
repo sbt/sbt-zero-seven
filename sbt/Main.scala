@@ -25,10 +25,10 @@ object Main
 	private def startProject(project: Project, args: Array[String], startTime: Long)
 	{
 		val i = project.info
-		project.info("Building project " + i.name + " " + i.currentVersion.toString + " using " + project.getClass.getName)
+		project.log.info("Building project " + i.name + " " + i.currentVersion.toString + " using " + project.getClass.getName)
 		if(args.length == 0)
 		{
-			project.info("No actions specified, interactive session started.")
+			project.log.info("No actions specified, interactive session started.")
 			interactive(project)
 			printTime(project, startTime, "session")
 		}
@@ -36,8 +36,8 @@ object Main
 		{
 			((None: Option[String]) /: args)( (errorMessage, arg) => errorMessage orElse project.act(arg) ) match
 			{
-				case None => project.success("Build completed successfully.")
-				case Some(errorMessage) => project.error("Error during build: " + errorMessage)
+				case None => project.log.success("Build completed successfully.")
+				case Some(errorMessage) => project.log.error("Error during build: " + errorMessage)
 			}
 			printTime(project, startTime, "build")
 		}
@@ -91,7 +91,7 @@ object Main
 							}
 							case None =>
 							{
-								currentProject.error("Invalid project name '" + projectName + "' (type 'projects' to list available projects).")
+								currentProject.log.error("Invalid project name '" + projectName + "' (type 'projects' to list available projects).")
 								loop(currentProject)
 							}
 						}
@@ -119,7 +119,7 @@ object Main
 			case ShowCurrent =>
 			{
 				printProject("Current project is ", project)
-				Console.println("Current log level is " + project.getLevel)
+				Console.println("Current log level is " + project.log.getLevel)
 			}
 			case ShowActions =>
 				for( (name, task) <- project.deepTasks)
@@ -140,24 +140,24 @@ object Main
 		val actionResult = project.act(action)
 		actionResult match
 		{
-			case Some(errorMessage) => project.error(errorMessage)
+			case Some(errorMessage) => project.log.error(errorMessage)
 			case None => 
 			{
 				printTime(project, startTime, "")
-				project.success("Successful.")
+				project.log.success("Successful.")
 			}
 		}
 	}
 	private def setLevel(project: Project, level: Level.Value)
 	{
-		project.topologicalSort.foreach(_.setLevel(level))
-		Console.println("Set log level to " + project.getLevel)
+		project.topologicalSort.foreach(_.log.setLevel(level))
+		Console.println("Set log level to " + project.log.getLevel)
 	}
 	private def printTime(project: Project, startTime: Long, s: String)
 	{
 		val endTime = System.currentTimeMillis()
-		project.info("")
+		project.log.info("")
 		val ss = if(s.isEmpty) "" else s + " "
-		project.info("Total " + ss + "time: " + (endTime - startTime + 500) / 1000 + " s")
+		project.log.info("Total " + ss + "time: " + (endTime - startTime + 500) / 1000 + " s")
 	}
 }

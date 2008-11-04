@@ -3,9 +3,10 @@
  */
 package sbt
 
-final class BuilderProject(val info: ProjectInfo) extends ScalaProject with ConsoleLogger
+final class BuilderProject(val info: ProjectInfo) extends ScalaProject
 {
-	setLevel(Level.Warn)
+	override protected def logImpl = new ConsoleLogger
+	log.setLevel(Level.Warn)
 	
 	import BasicProjectPaths._
 	
@@ -36,11 +37,11 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject with Cons
 					None
 				else
 				{
-					val oldLevel = getLevel
-					setLevel(Level.Info)
-					info("Recompiling project definition...")
-					info("\t" + cAnalysis.toString)
-					setLevel(oldLevel)
+					val oldLevel = log.getLevel
+					log.setLevel(Level.Info)
+					log.info("Recompiling project definition...")
+					log.info("\t" + cAnalysis.toString)
+					log.setLevel(oldLevel)
 					super.execute(cAnalysis)
 				}
 			}
@@ -51,7 +52,7 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject with Cons
 					{
 						if(superclassName == Project.ProjectClassName && !isModule)
 						{
-							debug("Found project definition " + subclassName)
+							log.debug("Found project definition " + subclassName)
 							analysis.addProjectDefinition(sourcePath, subclassName)
 						}
 					}
@@ -70,7 +71,7 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject with Cons
 			def analysisPath = outputPath / DefaultAnalysisDirectoryName
 			def projectPath = info.projectPath
 			def testDefinitionClassNames = Nil
-			def log = BuilderProject.this
+			def log = BuilderProject.this.log
 			def options = compileOptions.map(_.asString)
 		}
 		
@@ -79,11 +80,11 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject with Cons
 		compileConditional.analysis.allProjects.toList match
 		{
 			case Nil => 
-				debug("No project definitions detected: expecting explicit configuration.")
+				log.debug("No project definitions detected: expecting explicit configuration.")
 				None
 			case singleDefinition :: Nil => Some(singleDefinition)
 			case _ =>
-				debug("Multiple project definitions detected: expecting explicit configuration.")
+				log.debug("Multiple project definitions detected: expecting explicit configuration.")
 				None
 		}
 	}

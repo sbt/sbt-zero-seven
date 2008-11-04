@@ -77,14 +77,14 @@ trait ScalaProject extends Project
 	}
 
 	def consoleTask(classpath : PathFinder) = 
-		interactiveTask { Run.console(classpath.get, this) }
+		interactiveTask { Run.console(classpath.get, log) }
 
 	def runTask(mainClass: Option[String], classpath: PathFinder, options: String*) =	
-		interactiveTask { Run(mainClass, classpath.get, options, this) }
+		interactiveTask { Run(mainClass, classpath.get, options, log) }
 
 	def cleanTask(paths: PathFinder, options: CleanOption*) =
 		task {
-			val pathClean = FileUtilities.clean(paths.get, this)
+			val pathClean = FileUtilities.clean(paths.get, log)
 			for(ClearAnalysis(analysis) <- options)
 			{
 				analysis.clear()
@@ -103,19 +103,19 @@ trait ScalaProject extends Project
 				
 			if(tests.isEmpty)
 			{
-				info("No tests to run.")
+				log.info("No tests to run.")
 				None
 			}
 			else
-				ScalaCheckTests(classpath.get, tests, this)
+				ScalaCheckTests(classpath.get, tests, log)
 		}
 
-	def graphTask(outputDirectory: Path, analysis: CompileAnalysis) = task { DotGraph(analysis, outputDirectory, this) }
+	def graphTask(outputDirectory: Path, analysis: CompileAnalysis) = task { DotGraph(analysis, outputDirectory, log) }
 	def scaladocTask(sources: PathFinder, outputDirectory: Path, classpath: PathFinder, options: ScaladocOption*) =
 		task
 		{
 			val classpathString = Path.makeString(classpath.get)
-			Scaladoc(sources.get, classpathString, outputDirectory, options.flatMap(_.asList), this)
+			Scaladoc(sources.get, classpathString, outputDirectory, options.flatMap(_.asList), log)
 		}
 
 	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: String, options: PackageOption*) =
@@ -151,12 +151,12 @@ trait ScalaProject extends Project
 					}
 					case Recursive => recursive = true
 					case MainClassOption(mainClassName) => manifest.getMainAttributes.putValue(MainClassKey, mainClassName)
-					case _ => warn("Ignored unknown package option " + option)
+					case _ => log.warn("Ignored unknown package option " + option)
 				}
 			}
 			
 			val jarPath = outputDirectory / jarName
-			FileUtilities.pack(sources.get, jarPath, manifest, recursive, this)
+			FileUtilities.pack(sources.get, jarPath, manifest, recursive, log)
 		}
 }
 
@@ -183,22 +183,22 @@ trait ManagedScalaProject extends ScalaProject
 					case Validate => validate = true
 					case LibraryManager(m) => manager = m
 					case QuietUpdate => quiet = true
-					case _ => warn("Ignored unknown managed option " + option)
+					case _ => log.warn("Ignored unknown managed option " + option)
 				}
 			}
 			try
 			{
 				ManageDependencies.update(info.projectPath, outputPattern, managedDependencyPath, manager,
-					validate, synchronize, quiet, this)
+					validate, synchronize, quiet, log)
 			}
 			catch
 			{
 				case e: NoClassDefFoundError =>
-					trace(e)
+					log.trace(e)
 					Some("Apache Ivy is required for dependency management (" + e.toString + ")")
 			}
 		}
-	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, this) }
+	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, log) }
 }
 object ScalaProject
 {

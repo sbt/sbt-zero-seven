@@ -27,8 +27,89 @@ trait BasicLogger extends Logger
 		level = newLevel
 	}
 }
-
-trait ConsoleLogger extends BasicLogger
+final class BufferedLogger(delegate: Logger) extends Logger
+{
+	private val buffer = new scala.collection.mutable.ListBuffer[LogEvent]
+	private var recording = false
+	
+	private def record(event: => LogEvent)
+	{
+		if(recording)
+			buffer += event
+	}
+	
+	def startRecording()
+	{
+		recording = true
+	}
+	def play()
+	{
+		System.out.synchronized
+		{
+			buffer.foreach(play)
+		}
+	}
+	private def play(event: LogEvent)
+	{
+		event match
+		{
+			case Success(msg) => delegate.success(msg)
+			case Log(level, msg) => delegate.log(level, msg)
+			case Trace(t) => delegate.trace(t)
+			case SetLevel(level) => delegate.setLevel(level)
+		}
+	}
+	def clear()
+	{
+		buffer.clear()
+		recording = false
+	}
+	
+	sealed trait LogEvent extends NotNull
+	case class Success(msg: String) extends LogEvent
+	case class Log(level: Level.Value, msg: String) extends LogEvent
+	case class Trace(t: Throwable) extends LogEvent
+	case class SetLevel(newLevel: Level.Value) extends LogEvent
+	
+	def setLevel(newLevel: Level.Value)
+	{
+		record(SetLevel(newLevel))
+		delegate.setLevel(newLevel)
+	}
+	def getLevel = delegate.getLevel
+	
+	def trace(t: => Throwable): Unit =
+	{
+		if(atLevel(Level.Trace))
+		{
+			if(recording)
+				record(Trace(t))
+			else
+				delegate.trace(t)
+		}
+	}
+	override def success(message: => String): Unit =
+	{
+		if(atLevel(Level.Info))
+		{
+			if(recording)
+				record(Success(message))
+			else
+				delegate.success(message)
+		}
+	}
+	def log(level: Level.Value, message: => String): Unit =
+	{
+		if(atLevel(level))
+		{
+			if(recording)
+				record(Log(level, message))
+			else
+				delegate.log(level, message)
+		}
+	}
+}
+class ConsoleLogger extends BasicLogger
 {
 	private val os = System.getProperty("os.name")
 	private val isWindows = os.toLowerCase.indexOf("windows") >= 0
@@ -45,7 +126,7 @@ trait ConsoleLogger extends BasicLogger
 	def successMessageColor = Console.RESET
 	override def success(message: => String)
 	{
-		log(successLabelColor, "success", successMessageColor, message)
+		log(successLabelColor, Level.SuccessLabel, successMessageColor, message)
 	}
 	def trace(t: => Throwable)
 	{
@@ -60,20 +141,20 @@ trait ConsoleLogger extends BasicLogger
 	private def setColor(color: String)
 	{
 		if(!isWindows)
-			print(color)
+			System.out.print(color)
 	}
 	private def log(labelColor: String, label: String, messageColor: String, message: String) =
 	{
 		setColor(Console.RESET)
-		print('[')
+		System.out.print('[')
 		setColor(labelColor)
-		print(label)
+		System.out.print(label)
 		setColor(Console.RESET)
-		print("] ")
+		System.out.print("] ")
 		setColor(messageColor)
-		print(message)
+		System.out.print(message)
 		setColor(Console.RESET)
-		println()
+		System.out.println()
 	}
 }
 
@@ -84,6 +165,7 @@ object Level extends Enumeration with NotNull
 	val Info = Value(2, "info")
 	val Warn = Value(3, "warn")
 	val Error = Value(4, "error")
+	val SuccessLabel = "success"
 	
 	def apply(s: String) = elements.find(s == _.toString)
 }

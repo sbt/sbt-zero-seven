@@ -8,8 +8,12 @@ import scala.collection._
 import FileUtilities._
 import Project._
 
-trait Project extends Logger with TaskManager with Dag[Project]
+trait Project extends TaskManager with Dag[Project]
 {
+	/** The logger */
+	final val log: Logger = logImpl
+	protected def logImpl: Logger = new BufferedLogger(new ConsoleLogger)
+	
 	/** Basic project information. */
 	def info: ProjectInfo
 	/** The tasks declared on this project. */
@@ -58,7 +62,7 @@ trait Project extends Logger with TaskManager with Dag[Project]
 		
 		def runSequentially =
 		{
-			if(multiProject && atLevel(Level.Debug))
+			if(multiProject && log.atLevel(Level.Debug))
 				showBuildOrder(ordered)
 			
 			def run(projects: List[Project]): Option[String] =
@@ -98,16 +102,9 @@ trait Project extends Logger with TaskManager with Dag[Project]
 	}
 	private def showBuildOrder(order: Iterable[Project])
 	{
-		debug("Project build order:")
-		order.foreach(x => debug("    " + x.info.name) )
-		debug("")
-	}
-	private def showProjectHeader(project: Project)
-	{
-		val projectHeader = "Project " + project.info.name
-		info("")
-		info(projectHeader)
-		info(("=": scala.runtime.RichString) * projectHeader.length)
+		log.debug("Project build order:")
+		order.foreach(x => log.debug("    " + x.info.name) )
+		log.debug("")
 	}
 	
 	/** Converts a String to a path relative to the project directory of this project. */
@@ -184,13 +181,13 @@ trait ReflectiveModules extends Project
 trait ReflectiveProject extends ReflectiveModules with ReflectiveTasks
 
 class ParentProject(val info: ProjectInfo, protected val deps: Iterable[Project])
-	extends ReflectiveProject with ConsoleLogger
+	extends ReflectiveProject
 {
 	def dependencies = deps ++ subProjects.values.toList
 }
 object Project
 {
-	private val log = new ConsoleLogger {}
+	private val log = new ConsoleLogger
 	log.setLevel(Level.Trace)
 	
 	val BuilderProjectDirectoryName = "build"
@@ -259,5 +256,13 @@ object Project
 			log.error("Project " + forProject + " had a null dependency.  This is probably an initialization problem and might be due to a circular dependency.")
 			throw new RuntimeException("Null dependency in project " + forProject)
 		}
+	}
+	
+	def showProjectHeader(project: Project)
+	{
+		val projectHeader = "Project " + project.info.name
+		project.log.info("")
+		project.log.info(projectHeader)
+		project.log.info(("=": scala.runtime.RichString) * projectHeader.length)
 	}
 }

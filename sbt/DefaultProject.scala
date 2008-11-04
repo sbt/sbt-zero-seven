@@ -5,7 +5,7 @@ package sbt
 
 class DefaultProject(val info: ProjectInfo, val dependencies: Iterable[Project]) extends BasicScalaProject
 
-abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveProject with ConsoleLogger
+abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveProject
 {
 	import BasicScalaProject._
 	def mainClass: Option[String] = None
@@ -44,10 +44,10 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 			testResourcesPath ::
 			Nil
 		
-		FileUtilities.createDirectories(toCreate.map(_.asFile), this) match
+		FileUtilities.createDirectories(toCreate.map(_.asFile), log) match
 		{
-			case Some(errorMessage) => error("Could not initialize directory structure: " + errorMessage)
-			case None => success("Successfully initialized directory structure.")
+			case Some(errorMessage) => log.error("Could not initialize directory structure: " + errorMessage)
+			case None => log.success("Successfully initialized directory structure.")
 		}
 	}
 	def consoleConfiguration = Configurations.Runtime
@@ -88,7 +88,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		def analysisPath = BasicScalaProject.this.analysisPath
 		def projectPath = info.projectPath
 		def testDefinitionClassNames = ScalaCheckPropertiesClassName :: Nil
-		def log = BasicScalaProject.this
+		def log = BasicScalaProject.this.log
 		def options = compileOptions.map(_.asString)
 	}
 	

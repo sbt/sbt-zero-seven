@@ -12,13 +12,30 @@ object ParallelRunner
 	{
 		def runProject(p: Project) =
 		{
-			p.tasks.get(action).flatMap( task =>
+			val bufferedLogger = p.log match { case bl: BufferedLogger => Some(bl); case _ => None }
+			for(log <- bufferedLogger)
 			{
-				if(p == project || !task.interactive)
-					task.run
-				else
-					task.runDependenciesOnly
-			})
+				log.startRecording()
+				Project.showProjectHeader(p)
+			}
+			try
+			{
+				p.tasks.get(action).flatMap( task =>
+				{
+					if(p == project || !task.interactive)
+						task.run
+					else
+						task.runDependenciesOnly
+				})
+			}
+			finally
+			{
+				for(log <- bufferedLogger)
+				{
+					log.play()
+					log.clear()
+				}
+			}
 		}
 		run(project, (p: Project) => p.info.name, runProject, maximumTasks)
 	}
@@ -70,7 +87,6 @@ final class Scheduler(maximumTasks: Int, jobCount: Int) extends Actor with NotNu
 	
 	def act
 	{
-		println("Scheduler started: maximum tasks = " + maximumTasks + ", jobs =" + jobCount)
 		var runCount = 0
 		var started = false
 		val queued = new PriorityQueue[Job]
@@ -159,7 +175,6 @@ final class Job(val name: String, action: => Option[String], cost: Int, dependen
 		{
 			val complete = DependencyComplete(this, result)
 			dependents.foreach(_ ! complete)
-			println("Job " + name + " complete.")
 		}
 		
 		if(remainingDependencies.isEmpty)
