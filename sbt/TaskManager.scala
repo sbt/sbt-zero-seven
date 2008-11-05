@@ -14,7 +14,14 @@ trait TaskManager{
 	class Task(val description : Option[String], val dependencies : List[Task], val interactive: Boolean,
 		action : => Option[String]) extends Dag[Task]
 	{
-		def dependsOn(tasks : Task*) = new Task(description, dependencies ::: tasks.toList, interactive, action);
+		checkTaskDependencies(dependencies)
+		
+		def dependsOn(tasks : Task*) =
+		{
+			val dependencyList = tasks.toList
+			checkTaskDependencies(dependencyList)
+			new Task(description, dependencies ::: dependencyList, interactive, action)
+		}
 		def describedAs(description : String) = new Task(Some(description), dependencies, interactive, action);
 		private def invoke = action;
 
@@ -40,5 +47,11 @@ trait TaskManager{
 		}
 
 		def &&(that : Task) = task { this.invoke.orElse(that.invoke) }
+	}
+	
+	private def checkTaskDependencies(dependencyList: List[Task])
+	{
+		val nullDependencyIndex = dependencyList.findIndexOf(_ == null)
+		require(nullDependencyIndex < 0, "Dependency (at index " + nullDependencyIndex + ") was null.  This may be an initialization issue or a circular dependency.")
 	}
 }

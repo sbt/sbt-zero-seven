@@ -62,7 +62,7 @@ class Analyzer(val global: Global) extends Plugin
 		{
 			val callback = callbackOption.get
 			val projectPath = callback.basePath
-			val projectPathString = Path.basePathString(projectPath)
+			val projectPathString = Path.basePathString(projectPath).getOrElse({error("Could not determine base path for " + projectPath); ""})
 			def relativize(file: File) = Path.relativize(projectPath, projectPathString, file)
 			
 			val outputDir = new File(global.settings.outdir.value)

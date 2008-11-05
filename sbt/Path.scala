@@ -6,12 +6,12 @@ package sbt
 import Path._
 import FileUtilities.wrapNull
 import java.io.{File, FileFilter}
-import scala.collection.mutable.{Buffer, ListBuffer}
+import scala.collection.mutable.{Set, HashSet}
 
 sealed abstract class Path extends PathFinder with NotNull
 {
 	def ## : Path = new BaseDirectory(this)
-	private[sbt] def addTo(buffer: Buffer[Path]) { buffer += this }
+	private[sbt] def addTo(pathSet: Set[Path]) { pathSet += this }
 	override def / (component: String): Path = if(component == ".") this else new RelativePath(this, component)
 	private[sbt] def asFile: File
 	private[sbt] def asURL = asFile.toURI.toURL
@@ -75,7 +75,7 @@ object Path
 	def lazyPathFinder(paths: => Iterable[Path]): PathFinder =
 		new PathFinder
 		{
-			private[sbt] def addTo(buffer: Buffer[Path]) = buffer ++= paths
+			private[sbt] def addTo(pathSet: Set[Path]) = pathSet ++= paths
 		}
 		
 	val sep = java.io.File.separatorChar
@@ -104,7 +104,8 @@ object Path
 		}
 	
 	def relativize(basePath: Path, path: Path): Option[Path] = relativize(basePath, path.asFile)
-	def relativize(basePath: Path, file: File): Option[Path] = relativize(basePath, basePathString(basePath), file)
+	def relativize(basePath: Path, file: File): Option[Path] =
+		basePathString(basePath) flatMap { baseString => relativize(basePath, baseString, file) }
 	def relativize(basePath: Path, basePathString: String, file: File): Option[Path] =
 	{
 		val pathString = file.getCanonicalPath
@@ -116,23 +117,31 @@ object Path
 	private[sbt] def relativize(baseFile: File, file: File): Option[String] =
 	{
 		val pathString = file.getCanonicalPath
-		val baseString = baseFileString(baseFile)
-		if(pathString.startsWith(baseString))
-			Some(pathString.substring(baseString.length))
+		baseFileString(baseFile) flatMap
+		{
+			baseString =>
+			{
+				if(pathString.startsWith(baseString))
+					Some(pathString.substring(baseString.length))
+				else
+					None
+			}
+		}
+	}
+	def basePathString(basePath: Path): Option[String] = baseFileString(basePath.asFile)
+	private def baseFileString(baseFile: File): Option[String] =
+	{
+		if(baseFile.isDirectory)
+		{
+			val cp = baseFile.getCanonicalPath
+			assert(cp.length > 0)
+			if(cp.charAt(cp.length - 1) == File.separatorChar)
+				Some(cp)
+			else
+				Some(cp + File.separatorChar)
+		}
 		else
 			None
-	}
-	def basePathString(basePath: Path): String = baseFileString(basePath.asFile)
-	private def baseFileString(baseFile: File): String =
-	{
-		require(baseFile.isDirectory)
-		
-		val cp = baseFile.getCanonicalPath
-		assert(cp.length > 0)
-		if(cp.charAt(cp.length - 1) == File.separatorChar)
-			cp
-		else
-			cp + File.separatorChar
 	}
 }
 
@@ -145,13 +154,13 @@ sealed abstract class PathFinder extends NotNull
 	def / (literal: String): PathFinder = new ChildPathFinder(this, new ExactFilter(literal))
 	final def \ (literal: String): PathFinder = this / literal
 	
-	final def get: Iterable[Path] =
+	final def get: scala.collection.Set[Path] =
 	{
-		val buffer = new ListBuffer[Path]
-		addTo(buffer)
-		buffer.readOnly
+		val pathSet = new HashSet[Path]
+		addTo(pathSet)
+		pathSet.readOnly
 	}
-	private[sbt] def addTo(buffer: Buffer[Path])
+	private[sbt] def addTo(pathSet: Set[Path])
 }
 private abstract class FilterPath extends PathFinder with FileFilter
 {
@@ -163,43 +172,43 @@ private abstract class FilterPath extends PathFinder with FileFilter
 	{
 		def accept(file: File) = file.isDirectory && FilterPath.this.accept(file)
 	}
-	protected def handlePath(path: Path, buffer: Buffer[Path])
+	protected def handlePath(path: Path, pathSet: Set[Path])
 	{
 		for(matchedFile <- wrapNull(path.asFile.listFiles(this)))
-			buffer += path / matchedFile.getName
+			pathSet += path / matchedFile.getName
 	}
 }
 private class DescendentPathFinder(val parent: PathFinder, val filter: NameFilter, val includeSelf: Boolean) extends FilterPath
 {
-	private[sbt] def addTo(buffer: Buffer[Path])
+	private[sbt] def addTo(pathSet: Set[Path])
 	{
 		for(path <- parent.get)
 		{
 			if(includeSelf && accept(path.asFile))
-				buffer += path
-			handlePathDescendent(path, buffer)
+				pathSet += path
+			handlePathDescendent(path, pathSet)
 		}
 	}
-	private def handlePathDescendent(path: Path, buffer: Buffer[Path])
+	private def handlePathDescendent(path: Path, pathSet: Set[Path])
 	{
-		handlePath(path, buffer)
+		handlePath(path, pathSet)
 		for(childDirectory <- wrapNull(path.asFile.listFiles(DirectoryFilter)))
-			handlePathDescendent(path / childDirectory.getName, buffer)
+			handlePathDescendent(path / childDirectory.getName, pathSet)
 	}
 }
 private class ChildPathFinder(val parent: PathFinder, val filter: NameFilter) extends FilterPath
 {
-	private[sbt] def addTo(buffer: Buffer[Path])
+	private[sbt] def addTo(pathSet: Set[Path])
 	{
 		for(path <- parent.get)
-			handlePath(path, buffer)
+			handlePath(path, pathSet)
 	}
 }
 private class Paths(a: PathFinder, b: PathFinder) extends PathFinder
 {
-	private[sbt] def addTo(buffer: Buffer[Path])
+	private[sbt] def addTo(pathSet: Set[Path])
 	{
-		a.addTo(buffer)
-		b.addTo(buffer)
+		a.addTo(pathSet)
+		b.addTo(pathSet)
 	}
 }

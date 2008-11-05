@@ -155,6 +155,14 @@ trait Project extends TaskManager with Dag[Project]
 	*  This only has an effect for multi-projects.*/
 	def parallelExecution = false
 	
+	/** True if a project and its dependencies should be checked to ensure that their
+	* output directories are not the same, false if they should not be checked. */
+	def shouldCheckOutputDirectories = true
+	
+	/** The list of directories to which this project writes.  This is used to verify that multiple
+	* projects have not been defined with the same output directories. */
+	def outputDirectories: Iterable[Path] = Nil
+	
 	private def getProject(e: Either[String,Project], path: Path): Project =
 		e.fold(m => Predef.error("Error getting project " + path + " : " + m), x => x)
 }
@@ -193,7 +201,7 @@ object Project
 	val BuilderProjectDirectoryName = "build"
 	val ProjectClassName = classOf[Project].getName
 	
-	def loadProject: Either[String, Project] = loadProject(new File("."), Nil)
+	def loadProject: Either[String, Project] = loadProject(new File("."), Nil).right.flatMap(checkOutputDirectories)
 	def loadProject(path: Path, deps: Iterable[Project]): Either[String, Project] = loadProject(path.asFile, deps)
 	private def loadProject(projectDirectory: File, deps: Iterable[Project]): Either[String, Project] =
 	{
@@ -255,6 +263,36 @@ object Project
 		{
 			log.error("Project " + forProject + " had a null dependency.  This is probably an initialization problem and might be due to a circular dependency.")
 			throw new RuntimeException("Null dependency in project " + forProject)
+		}
+	}
+	private def checkOutputDirectories(project: Project): Either[String, Project] =
+	{
+		if(project.shouldCheckOutputDirectories)
+			checkOutputDirectoriesImpl(project).toLeft(project)
+		else
+			Right(project)
+	}
+	private def checkOutputDirectoriesImpl(project: Project): Option[String] =
+	{
+		val projects = project.topologicalSort
+		import scala.collection.mutable.{HashMap, HashSet, Set}
+		val outputDirectories = new HashMap[Path, Set[Project]]
+		for(p <- projects; path <- p.outputDirectories)
+			outputDirectories.getOrElseUpdate(path, new HashSet[Project]) += p
+		val shared = outputDirectories.filter(_._2.size > 1)
+		if(shared.isEmpty)
+			None
+		else
+		{
+			val sharedString =
+			{
+				val s =
+					for((path, projectsSharingPath) <- shared) yield
+						projectsSharingPath.map(_.info.name).mkString(", ") + " share " + FileUtilities.printableFilename(path.asFile)
+				s.mkString("\n\t")
+			}
+			Some("The same directory is used for output for multiple projects:\n\t" + sharedString +
+			"\n  (If this is intentional, use 'override def shouldCheckOutputDirectories = false' in your project definition.)")
 		}
 	}
 	

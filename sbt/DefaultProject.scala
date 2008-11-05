@@ -187,6 +187,8 @@ trait BasicProjectPaths extends Project
 	def docPath = outputPath / docDirectoryName
 	def graphPath = outputPath / graphDirectoryName
 	def analysisPath = outputPath / analysisDirectoryName
+	
+	override def outputDirectories = outputPath :: managedDependencyPath :: Nil
 }
 object BasicProjectPaths
 {
