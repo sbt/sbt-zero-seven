@@ -10,7 +10,7 @@ import Project._
 
 trait Project extends TaskManager with Dag[Project]
 {
-	/** The logger */
+	/** The logger for this project definition. */
 	final val log: Logger = logImpl
 	protected def logImpl: Logger = new BufferedLogger(new ConsoleLogger)
 	
@@ -30,6 +30,7 @@ trait Project extends TaskManager with Dag[Project]
 			buffer.append("\t" + name + task.description.map(x => ": " + x).getOrElse("") + "\n")
 		buffer.toString
 	}
+	/** Combines the task maps of this project and all dependencies.*/
 	private[sbt] def deepTasks: Map[String, Project#Task] =
 	{
 		val tasks = new jcl.TreeMap[String, Project#Task]
@@ -100,6 +101,7 @@ trait Project extends TaskManager with Dag[Project]
 		else
 			runSequentially
 	}
+	/** Logs the list of projects at the debug level.*/
 	private def showBuildOrder(order: Iterable[Project])
 	{
 		log.debug("Project build order:")
@@ -176,18 +178,26 @@ object Reflective
 		mappings
 	}
 }
+/** A Project that determines its tasks by reflectively finding all vals with a type
+* that conforms to Task.*/
 trait ReflectiveTasks extends Project
 {
 	def tasks: Map[String, Task] = reflectiveTaskMappings
 	def reflectiveTaskMappings : Map[String, Task] = Reflective.reflectiveMappings[Task](this)
 }
+/** A Project that determines its dependencies on other projects by reflectively
+* finding all vals with a type that conforms to Project.*/
 trait ReflectiveModules extends Project
 {
 	override def subProjects: Map[String, Project] = reflectiveModuleMappings
 	def reflectiveModuleMappings : Map[String, Project] = Reflective.reflectiveMappings[Project](this)
 }
+/** A Project that determines its dependencies on other projects by reflectively
+* finding all vals with a type that conforms to Project and determines its tasks
+* by reflectively finding all vals with a type that conforms to Task.*/
 trait ReflectiveProject extends ReflectiveModules with ReflectiveTasks
 
+/** This Project subclass is used to contain other projects as dependencies.*/
 class ParentProject(val info: ProjectInfo, protected val deps: Iterable[Project])
 	extends ReflectiveProject
 {
@@ -195,14 +205,20 @@ class ParentProject(val info: ProjectInfo, protected val deps: Iterable[Project]
 }
 object Project
 {
+	/** The logger that should be used before the project definition is loaded.*/
 	private val log = new ConsoleLogger
 	log.setLevel(Level.Trace)
 	
+	/** The name of the directory for project definitions.*/
 	val BuilderProjectDirectoryName = "build"
+	/** The name of the class that all projects must inherit from.*/
 	val ProjectClassName = classOf[Project].getName
 	
+	/** Loads the project in the current working directory.*/
 	def loadProject: Either[String, Project] = loadProject(new File("."), Nil).right.flatMap(checkOutputDirectories)
+	/** Loads the project in the directory given by 'path' and with the given dependencies.*/
 	def loadProject(path: Path, deps: Iterable[Project]): Either[String, Project] = loadProject(path.asFile, deps)
+	/** Loads the project in the directory given by 'projectDirectory' and with the given dependencies.*/
 	private def loadProject(projectDirectory: File, deps: Iterable[Project]): Either[String, Project] =
 	{
 		try
@@ -225,6 +241,8 @@ object Project
 			}
 		}
 	}
+	/** Loads the project for the given `info`, represented by an instance of 'builderClass', and
+	* with the given dependencies.*/
 	private def loadProject[P <: Project](info: ProjectInfo, builderClass: Class[P], deps: Iterable[Project]): Project =
 	{
 		checkDependencies(info.name, deps)
@@ -234,6 +252,8 @@ object Project
 			project.initializeDirectories()
 		project
 	}
+	/** Compiles the project definition classes and returns the project definition class name
+	* and the class loader that should be used to load the definition. */
 	private def getProjectDefinition(info: ProjectInfo): Either[String, (String, ClassLoader)] =
 	{
 		val builderProjectPath = info.builderPath / BuilderProjectDirectoryName
@@ -257,6 +277,8 @@ object Project
 		else
 			Right((info.builderClassName, getClass.getClassLoader))
 	}
+	/** Verifies that the given list of project dependencies contains no nulls.  The
+	* String argument should be the project name with the dependencies.*/
 	private def checkDependencies(forProject: String, deps: Iterable[Project])
 	{
 		for(nullDep <- deps.find(_ == null))
@@ -265,6 +287,10 @@ object Project
 			throw new RuntimeException("Null dependency in project " + forProject)
 		}
 	}
+	/** Verifies that output directories of the given project and all of its dependencies are
+	* all different.  No verification is done if the project overrides
+	* 'shouldCheckOutputDirectories' to be false. The 'Project.outputDirectories' method is
+	* used to determine a project's output directories. */
 	private def checkOutputDirectories(project: Project): Either[String, Project] =
 	{
 		if(project.shouldCheckOutputDirectories)
@@ -272,6 +298,9 @@ object Project
 		else
 			Right(project)
 	}
+	/** Verifies that output directories of the given project and all of its dependencies are
+	* all different.  The 'Project.outputDirectories' method is used to determine a project's
+	* output directories. */
 	private def checkOutputDirectoriesImpl(project: Project): Option[String] =
 	{
 		val projects = project.topologicalSort
@@ -296,6 +325,7 @@ object Project
 		}
 	}
 	
+	/** Writes the project name and a separator to the project's log at the info level.*/
 	def showProjectHeader(project: Project)
 	{
 		val projectHeader = "Project " + project.info.name
