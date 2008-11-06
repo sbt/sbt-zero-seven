@@ -95,7 +95,7 @@ trait Project extends TaskManager with Dag[Project]
 			ParallelRunner.run(this, name, Runtime.getRuntime.availableProcessors) match
 			{
 				case Nil => None
-				case x => Some(x.mkString("\n"))
+				case x => Some(Set(x: _*).mkString("\n"))
 			}
 		}
 		else

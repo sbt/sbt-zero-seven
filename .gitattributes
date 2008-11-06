@@ -5,7 +5,7 @@
 /NOTICE -text
 /build -text
 /clean -text
-lib/ivy-2.0.0-rc1.jar -text
+lib/ivy-2.0.0-rc2.jar -text
 sbt/Analysis.scala -text
 sbt/AnalysisCallback.scala -text
 sbt/Analyzer.scala -text

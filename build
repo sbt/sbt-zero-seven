@@ -1,3 +1,3 @@
 mkdir -p classes && \
-fsc -cp lib/ivy-2.0.0-rc1.jar -d classes/ sbt/*.scala && \
+fsc -cp lib/ivy-2.0.0-rc2.jar -d classes/ sbt/*.scala && \
 jar -cf sbt.jar scalac-plugin.xml LICENSE LICENSE_Apache LICENSE_Scala NOTICE -C classes sbt

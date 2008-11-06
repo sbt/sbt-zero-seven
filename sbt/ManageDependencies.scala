@@ -129,12 +129,15 @@ object ManageDependencies
 			catch { case e: Exception => log.trace(e); Some("Could not process dependencies: " + e.toString) }
 		}
 		
-		ivy.pushContext()
-		try
+		this.synchronized // Ivy is not thread-safe.  In particular, it uses a static DocumentBuilder, which is not thread-safe
 		{
-			moduleDescriptor.fold(Some(_), processModule)
+			ivy.pushContext()
+			try
+			{
+				moduleDescriptor.fold(Some(_), processModule)
+			}
+			finally { ivy.popContext() }
 		}
-		finally { ivy.popContext() }
 	}
 	private def addResolvers(settings: IvySettings, resolvers: Seq[Resolver], log: Logger)
 	{
