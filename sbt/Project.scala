@@ -234,20 +234,47 @@ object Project
 		}
 		catch
 		{
-			case e: Exception =>
+			case ite: java.lang.reflect.InvocationTargetException =>
 			{
-				log.trace(e)
-				Left("Error loading project: " + e.toString)
+				val cause =
+					if(ite.getCause == null) ite
+					else ite.getCause
+				errorLoadingProject(cause)
 			}
+			case e: Exception => errorLoadingProject(e)
 		}
+	}
+	/** Logs the stack trace and returns an error message in Left.*/
+	private def errorLoadingProject(e: Throwable) =
+	{
+		log.trace(e)
+		Left("Error loading project: " + e.toString)
 	}
 	/** Loads the project for the given `info`, represented by an instance of 'builderClass', and
 	* with the given dependencies.*/
 	private def loadProject[P <: Project](info: ProjectInfo, builderClass: Class[P], deps: Iterable[Project]): Project =
 	{
 		checkDependencies(info.name, deps)
-		val constructor = builderClass.getConstructor(classOf[ProjectInfo], classOf[Iterable[Project]])
-		val project = constructor.newInstance(info, deps)
+		val project =
+		{
+			val project1 =
+				if(deps.isEmpty)
+				{
+					try
+					{
+						val singleArgConstructor = builderClass.getConstructor(classOf[ProjectInfo])
+						Some(singleArgConstructor.newInstance(info))
+					}
+					catch { case _ => None }
+				}
+				else
+					None
+			project1.getOrElse
+			{
+				val constructor = builderClass.getConstructor(classOf[ProjectInfo], classOf[Iterable[Project]])
+				constructor.newInstance(info, deps)
+			}
+		}
 		if(info.initializeDirectories)
 			project.initializeDirectories()
 		project

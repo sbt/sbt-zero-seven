@@ -4,7 +4,7 @@ import java.io.File
 
 import org.apache.ivy.{core, plugins, util, Ivy}
 import core.LogOptions
-import core.module.descriptor.{DefaultDependencyDescriptor, DefaultModuleDescriptor, ModuleDescriptor}
+import core.module.descriptor.{DefaultArtifact, DefaultDependencyDescriptor, DefaultModuleDescriptor, ModuleDescriptor}
 import core.module.id.ModuleRevisionId
 import core.resolve.ResolveOptions
 import core.retrieve.RetrieveOptions
@@ -98,7 +98,15 @@ object ManageDependencies
 					addResolvers(ivy.getSettings, resolvers, log)
 					val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(module))
 					for(dependency <- dependencies)
-						moduleID.addDependency(new DefaultDependencyDescriptor(toID(dependency), false))
+					{
+						val dependencyDescriptor = new DefaultDependencyDescriptor(moduleID, toID(dependency), false, false, true)
+						dependencyDescriptor.addDependencyConfiguration("*", "*")
+						moduleID.addDependency(dependencyDescriptor)
+					}
+						
+					val artifact = DefaultArtifact.newIvyArtifact(moduleID.getResolvedModuleRevisionId, moduleID.getPublicationDate)
+					moduleID.setModuleArtifact(artifact)
+					moduleID.check()
 					Right(moduleID)
 				}
 			}
@@ -182,6 +190,7 @@ trait SbtManager extends Manager
 	def resolvers: Seq[Resolver]
 	def dependencies: Iterable[ModuleID]
 }
+case class SimpleManager(module: ModuleID, resolvers: Seq[Resolver], dependencies: ModuleID*)  extends SbtManager
 
 final case class ModuleID(organization: String, name: String, revision: String) extends NotNull
 {
@@ -198,6 +207,7 @@ sealed case class MavenRepository(name: String, root: String) extends Resolver
 import Resolver._
 object ScalaToolsReleases extends MavenRepository(ScalaToolsReleasesName, ScalaToolsReleasesRoot)
 object ScalaToolsSnapshots extends MavenRepository(ScalaToolsSnapshotsName, ScalaToolsSnapshotsRoot)
+object DefaultMavenRepository extends MavenRepository("Maven2 Repository", IBiblioResolver.DEFAULT_M2_ROOT)
 
 object Resolver
 {

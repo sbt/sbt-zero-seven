@@ -22,7 +22,7 @@ trait ScalaProject extends Project
 	object IncrementVersion extends ActionOption
 	case class ClearAnalysis(analysis: TaskAnalysis[_, _, _]) extends CleanOption
 	
-	case class ExcludeTests(classNames: Iterable[String]) extends TestOption
+	case class ExcludeTests(tests: Iterable[TestDefinition]) extends TestOption
 	
 	case class ManifestOption(m: Manifest) extends PackageOption
 	{
@@ -93,21 +93,16 @@ trait ScalaProject extends Project
 			pathClean
 		}
 
-	def testTask(classpath: PathFinder, analysis: CompileAnalysis, options: TestOption*) = 
-		task {
+	def testTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: TestOption*) = 
+		task
+		{
 			import scala.collection.mutable.HashSet
 			
-			val tests = HashSet.empty[String] ++ analysis.allTests
+			val tests = HashSet.empty[TestDefinition] ++ analysis.allTests
 			for(ExcludeTests(exclude) <- options)
 				tests -- exclude
 				
-			if(tests.isEmpty)
-			{
-				log.info("No tests to run.")
-				None
-			}
-			else
-				ScalaCheckTests(classpath.get, tests, log)
+			TestFramework.runTests(frameworks, classpath.get, tests, log)
 		}
 
 	def graphTask(outputDirectory: Path, analysis: CompileAnalysis) = task { DotGraph(analysis, outputDirectory, log) }

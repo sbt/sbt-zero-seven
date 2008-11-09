@@ -4,6 +4,9 @@
 package sbt
 
 class DefaultProject(val info: ProjectInfo, val dependencies: Iterable[Project]) extends BasicScalaProject
+{
+	def this(i: ProjectInfo) = this(i, Nil)
+}
 
 abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveProject
 {
@@ -30,6 +33,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		documentTitle(info.name + " " + info.currentVersion + " API") ::
 		windowTitle(info.name + " " + info.currentVersion + " API") ::
 		Nil
+	def updateOptions: Seq[ManagedOption] = Validate :: Synchronize :: QuietUpdate :: Nil
 		
 	override def initializeDirectories()
 	{
@@ -58,7 +62,16 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	def runClasspath = fullClasspath(Configurations.Runtime)
 	def consoleClasspath = fullClasspath(consoleConfiguration)
 	
-	def managedClasspath(config: String): PathFinder = managedDependencyPath / config ** defaultIncludeAll * "*.jar"
+	def managedClasspath(config: String): PathFinder =
+	{
+		val configDirectory = managedDependencyPath / config
+		val useDirectory =
+			if(configDirectory.asFile.exists)
+				configDirectory
+			else
+				managedDependencyPath / Configurations.Default
+		useDirectory ** defaultIncludeAll * "*.jar"
+	}
 	def unmanagedClasspath: PathFinder =
 		(dependencyPath * "*.jar") +++ ((dependencyPath * -managedDirectoryName) ** defaultIncludeAll * "*.jar")
 	def projectClasspath(config: String) = compilePath +++ unmanagedClasspath +++ managedClasspath(config)
@@ -79,6 +92,8 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 			set.toList
 		}
 		
+	def testFrameworks: Iterable[TestFramework] = ScalaCheckFramework :: SpecsFramework :: ScalaTestFramework :: Nil
+		
 	def compileConfiguration = new DefaultCompileConfig
 	class DefaultCompileConfig extends CompileConfiguration
 	{
@@ -87,7 +102,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		def classpath = compileClasspath
 		def analysisPath = BasicScalaProject.this.analysisPath
 		def projectPath = info.projectPath
-		def testDefinitionClassNames = ScalaCheckPropertiesClassName :: Nil
+		def testDefinitionClassNames = testFrameworks.map(_.testSuperClassName)
 		def log = BasicScalaProject.this.log
 		def options = compileOptions.map(_.asString)
 	}
@@ -101,7 +116,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val console = consoleTask(consoleClasspath).dependsOn(compile) describedAs ConsoleDescription
 	lazy val doc = scaladocTask(mainSources, mainDocPath, docClasspath, documentOptions: _*).dependsOn(compile) describedAs DocDescription
 	lazy val docTest = scaladocTask(testSources, testDocPath, docClasspath, documentOptions: _*).dependsOn(compile) describedAs TestDocDescription
-	lazy val test = testTask(testClasspath, analysis).dependsOn(compile) describedAs TestDescription
+	lazy val test = testTask(testFrameworks, testClasspath, analysis).dependsOn(compile) describedAs TestDescription
 	lazy val `package` = packageTask(getClasses(mainSources) +++ mainResources, outputPath, defaultJarName, mainClass.map(MainClassOption(_)).toList: _*).dependsOn(compile) describedAs PackageDescription
 	lazy val packageTest = packageTask(getClasses(testSources) +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(test) describedAs TestPackageDescription
 	lazy val packageDocs = packageTask(mainDocPath ##, outputPath, defaultJarBaseName + "-docs.jar", Recursive).dependsOn(doc) describedAs DocPackageDescription
@@ -110,7 +125,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val packageAll = (`package` && packageTest && packageSrc) describedAs PackageAllDescription
 	lazy val release = clean && compile && test && packageAll && doc 
 	lazy val graph = graphTask(graphPath, analysis).dependsOn(compile)
-	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, Validate, Synchronize, QuietUpdate)
+	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, updateOptions: _*)
 	lazy val cleanLib = cleanLibTask(managedDependencyPath)
 }
 

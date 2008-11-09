@@ -248,8 +248,7 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 		{
 			def foundSubclass(sourcePath: Path, subclassName: String, superclassName: String, isModule: Boolean)
 			{
-				if(isModule)
-					analysis.addTest(sourcePath, subclassName)
+				analysis.addTest(sourcePath, TestDefinition(isModule, subclassName, superclassName))
 			}
 		}
 }

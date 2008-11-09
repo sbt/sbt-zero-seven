@@ -1,11 +1,17 @@
 * text=auto !eol
 /LICENSE -text
-/LICENSE_Apache -text
-/LICENSE_Scala -text
 /NOTICE -text
 /build -text
 /clean -text
+lib/ScalaCheck-1.4dev.jar -text
 lib/ivy-2.0.0-rc2.jar -text
+lib/scalatest-0.9.3.jar -text
+lib/specs-1.3.1.jar -text
+licenses/LICENSE_Apache -text
+licenses/LICENSE_Scala -text
+licenses/LICENSE_ScalaCheck -text
+licenses/LICENSE_sbt -text
+licenses/LICENSE_specs -text
 sbt/Analysis.scala -text
 sbt/AnalysisCallback.scala -text
 sbt/Analyzer.scala -text
@@ -29,9 +35,9 @@ sbt/Project.scala -text
 sbt/ProjectInfo.scala -text
 sbt/ReflectUtilities.scala -text
 sbt/Run.scala -text
-sbt/ScalaCheckTests.scala -text
 sbt/ScalaProject.scala -text
 sbt/TaskManager.scala -text
+sbt/TestFramework.scala -text
 sbt/TrapExit.scala -text
 sbt/Version.scala -text
 /scalac-plugin.xml -text

@@ -155,7 +155,7 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 	extends BasicAnalysis(analysisPath, projectPath, log)
 {
 	import CompileAnalysis._
-	private val testMap = new HashMap[Path, Set[String]]
+	private val testMap = new HashMap[Path, Set[TestDefinition]]
 	private val projectDefinitionMap = new HashMap[Path, Set[String]]
 	
 	override protected def mapsToClear = testMap :: projectDefinitionMap :: super.mapsToClear
@@ -164,7 +164,7 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 	def allTests = all(testMap)
 	def allProjects = all(projectDefinitionMap)
 	
-	def addTest(source: Path, testClassName: String) = add(source, testClassName, testMap)
+	def addTest(source: Path, test: TestDefinition) = add(source, test, testMap)
 	def addProjectDefinition(source: Path, className: String) = add(source, className, projectDefinitionMap)
 	
 	def getClasses(sources: PathFinder, outputDirectory: Path): PathFinder =
@@ -181,12 +181,12 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 		
 	override protected def loadExtra() =
 	{
-		loadStrings(testMap, analysisPath / TestsFileName, projectPath, log) orElse
+		loadTestDefinitions(testMap, analysisPath / TestsFileName, projectPath, log) orElse
 		loadStrings(projectDefinitionMap, analysisPath / ProjectDefinitionsName, projectPath, log)
 	}
 	override protected def saveExtra() =
 	{
-		writeStrings(testMap, TestsLabel, analysisPath / TestsFileName, log) orElse
+		writeTestDefinitions(testMap, TestsLabel, analysisPath / TestsFileName, log) orElse
 		writeStrings(projectDefinitionMap, ProjectDefinitionsLabel, analysisPath / ProjectDefinitionsName, log)
 	}
 }
@@ -232,6 +232,8 @@ object MapUtilities
 		map.getOrElseUpdate(key, new HashSet[Value]) + value
 	}
 	
+	def writeTestDefinitions(map: Map[Path, Set[TestDefinition]], label: String, to: Path, log: Logger) =
+		write(map, label, (i: Iterable[TestDefinition]) => i.map(_.toString).mkString(File.pathSeparator), to, log)
 	def writeStrings(map: Map[Path, Set[String]], label: String, to: Path, log: Logger) =
 		write(map, label, (i: Iterable[String]) => i.mkString(File.pathSeparator), to, log)
 	def writePaths(map: Map[Path, Set[Path]], label: String, to: Path, log: Logger) =
@@ -254,9 +256,15 @@ object MapUtilities
 	
 	private def pathSetFromString(projectPath: Path)(s: String): Set[Path] =
 		(new HashSet[Path]) ++ Path.splitString(projectPath, s)
+	private def stringToSet[T](f: String => T)(s: String): Set[T] =
+		(new HashSet[T]) ++ FileUtilities.pathSplit(s).map(_.trim).filter(_.length > 0).map(f)
 	
-	def loadStrings(map: Map[Path, Set[String]], from: Path, projectPath: Path, log: Logger) =
-		load(map, (s: String) => (new HashSet[String]) ++ FileUtilities.pathSplit(s), from, projectPath, log)
+	def loadTestDefinitions(map: Map[Path, Set[TestDefinition]], from: Path, projectPath: Path, log: Logger) =
+		loadStrings(map, t => TestParser.parse(t).fold(error, x => x), from, projectPath, log)
+	def loadStrings(map: Map[Path, Set[String]], from: Path, projectPath: Path, log: Logger): Option[String] =
+		loadStrings(map, x => x, from, projectPath, log)
+	def loadStrings[T](map: Map[Path, Set[T]], f: String => T, from: Path, projectPath: Path, log: Logger): Option[String] =
+		load(map, stringToSet[T](f)(_), from, projectPath, log)
 	def loadPaths(map: Map[Path, Set[Path]], from: Path, projectPath: Path, log: Logger) =
 		load(map, pathSetFromString(projectPath)(_), from, projectPath, log)
 		
