@@ -4,12 +4,11 @@
 package sbt
 
 sealed trait Version extends NotNull
-case class BasicVersion(major: Int, minor: Option[Int], micro: Option[Int], build: Option[Int], status: Option[String]) extends Version
+case class BasicVersion(major: Int, minor: Option[Int], micro: Option[Int], extra: Option[String]) extends Version
 {
 	override def toString = major +
 		minor.map(minorI => "." + minorI + micro.map(microI => "." + microI).getOrElse("")).getOrElse("") +
-		build.map("-b" + _).getOrElse("") +
-		status.map("-" + _).getOrElse("")
+			extra.map(x => "-" + x).getOrElse("")
 }
 case class OpaqueVersion(value: String) extends Version
 {
@@ -18,18 +17,16 @@ case class OpaqueVersion(value: String) extends Version
 object Version
 {
 	import java.util.regex.Pattern
-	val versionPattern = Pattern.compile("""(\d+)(?:\.(\d+)(?:\.(\d+))?)?(?:-b(\d+))?(?:-(\.+))?""")
+	val versionPattern = Pattern.compile("""(\d+)(?:\.(\d+)(?:\.(\d+))?)?(?:-(.+))?""")
 	def fromString(v: String): Either[String, Version] =
 	{
 		val trimmed = v.trim
-		if(trimmed.isEmpty)//length == 0)
+		if(trimmed.isEmpty)
 			Left("No project version specified")
 		else if(trimmed.charAt(0) == '"')
 		{
-			if(trimmed.length == 1)
+			if(trimmed.length == 1 || trimmed.charAt(trimmed.length - 1) != '"')
 				Left("Closing \" not found")
-			else if(trimmed.charAt(trimmed.length - 1) != '"')
-				Left("Opaque version must end with \"")
 			else
 				Right(OpaqueVersion(trimmed))
 		}
@@ -49,10 +46,10 @@ object Version
 					val v = group(index)
 					if(v == null) None else Some(v.toInt)
 				}
-				Right(BasicVersion(group(1).toInt, toInt(2), toInt(3), toInt(4), toOption(5)))
+				Right(BasicVersion(group(1).toInt, toInt(2), toInt(3), toOption(4)))
 			}
 			else
-				Left("Invalid version string " + v + ", expected #[.#[.#]][-b#][-*]")
+				Right(OpaqueVersion(trimmed))
 		}
 	}
 }

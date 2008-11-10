@@ -26,7 +26,7 @@ class Analyzer(val global: Global) extends Plugin
 	val description = "A plugin to find all concrete instances of a given class and extract dependency information."
 	val components = List[PluginComponent](Component)
 	
-	var callbackOption: Option[AnalysisCallback] = None
+	private var callbackOption: Option[AnalysisCallback] = None
 	
 	override def processOptions(options: List[String], error: String => Unit)
 	{

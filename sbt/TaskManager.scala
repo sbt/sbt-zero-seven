@@ -46,7 +46,8 @@ trait TaskManager{
 			invokeList(topologicalSort)
 		}
 
-		def &&(that : Task) = task { this.invoke.orElse(that.invoke) }
+		def &&(that : Task) =
+			new Task(None, dependencies ::: that.dependencies, interactive || that.interactive, this.invoke.orElse(that.invoke))
 	}
 	
 	private def checkTaskDependencies(dependencyList: List[Task])

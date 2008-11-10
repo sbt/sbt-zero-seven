@@ -34,21 +34,19 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		windowTitle(info.name + " " + info.currentVersion + " API") ::
 		Nil
 	def updateOptions: Seq[ManagedOption] = Validate :: Synchronize :: QuietUpdate :: Nil
-		
-	override def initializeDirectories()
+	def testOptions: Seq[TestOption] = Nil
+	
+	private def directoriesToCreate: List[Path] =
+		dependencyPath ::
+		mainScalaSourcePath ::
+		mainResourcesPath ::
+		testScalaSourcePath ::
+		testResourcesPath ::
+		Nil
+	
+	override final def initializeDirectories()
 	{
-		val toCreate =
-			dependencyPath ::
-			sourcePath ::
-			mainSourcePath ::
-			mainScalaSourcePath ::
-			mainResourcesPath ::
-			testSourcePath ::
-			testScalaSourcePath ::
-			testResourcesPath ::
-			Nil
-		
-		FileUtilities.createDirectories(toCreate.map(_.asFile), log) match
+		FileUtilities.createDirectories(directoriesToCreate.map(_.asFile), log) match
 		{
 			case Some(errorMessage) => log.error("Could not initialize directory structure: " + errorMessage)
 			case None => log.success("Successfully initialized directory structure.")
@@ -116,14 +114,14 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val console = consoleTask(consoleClasspath).dependsOn(compile) describedAs ConsoleDescription
 	lazy val doc = scaladocTask(mainSources, mainDocPath, docClasspath, documentOptions: _*).dependsOn(compile) describedAs DocDescription
 	lazy val docTest = scaladocTask(testSources, testDocPath, docClasspath, documentOptions: _*).dependsOn(compile) describedAs TestDocDescription
-	lazy val test = testTask(testFrameworks, testClasspath, analysis).dependsOn(compile) describedAs TestDescription
+	lazy val test = testTask(testFrameworks, testClasspath, analysis, testOptions: _*).dependsOn(compile) describedAs TestDescription
 	lazy val `package` = packageTask(getClasses(mainSources) +++ mainResources, outputPath, defaultJarName, mainClass.map(MainClassOption(_)).toList: _*).dependsOn(compile) describedAs PackageDescription
-	lazy val packageTest = packageTask(getClasses(testSources) +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(test) describedAs TestPackageDescription
+	lazy val packageTest = packageTask(getClasses(testSources) +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(compile) describedAs TestPackageDescription
 	lazy val packageDocs = packageTask(mainDocPath ##, outputPath, defaultJarBaseName + "-docs.jar", Recursive).dependsOn(doc) describedAs DocPackageDescription
 	lazy val packageSrc = packageTask(allSources, outputPath, defaultJarBaseName + "-src.jar") describedAs SourcePackageDescription
 	lazy val docAll = (doc && docTest) describedAs DocAllDescription
-	lazy val packageAll = (`package` && packageTest && packageSrc) describedAs PackageAllDescription
-	lazy val release = clean && compile && test && packageAll && doc 
+	lazy val packageAll = (`package` && packageTest && packageSrc && packageDocs) describedAs PackageAllDescription
+	lazy val release = clean && compile && test && packageAll
 	lazy val graph = graphTask(graphPath, analysis).dependsOn(compile)
 	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, updateOptions: _*)
 	lazy val cleanLib = cleanLibTask(managedDependencyPath)
@@ -203,6 +201,8 @@ trait BasicProjectPaths extends Project
 	def graphPath = outputPath / graphDirectoryName
 	def analysisPath = outputPath / analysisDirectoryName
 	
+	/** The directories to which a project writes are listed here and is used
+	* to check a project and its dependencies for collisions.*/
 	override def outputDirectories = outputPath :: managedDependencyPath :: Nil
 }
 object BasicProjectPaths

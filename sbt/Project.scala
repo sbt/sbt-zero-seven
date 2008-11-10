@@ -201,6 +201,7 @@ trait ReflectiveProject extends ReflectiveModules with ReflectiveTasks
 class ParentProject(val info: ProjectInfo, protected val deps: Iterable[Project])
 	extends ReflectiveProject
 {
+	def this(info: ProjectInfo) = this(info, Nil)
 	def dependencies = deps ++ subProjects.values.toList
 }
 object Project

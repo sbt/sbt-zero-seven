@@ -19,10 +19,9 @@ trait ScalaProject extends Project
 	trait PackageOption extends ActionOption
 	trait TestOption extends ActionOption
 	trait CleanOption extends ActionOption
-	object IncrementVersion extends ActionOption
 	case class ClearAnalysis(analysis: TaskAnalysis[_, _, _]) extends CleanOption
 	
-	case class ExcludeTests(tests: Iterable[TestDefinition]) extends TestOption
+	case class ExcludeTests(tests: Iterable[String]) extends TestOption
 	
 	case class ManifestOption(m: Manifest) extends PackageOption
 	{
@@ -98,10 +97,15 @@ trait ScalaProject extends Project
 		{
 			import scala.collection.mutable.HashSet
 			
-			val tests = HashSet.empty[TestDefinition] ++ analysis.allTests
-			for(ExcludeTests(exclude) <- options)
-				tests -- exclude
-				
+			val excludeTests = for(ExcludeTests(exclude) <- options) yield exclude
+			val excludeTestsSet = HashSet.empty[String] ++ excludeTests.flatMap(x => x)
+			if(excludeTestsSet.size > 0 && log.atLevel(Level.Debug))
+			{
+				log.debug("Excluding tests: ")
+				excludeTestsSet.foreach(test => log.debug("\t" + test))
+			}
+			val tests = HashSet.empty[TestDefinition] ++ analysis.allTests.filter(test => !excludeTestsSet.contains(test.testClassName))
+			
 			TestFramework.runTests(frameworks, classpath.get, tests, log)
 		}
 
