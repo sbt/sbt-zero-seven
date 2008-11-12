@@ -147,7 +147,7 @@ object ManageDependencies
 			finally { ivy.popContext() }
 		}
 	}
-	private def addResolvers(settings: IvySettings, resolvers: Seq[Resolver], log: Logger)
+	private def addResolvers(settings: IvySettings, resolvers: Iterable[Resolver], log: Logger)
 	{
 		val newDefault = new ChainResolver
 		newDefault.setName("redefined-public")
@@ -187,10 +187,10 @@ final case class IvyManager(configuration: Option[Path], dependencies: Path) ext
 trait SbtManager extends Manager
 {
 	def module: ModuleID
-	def resolvers: Seq[Resolver]
+	def resolvers: Iterable[Resolver]
 	def dependencies: Iterable[ModuleID]
 }
-case class SimpleManager(module: ModuleID, resolvers: Seq[Resolver], dependencies: ModuleID*)  extends SbtManager
+case class SimpleManager(module: ModuleID, resolvers: Iterable[Resolver], dependencies: ModuleID*)  extends SbtManager
 
 final case class ModuleID(organization: String, name: String, revision: String) extends NotNull
 {

@@ -158,7 +158,6 @@ trait ScalaProject extends Project
 			FileUtilities.pack(sources.get, jarPath, manifest, recursive, log)
 		}
 }
-
 trait ManagedScalaProject extends ScalaProject
 {
 	trait ManagedOption extends ActionOption
@@ -204,3 +203,22 @@ object ScalaProject
 	val AnalysisDirectoryName = "analysis"
 	val MainClassKey = "Main-Class"
 }
+
+/** A Project that determines its library dependencies by reflectively finding all vals with a type
+* that conforms to ModuleID.*/
+trait ReflectiveLibraryDependencies extends Project
+{
+	def excludeIDs: Iterable[ModuleID]
+	def libraryDependencies: Set[ModuleID] = reflectiveLibraryDependencies
+	def reflectiveLibraryDependencies : Set[ModuleID] = Set(Reflective.reflectiveMappings[ModuleID](this).values.toList: _*) -- excludeIDs
+}
+
+/** A Project that determines its library dependencies by reflectively finding all vals with a type
+* that conforms to ModuleID.*/
+trait ReflectiveRepositories extends Project
+{
+	def repositories: Set[Resolver] = reflectiveRepositories
+	def reflectiveRepositories: Set[Resolver] = Set(Reflective.reflectiveMappings[Resolver](this).values.toList: _*)
+}
+
+trait ReflectiveManagedProject extends ReflectiveProject with ReflectiveRepositories with ReflectiveLibraryDependencies

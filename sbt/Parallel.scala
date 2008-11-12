@@ -186,10 +186,21 @@ final class Job(val name: String, action: => Option[String], cost: Int, dependen
 			{
 				case Execute =>
 				{
-					result = action.map(msg => JobFailure(this, msg)).toList
-					completed()
-					scheduler ! JobComplete(this)
-					exit()
+					result = 
+					try
+					{
+						action.map(msg => JobFailure(this, msg)).toList
+					}
+					catch
+					{
+						case e => JobFailure(this, e.toString) :: Nil
+					}
+					finally
+					{
+						completed()
+						scheduler ! JobComplete(this)
+						exit()
+					}
 				}
 				case DependencyComplete(dependency, depResult) =>
 				{

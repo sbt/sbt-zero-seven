@@ -8,7 +8,7 @@ class DefaultProject(val info: ProjectInfo, val dependencies: Iterable[Project])
 	def this(i: ProjectInfo) = this(i, Nil)
 }
 
-abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveProject
+abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveManagedProject
 {
 	import BasicScalaProject._
 	def mainClass: Option[String] = None
@@ -26,6 +26,22 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	
 	import Project._
 	
+	def projectID: ModuleID =
+	{
+		val normalizedName = info.name.toLowerCase.replaceAll("""\s+""", "-")
+		normalizedName % normalizedName % info.currentVersion.toString
+	}
+	def excludeIDs = projectID :: Nil
+	def manager = SimpleManager(projectID, repositories, libraryDependencies.toList: _*)
+	
+	def updateOptions: Seq[ManagedOption] =
+	{
+		val baseOptions = Validate :: Synchronize :: QuietUpdate :: Nil
+		if(manager.dependencies.isEmpty)
+			baseOptions
+		else
+			LibraryManager(manager) :: baseOptions
+	}
 	def compileOptions: Seq[CompileOption] = Deprecation :: Nil
 	def runOptions: Seq[String] = Nil
 	def documentOptions: Seq[ScaladocOption] =
@@ -33,7 +49,6 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		documentTitle(info.name + " " + info.currentVersion + " API") ::
 		windowTitle(info.name + " " + info.currentVersion + " API") ::
 		Nil
-	def updateOptions: Seq[ManagedOption] = Validate :: Synchronize :: QuietUpdate :: Nil
 	def testOptions: Seq[TestOption] = Nil
 	
 	private def directoriesToCreate: List[Path] =
@@ -70,8 +85,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 				managedDependencyPath / Configurations.Default
 		useDirectory ** defaultIncludeAll * "*.jar"
 	}
-	def unmanagedClasspath: PathFinder =
-		(dependencyPath * "*.jar") +++ ((dependencyPath * -managedDirectoryName) ** defaultIncludeAll * "*.jar")
+	def unmanagedClasspath: PathFinder = dependencyPath ** "*.jar"
 	def projectClasspath(config: String) = compilePath +++ unmanagedClasspath +++ managedClasspath(config)
 	
 	// includes classpaths of dependencies
@@ -125,6 +139,18 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val graph = graphTask(graphPath, analysis).dependsOn(compile)
 	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, updateOptions: _*)
 	lazy val cleanLib = cleanLibTask(managedDependencyPath)
+	
+	import StringUtilities.nonEmpty
+	implicit def toGroupID(groupID: String): GroupID =
+	{
+		nonEmpty(groupID, "Group ID")
+		GroupID(groupID)
+	}
+	implicit def toRepositoryName(name: String): RepositoryName =
+	{
+		nonEmpty(name, "Repository name")
+		RepositoryName(name)
+	}
 }
 
 object BasicScalaProject
@@ -182,7 +208,7 @@ trait BasicProjectPaths extends Project
 	def analysisDirectoryName = DefaultAnalysisDirectoryName
 	
 	def dependencyPath = path(dependencyDirectoryName)
-	final def managedDependencyPath = dependencyPath / managedDirectoryName
+	def managedDependencyPath = path(managedDirectoryName)
 	def outputPath = path(outputDirectoryName)
 	def sourcePath = path(sourceDirectoryName)
 	
@@ -213,7 +239,7 @@ object BasicProjectPaths
 	val DefaultDocDirectoryName = "doc"
 	val DefaultAPIDirectoryName = "api"
 	val DefaultGraphDirectoryName = "graph"
-	val DefaultManagedDirectoryName = "managed"
+	val DefaultManagedDirectoryName = "lib_managed"
 	val DefaultAnalysisDirectoryName = "analysis"
 	
 	val DefaultMainDirectoryName = "main"
@@ -221,4 +247,36 @@ object BasicProjectPaths
 	val DefaultResourcesDirectoryName = "resources"
 	val DefaultTestDirectoryName = "test"
 	val DefaultDependencyDirectoryName = "lib"
+}
+object StringUtilities
+{
+	def nonEmpty(s: String, label: String)
+	{
+		require(s.length > 0, label + " cannot be empty.")
+	}
+}
+import StringUtilities.nonEmpty
+final case class GroupID(groupID: String) extends NotNull
+{
+	def % (artifactID: String) =
+	{
+		nonEmpty(artifactID, "Artifact ID")
+		GroupArtifactID(groupID, artifactID)
+	}
+}
+final case class GroupArtifactID(groupID: String, artifactID: String) extends NotNull
+{
+	def % (revision: String): ModuleID =
+	{
+		nonEmpty(revision, "Revision")
+		ModuleID(groupID, artifactID, revision)
+	}
+}
+final case class RepositoryName(name: String) extends NotNull
+{
+	def at (location: String) =
+	{
+		nonEmpty(location, "Repository location")
+		MavenRepository(name, location)
+	}
 }
