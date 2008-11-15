@@ -9,8 +9,8 @@ import scala.collection.mutable.{HashSet, ListBuffer}
 
 object ClasspathUtilities
 {
-	def isArchive(path: Path) = isArchive(path.asFile)
-	def isArchive(file: File) = isArchiveName(file.getName)
+	def isArchive(path: Path): Boolean = isArchive(path.asFile)
+	def isArchive(file: File): Boolean = isArchiveName(file.getName)
 	def isArchiveName(fileName: String) = fileName.endsWith(".jar") || fileName.endsWith(".zip")
 	// (jars, dirs)
 	def separate(paths: Iterable[File]): (Iterable[File], Iterable[File]) = paths.partition(isArchive)
