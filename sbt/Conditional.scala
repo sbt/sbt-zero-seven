@@ -219,7 +219,9 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 	{
 		log.info(executeAnalysis.toString)
 		import executeAnalysis.dirtySources
-		val classpathString = Path.makeString(classpath.get)
+		val cp = classpath.get
+		checkClasspath(cp)
+		val classpathString = Path.makeString(cp)
 		val id = AnalysisCallback.register(analysisCallback)
 		val allOptions = (("-Xplugin:" + FileUtilities.sbtJar.getCanonicalPath) ::
 			("-P:sbt-analyzer:callback:" + id.toString) :: Nil) ++ options
@@ -241,6 +243,21 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 			log.debug("Total missed classes: " + missed)
 		}
 		r
+	}
+	private def checkClasspath(cp: Iterable[Path])
+	{
+		import scala.collection.mutable.{HashMap, HashSet, Set}
+		val collisions = new HashMap[String, Set[Path]]
+		for(jar <- cp if ClasspathUtilities.isArchive(jar))
+			collisions.getOrElseUpdate(jar.asFile.getName, new HashSet[Path]) += jar
+		for((name, jars) <- collisions)
+		{
+			if(jars.size > 1)
+			{
+				log.warn("Possible duplicate classpath locations for jar " + name + ": ")
+				for(jar <- jars) log.warn("\t" + jar)
+			}
+		}
 	}
 	
 	protected def analysisCallback: AnalysisCallback =

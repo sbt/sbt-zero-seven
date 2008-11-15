@@ -9,6 +9,7 @@ import scala.collection.mutable.{HashSet, ListBuffer}
 
 object ClasspathUtilities
 {
+	def isArchive(path: Path) = isArchive(path.asFile)
 	def isArchive(file: File) = isArchiveName(file.getName)
 	def isArchiveName(fileName: String) = fileName.endsWith(".jar") || fileName.endsWith(".zip")
 	// (jars, dirs)

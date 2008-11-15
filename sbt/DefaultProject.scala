@@ -3,19 +3,24 @@
  */
 package sbt
 
+/** The default project when no project is explicitly configured and the common base class for
+* configuring a project.*/
 class DefaultProject(val info: ProjectInfo, val dependencies: Iterable[Project]) extends BasicScalaProject
 {
+	/** Constructs this project with the given info and with no dependencies.*/
 	def this(i: ProjectInfo) = this(i, Nil)
 }
 
 abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveManagedProject
 {
 	import BasicScalaProject._
+	/** The class to be run by the 'run' action.
+	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
 	def mainClass: Option[String] = None
 
 	val compileConditional = new CompileConditional(compileConfiguration)
 
-	def allSources = (sourcePath ##) ** defaultIncludeAll
+	def allSources = (mainScalaSourcePath +++ mainResourcesPath +++ testScalaSourcePath +++ testResourcesPath) ** defaultIncludeAll
 	def mainSources = mainScalaSourcePath ** defaultIncludeAll * "*.scala"
 	def testSources = testScalaSourcePath ** defaultIncludeAll * "*.scala"
 	def mainResources = (mainResourcesPath ##) ** defaultIncludeAll
@@ -34,6 +39,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	def excludeIDs = projectID :: Nil
 	def manager = SimpleManager(projectID, repositories, libraryDependencies.toList: _*)
 	
+	/** The options provided to the 'update' action.*/
 	def updateOptions: Seq[ManagedOption] =
 	{
 		val baseOptions = Validate :: Synchronize :: QuietUpdate :: Nil
@@ -42,13 +48,17 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		else
 			LibraryManager(manager) :: baseOptions
 	}
+	/** The options provided to the 'compile' action.*/
 	def compileOptions: Seq[CompileOption] = Deprecation :: Nil
+	/** The options provided to the 'run' action.*/
 	def runOptions: Seq[String] = Nil
+	/** The options provided to the 'doc' and 'docTest' actions.*/
 	def documentOptions: Seq[ScaladocOption] =
 		LinkSource ::
 		documentTitle(info.name + " " + info.currentVersion + " API") ::
 		windowTitle(info.name + " " + info.currentVersion + " API") ::
 		Nil
+	/** The options provided to the 'test' action.*/
 	def testOptions: Seq[TestOption] = Nil
 	
 	private def directoriesToCreate: List[Path] =
@@ -104,6 +114,8 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 			set.toList
 		}
 		
+	/** The list of test frameworks to use for testing.  Note that adding frameworks to this list
+	* for an active project currently requires an explicit 'clean'. */
 	def testFrameworks: Iterable[TestFramework] = ScalaCheckFramework :: SpecsFramework :: ScalaTestFramework :: Nil
 		
 	def compileConfiguration = new DefaultCompileConfig
@@ -120,6 +132,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	}
 	
 	import compileConditional.analysis
+	/** Gets the generated classes for the source files found by the given PathFinder.*/
 	def getClasses(sources: PathFinder): PathFinder = analysis.getClasses(sources, compilePath)
 	
 	lazy val compile = task { compileConditional.run } describedAs CompileDescription
@@ -135,7 +148,6 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val packageSrc = packageTask(allSources, outputPath, defaultJarBaseName + "-src.jar") describedAs SourcePackageDescription
 	lazy val docAll = (doc && docTest) describedAs DocAllDescription
 	lazy val packageAll = (`package` && packageTest && packageSrc && packageDocs) describedAs PackageAllDescription
-	lazy val release = clean && compile && test && packageAll
 	lazy val graph = graphTask(graphPath, analysis).dependsOn(compile)
 	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, updateOptions: _*)
 	lazy val cleanLib = cleanLibTask(managedDependencyPath)

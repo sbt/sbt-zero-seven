@@ -161,9 +161,10 @@ trait ScalaProject extends Project
 trait ManagedScalaProject extends ScalaProject
 {
 	trait ManagedOption extends ActionOption
-	object Synchronize extends ManagedOption
-	object Validate extends ManagedOption
-	object QuietUpdate extends ManagedOption
+	final class ManagedFlagOption extends ManagedOption
+	final val Synchronize = new ManagedFlagOption
+	final val Validate = new ManagedFlagOption
+	final val QuietUpdate = new ManagedFlagOption
 	final case class LibraryManager(m: Manager) extends ManagedOption
 	
 	def updateTask(outputPattern: String, managedDependencyPath: Path, options: ManagedOption*) =

@@ -92,6 +92,7 @@ object TestFramework
 				log.debug("No tests to run for framework " + framework.name + ".")
 			else
 			{
+				log.info(" ")
 				log.info("Running " + framework.name + " tests...")
 				val runner = framework.testRunner(loader, log)
 				for(testClassName <- testClassNames)
@@ -234,10 +235,10 @@ private class SpecsRunner(val log: Logger) extends BasicTestRunner
 	def runTest(testClass: String): Result.Value =
 	{
 		import org.specs.Specification
-		import org.specs.runner.ConsoleRunner
+		//import org.specs.runner.ConsoleRunner
 		val test = ModuleUtilities.getObject(testClass, getClass.getClassLoader).asInstanceOf[Specification]
-		val runner = new ConsoleRunner(test)
-		runner.report(test :: Nil)
+		//val runner = new ConsoleRunner(test)
+		//runner.report(test :: Nil)
 		if(test.isFailing)
 			Result.Failed
 		else
