@@ -13,9 +13,9 @@ sealed abstract class Path extends PathFinder with NotNull
 	def ## : Path = new BaseDirectory(this)
 	private[sbt] def addTo(pathSet: Set[Path]) { pathSet += this }
 	override def / (component: String): Path = if(component == ".") this else new RelativePath(this, component)
-	private[sbt] def asFile: File
-	private[sbt] def asURL = asFile.toURI.toURL
-	private[sbt] def relativePath: String
+	def asFile: File
+	def asURL = asFile.toURI.toURL
+	def relativePath: String
 	private[sbt] def prependTo(s: String): String
 	
 	override final def equals(other: Any) =
@@ -34,22 +34,22 @@ private final case class BaseDirectory(private[sbt] val path: Path) extends Path
 	
 	override def toString = path.toString
 	def asFile = path.asFile
-	private[sbt] def relativePath = ""
+	def relativePath = ""
 	private[sbt] def prependTo(s: String) = "." + sep + s
 }
-private[sbt] final class ProjectDirectory(private[sbt] val asFile: File) extends Path
+private[sbt] final class ProjectDirectory(val asFile: File) extends Path
 {
 	override def toString = "."
-	private[sbt] def relativePath = ""
+	def relativePath = ""
 	private[sbt] def prependTo(s: String) = "." + sep + s
 }
 private[sbt] final class RelativePath(val parentPath: Path, val component: String) extends Path
 {
 	checkComponent(component)
 	override def toString = parentPath prependTo component
-	private[sbt] lazy val asFile = new File(parentPath.asFile, component)
+	lazy val asFile = new File(parentPath.asFile, component)
 	private[sbt] def prependTo(s: String) =  parentPath prependTo (component + sep + s)
-	private[sbt] lazy val relativePath =
+	lazy val relativePath =
 	{
 		val parentRelative = parentPath.relativePath
 		if(parentRelative.isEmpty)

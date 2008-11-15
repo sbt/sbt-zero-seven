@@ -39,8 +39,7 @@ object ParallelRunner
 		}
 		run(project, (p: Project) => p.info.name, runProject, maximumTasks)
 	}
-		
-	// TODO: handle logging properly
+
 	def run[D <: Dag[D]](node: D, name: D => String, action: D => Option[String], maximumTasks: Int): List[JobFailure] =
 	{
 		val actors = new HashMap[D, Job]
@@ -171,10 +170,12 @@ final class Job(val name: String, action: => Option[String], cost: Int, dependen
 		val remainingDependencies = HashSet(dependencies.toSeq: _*)
 		var result = List[JobFailure]()
 		
-		def completed()
+		def completed(schedulerMessage: Any)
 		{
 			val complete = DependencyComplete(this, result)
 			dependents.foreach(_ ! complete)
+			scheduler ! schedulerMessage
+			exit()
 		}
 		
 		if(remainingDependencies.isEmpty)
@@ -186,21 +187,14 @@ final class Job(val name: String, action: => Option[String], cost: Int, dependen
 			{
 				case Execute =>
 				{
-					result = 
-					try
-					{
-						action.map(msg => JobFailure(this, msg)).toList
-					}
-					catch
-					{
-						case e => JobFailure(this, e.toString) :: Nil
-					}
-					finally
-					{
-						completed()
-						scheduler ! JobComplete(this)
-						exit()
-					}
+					result =
+						try {
+							action.map(msg => JobFailure(this, msg)).toList
+						}
+						catch {
+							case e => JobFailure(this, e.toString) :: Nil
+						}
+					completed(JobComplete(this))
 				}
 				case DependencyComplete(dependency, depResult) =>
 				{
@@ -211,11 +205,7 @@ final class Job(val name: String, action: => Option[String], cost: Int, dependen
 						if(result.isEmpty)
 							schedule()
 						else
-						{
-							completed()
-							scheduler ! JobNotRunning
-							exit()
-						}
+							completed(JobNotRunning)
 					}
 				}
 			}

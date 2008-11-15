@@ -3,7 +3,7 @@
 /NOTICE -text
 /build -text
 /clean -text
-lib/ScalaCheck-1.4dev.jar -text
+lib/ScalaCheck-1.5.jar -text
 lib/ivy-2.0.0-rc2.jar -text
 lib/scalatest-0.9.3.jar -text
 lib/specs-1.4.0.jar -text

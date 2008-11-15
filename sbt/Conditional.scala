@@ -100,25 +100,20 @@ trait Conditional[Source, Product, External] extends NotNull
 			}
 		}
 		
-		def markDependenciesModified(changed: Iterable[Source]): List[Source] =
+		val handled = new scala.collection.mutable.HashSet[Source]
+		def markModified(changed: Iterable[Source]) { for(c <- changed if !handled.contains(c)) markSourceModified(c) }
+		def markSourceModified(src: Source)
 		{
-			var newChanges: List[Source] = Nil
-			for(changedPath <- changed; dependencies <- analysis.removeDependencies(changedPath); dependsOnChanged <- dependencies)
-			{
-				unmodified -= dependsOnChanged
-				modified += dependsOnChanged
-				newChanges = dependsOnChanged :: newChanges
-			}
-			newChanges
+			unmodified -= src
+			modified += src
+			handled += src
+			markDependenciesModified(src)
 		}
-		def propagateChanges(changed: Iterable[Source])
-		{
-			val newChanges = markDependenciesModified(changed)
-			if(newChanges.length > 0)
-				propagateChanges(newChanges)
-		}
+		def markDependenciesModified(src: Source) { analysis.removeDependencies(src).map(markModified) }
+
+		markModified(modified.toList)
+		removedSources.foreach(markDependenciesModified)
 		
-		propagateChanges(modified ++ markDependenciesModified(removedSources))
 		for(changed <- removedSources ++ modified)
 			analysis.removeSource(changed)
 		
@@ -221,7 +216,8 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 		log.info(executeAnalysis.toString)
 		import executeAnalysis.dirtySources
 		val cp = classpath.get
-		checkClasspath(cp)
+		if(!dirtySources.isEmpty)
+			checkClasspath(cp)
 		val classpathString = Path.makeString(cp)
 		val id = AnalysisCallback.register(analysisCallback)
 		val allOptions = (("-Xplugin:" + FileUtilities.sbtJar.getCanonicalPath) ::
@@ -256,7 +252,7 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 			if(jars.size > 1)
 			{
 				log.warn("Possible duplicate classpath locations for jar " + name + ": ")
-				for(jar <- jars) log.warn("\t" + jar)
+				for(jar <- jars) log.warn("\t" + jar.asFile.getCanonicalPath)
 			}
 		}
 	}
