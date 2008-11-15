@@ -71,7 +71,9 @@ object Main
 			{
 				case Some(line) =>
 					val trimmed = line.trim
-					if(TerminateActions.elements.contains(trimmed.toLowerCase))
+					if(trimmed.isEmpty)
+						loop(currentProject)
+					else if(TerminateActions.elements.contains(trimmed.toLowerCase))
 						()
 					else if(trimmed == ShowProjectsAction)
 					{
