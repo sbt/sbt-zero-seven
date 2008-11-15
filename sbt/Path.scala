@@ -72,6 +72,11 @@ object Path
 			Path.fromString(projectPath, pathString)
 	}
 	
+	def emptyPathFinder =
+		new PathFinder
+		{
+			private[sbt] def addTo(pathSet: Set[Path]) {}
+		}
 	def lazyPathFinder(paths: => Iterable[Path]): PathFinder =
 		new PathFinder
 		{
@@ -147,6 +152,7 @@ object Path
 
 sealed abstract class PathFinder extends NotNull
 {
+	/** The union of the paths found by this with the paths found by 'paths'.*/
 	def +++(paths: PathFinder): PathFinder = new Paths(this, paths)
 	def ***(filter: NameFilter): PathFinder = new DescendentPathFinder(this, filter, false)
 	def **(filter: NameFilter): PathFinder = new DescendentPathFinder(this, filter, true)
@@ -154,6 +160,7 @@ sealed abstract class PathFinder extends NotNull
 	def / (literal: String): PathFinder = new ChildPathFinder(this, new ExactFilter(literal))
 	final def \ (literal: String): PathFinder = this / literal
 	
+	/** Evaluates this finder.*/
 	final def get: scala.collection.Set[Path] =
 	{
 		val pathSet = new HashSet[Path]
