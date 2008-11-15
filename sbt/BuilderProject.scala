@@ -11,7 +11,7 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject
 	import BasicProjectPaths._
 	
 	def outputPath = path(DefaultOutputDirectoryName)
-	def compilePath = outputPath / DefaultCompileDirectoryName
+	def compilePath = outputPath / DefaultMainCompileDirectoryName
 	def sourcePath = path(DefaultSourceDirectoryName)
 	def mainResourcesPath = path(DefaultResourcesDirectoryName)
 	def dependencyPath = path(DefaultDependencyDirectoryName)
@@ -65,10 +65,11 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject
 	def compileConfiguration =
 		new CompileConfiguration
 		{
+			def label = "builder"
 			def sources = sourcePath ** defaultIncludeAll * "*.scala"
 			def outputDirectory = compilePath
 			def classpath = projectClasspath
-			def analysisPath = outputPath / DefaultAnalysisDirectoryName
+			def analysisPath = outputPath / DefaultMainAnalysisDirectoryName
 			def projectPath = info.projectPath
 			def testDefinitionClassNames = Nil
 			def log = BuilderProject.this.log

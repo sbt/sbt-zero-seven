@@ -110,11 +110,11 @@ trait ScalaProject extends Project
 		}
 
 	def graphTask(outputDirectory: Path, analysis: CompileAnalysis) = task { DotGraph(analysis, outputDirectory, log) }
-	def scaladocTask(sources: PathFinder, outputDirectory: Path, classpath: PathFinder, options: ScaladocOption*) =
+	def scaladocTask(label: String, sources: PathFinder, outputDirectory: Path, classpath: PathFinder, options: ScaladocOption*) =
 		task
 		{
 			val classpathString = Path.makeString(classpath.get)
-			Scaladoc(sources.get, classpathString, outputDirectory, options.flatMap(_.asList), log)
+			Scaladoc(label, sources.get, classpathString, outputDirectory, options.flatMap(_.asList), log)
 		}
 
 	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: String, options: PackageOption*) =

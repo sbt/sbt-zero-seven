@@ -171,6 +171,7 @@ trait Conditional[Source, Product, External] extends NotNull
 
 abstract class CompileConfiguration extends NotNull
 {
+	def label: String
 	def sources: PathFinder
 	def outputDirectory: Path
 	def classpath: PathFinder
@@ -225,7 +226,7 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 		val id = AnalysisCallback.register(analysisCallback)
 		val allOptions = (("-Xplugin:" + FileUtilities.sbtJar.getCanonicalPath) ::
 			("-P:sbt-analyzer:callback:" + id.toString) :: Nil) ++ options
-		val r = Compile(dirtySources, classpathString, outputDirectory, allOptions, log)
+		val r = Compile(label, dirtySources, classpathString, outputDirectory, allOptions, log)
 		AnalysisCallback.unregister(id)
 		if(log.atLevel(Level.Debug))
 		{

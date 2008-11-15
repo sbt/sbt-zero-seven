@@ -10,14 +10,14 @@ abstract class CompilerCore
 	
 	// Returns false if there were errors, true if there were not.
 	protected def process(args: List[String], log: Logger): Boolean
-	def actionStartMessage: String
+	def actionStartMessage(label: String): String
 	def actionNothingToDoMessage: String
 	def actionSuccessfulMessage: String
 	def actionUnsuccessfulMessage: String
 
-	final def apply(sources: Iterable[Path], classpathString: String, outputDirectory: Path, options: Iterable[String], log: Logger) =
+	final def apply(label: String, sources: Iterable[Path], classpathString: String, outputDirectory: Path, options: Iterable[String], log: Logger) =
 	{
-		log.info(actionStartMessage)
+		log.info(actionStartMessage(label))
 		val classpathOption: List[String] =
 			if(classpathString.isEmpty)
 				Nil
@@ -87,7 +87,7 @@ object Compile extends CompilerCore
 		}
 		!reporter.hasErrors
 	}
-	val actionStartMessage = "Compiling..."
+	def actionStartMessage(label: String) = "Compiling " + label + " sources..."
 	val actionNothingToDoMessage = "Nothing to compile."
 	val actionSuccessfulMessage = "Compilation successful."
 	def actionUnsuccessfulMessage = "Compilation unsuccessful."
@@ -127,7 +127,7 @@ object Scaladoc extends CompilerCore
 		}
 		!reporter.hasErrors
 	}
-	val actionStartMessage = "Generating API documentation..."
+	def actionStartMessage(label: String) = "Generating API documentation for " + label + " sources..."
 	val actionNothingToDoMessage = "No sources specified."
 	val actionSuccessfulMessage = "API documentation generation successful."
 	def actionUnsuccessfulMessage = "API documentation generation unsuccessful."

@@ -18,13 +18,17 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
 	def mainClass: Option[String] = None
 
-	val compileConditional = new CompileConditional(compileConfiguration)
+	val mainCompileConditional = new CompileConditional(mainCompileConfiguration)
+	val testCompileConditional = new CompileConditional(testCompileConfiguration)
 
 	def allSources = (mainScalaSourcePath +++ mainResourcesPath +++ testScalaSourcePath +++ testResourcesPath) ** defaultIncludeAll
 	def mainSources = mainScalaSourcePath ** defaultIncludeAll * "*.scala"
 	def testSources = testScalaSourcePath ** defaultIncludeAll * "*.scala"
 	def mainResources = (mainResourcesPath ##) ** defaultIncludeAll
 	def testResources = (testResourcesPath ##) ** defaultIncludeAll
+	
+	def mainClasses = (mainCompilePath ##) ** "*.class"
+	def testClasses = (testCompilePath ##) ** "*.class"
 	
 	def defaultExcludes = ".svn" | ".cvs"
 	def defaultIncludeAll = -defaultExcludes
@@ -50,6 +54,9 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	}
 	/** The options provided to the 'compile' action.*/
 	def compileOptions: Seq[CompileOption] = Deprecation :: Nil
+	/** The options provided to the 'test-compile' action, defaulting to those for the 'compile' action.*/
+	def testCompileOptions: Seq[CompileOption] = compileOptions
+	
 	/** The options provided to the 'run' action.*/
 	def runOptions: Seq[String] = Nil
 	/** The options provided to the 'doc' and 'docTest' actions.*/
@@ -60,6 +67,10 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		Nil
 	/** The options provided to the 'test' action.*/
 	def testOptions: Seq[TestOption] = Nil
+	def cleanOptions: Seq[CleanOption] =
+		ClearAnalysis(mainCompileConditional.analysis) ::
+		ClearAnalysis(testCompileConditional.analysis) ::
+		Nil
 	
 	private def directoriesToCreate: List[Path] =
 		dependencyPath ::
@@ -81,7 +92,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	
 	def docClasspath = fullClasspath(Configurations.Compile)
 	def compileClasspath = fullClasspath(Configurations.Compile)
-	def testClasspath = fullClasspath(Configurations.Test)
+	def testClasspath = fullClasspath(Configurations.Test, true)
 	def runClasspath = fullClasspath(Configurations.Runtime)
 	def consoleClasspath = fullClasspath(consoleConfiguration)
 	
@@ -96,10 +107,18 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		useDirectory ** defaultIncludeAll * "*.jar"
 	}
 	def unmanagedClasspath: PathFinder = dependencyPath ** "*.jar"
-	def projectClasspath(config: String) = compilePath +++ unmanagedClasspath +++ managedClasspath(config)
+	def projectClasspath(config: String, includeTestCompilePath: Boolean) =
+	{
+		val base = mainCompilePath +++ unmanagedClasspath +++ managedClasspath(config)
+		if(includeTestCompilePath)
+			testCompilePath +++ base
+		else
+			base
+	}
 	
 	// includes classpaths of dependencies
-	def fullClasspath(config: String): PathFinder =
+	def fullClasspath(config: String): PathFinder = fullClasspath(config, false)
+	def fullClasspath(config: String, includeTestCompilePath: Boolean): PathFinder =
 		Path.lazyPathFinder
 		{
 			val set = new scala.collection.jcl.LinkedHashSet[Path]
@@ -107,7 +126,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 			{
 				project match
 				{
-					case sp: BasicScalaProject => set ++= sp.projectClasspath(config).get
+					case sp: BasicScalaProject => set ++= sp.projectClasspath(config, includeTestCompilePath).get
 					case _ => ()
 				}
 			}
@@ -118,37 +137,52 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	* for an active project currently requires an explicit 'clean'. */
 	def testFrameworks: Iterable[TestFramework] = ScalaCheckFramework :: SpecsFramework :: ScalaTestFramework :: Nil
 		
-	def compileConfiguration = new DefaultCompileConfig
-	class DefaultCompileConfig extends CompileConfiguration
+	def mainLabel = "main"
+	def testLabel = "test"
+		
+	def mainCompileConfiguration = new MainCompileConfig
+	def testCompileConfiguration = new TestCompileConfig
+	abstract class BaseCompileConfig extends CompileConfiguration
 	{
-		def sources = mainSources +++ testSources
-		def outputDirectory = compilePath
-		def classpath = compileClasspath
-		def analysisPath = BasicScalaProject.this.analysisPath
-		def projectPath = info.projectPath
-		def testDefinitionClassNames = testFrameworks.map(_.testSuperClassName)
 		def log = BasicScalaProject.this.log
+		def projectPath = info.projectPath
+	}
+	class MainCompileConfig extends BaseCompileConfig
+	{
+		def label = mainLabel
+		def sources = mainSources
+		def outputDirectory = mainCompilePath
+		def classpath = compileClasspath
+		def analysisPath = mainAnalysisPath
+		def testDefinitionClassNames = Nil
 		def options = compileOptions.map(_.asString)
 	}
+	class TestCompileConfig extends BaseCompileConfig
+	{
+		def label = testLabel
+		def sources = testSources
+		def outputDirectory = testCompilePath
+		def classpath = testClasspath
+		def analysisPath = testAnalysisPath
+		def testDefinitionClassNames = testFrameworks.map(_.testSuperClassName)
+		def options = testCompileOptions.map(_.asString)
+	}
 	
-	import compileConditional.analysis
-	/** Gets the generated classes for the source files found by the given PathFinder.*/
-	def getClasses(sources: PathFinder): PathFinder = analysis.getClasses(sources, compilePath)
-	
-	lazy val compile = task { compileConditional.run } describedAs CompileDescription
-	lazy val clean = cleanTask(outputPath, ClearAnalysis(analysis)) describedAs CleanDescription
+	lazy val compile = task { mainCompileConditional.run } describedAs MainCompileDescription
+	lazy val testCompile = task { testCompileConditional.run } dependsOn compile describedAs TestCompileDescription
+	lazy val clean = cleanTask(outputPath, cleanOptions: _*) describedAs CleanDescription
 	lazy val run = runTask(mainClass, runClasspath, runOptions: _*).dependsOn(compile) describedAs RunDescription
-	lazy val console = consoleTask(consoleClasspath).dependsOn(compile) describedAs ConsoleDescription
-	lazy val doc = scaladocTask(mainSources, mainDocPath, docClasspath, documentOptions: _*).dependsOn(compile) describedAs DocDescription
-	lazy val docTest = scaladocTask(testSources, testDocPath, docClasspath, documentOptions: _*).dependsOn(compile) describedAs TestDocDescription
-	lazy val test = testTask(testFrameworks, testClasspath, analysis, testOptions: _*).dependsOn(compile) describedAs TestDescription
-	lazy val `package` = packageTask(getClasses(mainSources) +++ mainResources, outputPath, defaultJarName, mainClass.map(MainClassOption(_)).toList: _*).dependsOn(compile) describedAs PackageDescription
-	lazy val packageTest = packageTask(getClasses(testSources) +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(compile) describedAs TestPackageDescription
+	lazy val console = consoleTask(consoleClasspath).dependsOn(testCompile) describedAs ConsoleDescription
+	lazy val doc = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions: _*).dependsOn(compile) describedAs DocDescription
+	lazy val docTest = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions: _*).dependsOn(testCompile) describedAs TestDocDescription
+	lazy val test = testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions: _*).dependsOn(testCompile) describedAs TestDescription
+	lazy val `package` = packageTask(mainClasses +++ mainResources, outputPath, defaultJarName, mainClass.map(MainClassOption(_)).toList: _*).dependsOn(compile) describedAs PackageDescription
+	lazy val packageTest = packageTask(testClasses +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription
 	lazy val packageDocs = packageTask(mainDocPath ##, outputPath, defaultJarBaseName + "-docs.jar", Recursive).dependsOn(doc) describedAs DocPackageDescription
 	lazy val packageSrc = packageTask(allSources, outputPath, defaultJarBaseName + "-src.jar") describedAs SourcePackageDescription
 	lazy val docAll = (doc && docTest) describedAs DocAllDescription
 	lazy val packageAll = (`package` && packageTest && packageSrc && packageDocs) describedAs PackageAllDescription
-	lazy val graph = graphTask(graphPath, analysis).dependsOn(compile)
+	lazy val graph = graphTask(graphPath, mainCompileConditional.analysis).dependsOn(compile)
 	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, updateOptions: _*)
 	lazy val cleanLib = cleanLibTask(managedDependencyPath)
 	
@@ -169,8 +203,10 @@ object BasicScalaProject
 {
 	val CleanDescription =
 		"Deletes all generated files (the target directory and the analysis directory)."
-	val CompileDescription =
-		"Compiles all sources."
+	val MainCompileDescription =
+		"Compiles main sources."
+	val TestCompileDescription =
+		"Compiles test sources."
 	val TestDescription =
 		"Runs all tests detected during compilation."
 	val DocDescription =
@@ -211,13 +247,15 @@ trait BasicProjectPaths extends Project
 	def scalaDirectoryName = DefaultScalaDirectoryName
 	def resourcesDirectoryName = DefaultResourcesDirectoryName
 	def testDirectoryName = DefaultTestDirectoryName
-	def compileDirectoryName = DefaultCompileDirectoryName
+	def mainCompileDirectoryName = DefaultMainCompileDirectoryName
+	def testCompileDirectoryName = DefaultTestCompileDirectoryName
 	def dependencyDirectoryName = DefaultDependencyDirectoryName
 	def docDirectoryName = DefaultDocDirectoryName
 	def apiDirectoryName = DefaultAPIDirectoryName
 	def graphDirectoryName = DefaultGraphDirectoryName
 	def managedDirectoryName = DefaultManagedDirectoryName
-	def analysisDirectoryName = DefaultAnalysisDirectoryName
+	def mainAnalysisDirectoryName = DefaultMainAnalysisDirectoryName
+	def testAnalysisDirectoryName = DefaultTestAnalysisDirectoryName
 	
 	def dependencyPath = path(dependencyDirectoryName)
 	def managedDependencyPath = path(managedDirectoryName)
@@ -228,16 +266,18 @@ trait BasicProjectPaths extends Project
 	def mainScalaSourcePath = mainSourcePath / scalaDirectoryName
 	def mainResourcesPath = mainSourcePath / resourcesDirectoryName
 	def mainDocPath = docPath / mainDirectoryName / apiDirectoryName
+	def mainCompilePath = outputPath / mainCompileDirectoryName
+	def mainAnalysisPath = outputPath / mainAnalysisDirectoryName
 	
 	def testSourcePath = sourcePath / testDirectoryName
 	def testScalaSourcePath = testSourcePath / scalaDirectoryName
 	def testResourcesPath = testSourcePath / resourcesDirectoryName
 	def testDocPath = docPath / testDirectoryName / apiDirectoryName
+	def testCompilePath = outputPath / testCompileDirectoryName
+	def testAnalysisPath = outputPath / testAnalysisDirectoryName
 	
-	def compilePath = outputPath / compileDirectoryName
 	def docPath = outputPath / docDirectoryName
 	def graphPath = outputPath / graphDirectoryName
-	def analysisPath = outputPath / analysisDirectoryName
 	
 	/** The directories to which a project writes are listed here and is used
 	* to check a project and its dependencies for collisions.*/
@@ -247,12 +287,14 @@ object BasicProjectPaths
 {
 	val DefaultSourceDirectoryName = "src"
 	val DefaultOutputDirectoryName = "target"
-	val DefaultCompileDirectoryName = "classes"
+	val DefaultMainCompileDirectoryName = "classes"
+	val DefaultTestCompileDirectoryName = "test-classes"
 	val DefaultDocDirectoryName = "doc"
 	val DefaultAPIDirectoryName = "api"
 	val DefaultGraphDirectoryName = "graph"
 	val DefaultManagedDirectoryName = "lib_managed"
-	val DefaultAnalysisDirectoryName = "analysis"
+	val DefaultMainAnalysisDirectoryName = "analysis"
+	val DefaultTestAnalysisDirectoryName = "test-analysis"
 	
 	val DefaultMainDirectoryName = "main"
 	val DefaultScalaDirectoryName = "scala"
