@@ -48,9 +48,9 @@ abstract class BasicTestRunner extends TestRunner
 	def runTest(testClass: String): Result.Value
 }
 
-import scala.collection.{Map, Set}
 object TestFramework
 {
+	import scala.collection.{Map, Set}
 	def runTests(frameworks: Iterable[TestFramework], classpath: Iterable[Path], tests: Iterable[TestDefinition], log: Logger): Option[String] =
 	{
 		val mappedTests = testMap(frameworks, tests)
@@ -113,6 +113,7 @@ object TestFramework
 			case Failed => Some("One or more tests FAILED.")
 			case Passed =>
 			{
+				log.info(" ")
 				log.info("All tests PASSED.")
 				None
 			}
@@ -126,7 +127,7 @@ object TestFramework
 }
 import java.net.{URL, URLClassLoader}
 private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], parent: ClassLoader)
-	extends URLClassLoader(urls, parent)
+	extends URLClassLoader(urls, parent) with NotNull
 {
 	@throws(classOf[ClassNotFoundException])
 	override def loadClass(className: String, resolve: Boolean): Class[_] =
@@ -222,29 +223,138 @@ private class ScalaTestRunner(val log: Logger) extends BasicTestRunner
 {
 	def runTest(testClassName: String): Result.Value =
 	{
-		import org.scalatest.Suite
+		import org.scalatest.{Stopper, Suite}
 		val testClass = Class.forName(testClassName, true, getClass.getClassLoader).asSubclass(classOf[Suite])
 		val test = testClass.newInstance
-		test.execute() // TODO: implement Reporter to get result!
+		val reporter = new ScalaTestReporter
+		val stopper = new Stopper { override def stopRequested = false }
+		test.execute(None, reporter, stopper, Set.empty, Set.empty, Map.empty, None)
 		Result.Passed
+	}
+	
+	/** An implementation of Reporter for ScalaTest. */
+	private class ScalaTestReporter extends org.scalatest.Reporter with NotNull
+	{
+		import org.scalatest.Report
+		override def testIgnored(report: Report) { info(report, "Test ignored") }
+		override def testStarting(report: Report) { info(report, "Test starting") }
+		override def testSucceeded(report: Report) { info(report, "Test succeeded") }
+		override def testFailed(report: Report)
+		{
+			succeeded = false
+			error(report, "Test failed")
+		}
+		
+		override def infoProvided(report : Report) { info(report, "") }
+		
+		override def suiteStarting(report: Report) { info(report, "Suite starting") }
+		override def suiteCompleted(report: Report) { info(report, "Suite completed") }
+		override def suiteAborted(report: Report) { error(report, "Suite aborted") }
+		
+		override def runStarting(testCount: Int) { log.info("Run starting") }
+		override def runStopped()
+		{
+			succeeded = false
+			log.error("Run stopped.")
+		}
+		override def runAborted(report: Report)
+		{
+			succeeded = false
+			error(report, "Run aborted")
+		}
+		override def runCompleted() { log.info("Run completed.") }
+		
+		private def error(report: Report, event: String) { logReport(report, event, Level.Error) }
+		private def info(report: Report, event: String) { logReport(report, event, Level.Info) }
+		private def logReport(report: Report, event: String, level: Level.Value)
+		{
+			val trimmed = report.message.trim
+			val message = if(trimmed.isEmpty) "" else ": " + trimmed
+			log.log(level, event + " - " + report.name + message)
+		}
+		
+		var succeeded = true
 	}
 }
 /** The test runner for specs tests. */
 private class SpecsRunner(val log: Logger) extends BasicTestRunner
 {
+	import org.specs.Specification
+	import org.specs.runner.TextFormatter
+	import org.specs.specification.{Example, Sus}
+	
+	val Indent = "  "
 	def runTest(testClass: String): Result.Value =
 	{
-		import org.specs.Specification
-		//import org.specs.runner.ConsoleRunner
 		val test = ModuleUtilities.getObject(testClass, getClass.getClassLoader).asInstanceOf[Specification]
-		//val runner = new ConsoleRunner(test)
-		//runner.report(test :: Nil)
+		reportSpecification(test, "")
 		if(test.isFailing)
 			Result.Failed
 		else
 			Result.Passed
 	}
+	
+	/* The following is closely based on org.specs.runner.OutputReporter,
+	* part of specs, which is Copyright 2007-2008 Eric Torreborre.
+	* */
+	
+	private def reportSpecification(specification: Specification, padding: String)
+	{
+		val newIndent = padding + Indent
+		reportSpecifications(specification.subSpecifications, newIndent)
+		reportSystems(specification.systems, newIndent)
+	}
+	private def reportSpecifications(specifications: Iterable[Specification], padding: String)
+	{
+		for(specification <- specifications)
+			reportSpecification(specification, padding)
+	}
+	private def reportSystems(systems: Iterable[Sus], padding: String)
+	{
+		for(system <- systems)
+			reportSystem(system, padding)
+	}
+	private def reportSystem(sus: Sus, padding: String)
+	{
+		log.info(padding + sus.description + " " + sus.verb + sus.skippedSus.map(" (skipped: " + _.getMessage + ")").getOrElse(""))
+		for(description <- sus.literateDescription)
+			log.info(padding + new TextFormatter().format(description, sus.examples).text)
+		reportExamples(sus.examples, padding)
+		log.info(" ")
+	}
+	private def reportExamples(examples: Iterable[Example], padding: String)
+	{
+		for(example <- examples)
+		{
+			reportExample(example, padding)
+			reportExamples(example.subExamples, padding + Indent)
+		}
+	}
+	private def status(example: Example) =
+	{
+		if (example.errors.size + example.failures.size > 0)
+			"x "
+		else if (example.skipped.size > 0)
+			"o "
+		else
+			"+ "
+	}
+	private def reportExample(example: Example, padding: String)
+	{
+		log.info(padding + status(example) + example.description)
+		for(skip <- example.skipped)
+		{
+			log.trace(skip)
+			log.warn(padding + e.toString)
+		}
+		for(e <- example.failures ++ example.errors)
+		{
+			log.trace(e)
+			log.error(padding + e.toString)
+		}
+	}
 }
+
 
 /* The following implements the simple syntax for storing test definitions.
 * The syntax is:

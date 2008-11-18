@@ -156,9 +156,11 @@ trait Conditional[Source, Product, External] extends NotNull
 	}
 	protected def processingComplete(success: Boolean)
 	{
-		log.info("  Post-analysis: " + analysis.allProducts.toSeq.length + " " + productTypePlural + ".")
 		if(success)
+		{
 			analysis.save()
+			log.info("  Post-analysis: " + analysis.allProducts.toSeq.length + " " + productTypePlural + ".")
+		}
 		else
 			analysis.revert()
 	}
