@@ -208,14 +208,24 @@ object SpecsFramework extends LazyTestFramework
 /** The test runner for ScalaCheck tests. */
 private class ScalaCheckRunner(val log: Logger) extends BasicTestRunner
 {
+	import org.scalacheck.{Pretty, Properties, Test}
 	def runTest(testClass: String): Result.Value =
 	{
-		import org.scalacheck.{Test, Properties}
 		val test = ModuleUtilities.getObject(testClass, getClass.getClassLoader).asInstanceOf[Properties]
-		if(Test.checkProperties(test).find(!_._2.passed).isEmpty)
+		if(Test.checkProperties(test, Test.defaultParams, propReport, testReport).find(!_._2.passed).isEmpty)
 			Result.Passed
 		else
 			Result.Failed
+	}
+	private def propReport(pName: String, s: Int, d: Int) {}
+	private def testReport(pName: String, res: Test.Result) =
+	{
+		import Pretty._
+		val s = (if(res.passed) "+ " else "! ") + pName + ": " + pretty(res)
+		if(res.passed)
+			log.info(s)
+		else
+			log.error(s)
 	}
 }
 /** The test runner for ScalaTest suites. */
@@ -345,7 +355,7 @@ private class SpecsRunner(val log: Logger) extends BasicTestRunner
 		for(skip <- example.skipped)
 		{
 			log.trace(skip)
-			log.warn(padding + e.toString)
+			log.warn(padding + skip.toString)
 		}
 		for(e <- example.failures ++ example.errors)
 		{

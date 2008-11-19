@@ -126,7 +126,8 @@ class ConsoleLogger extends BasicLogger
 	def successMessageColor = Console.RESET
 	override def success(message: => String)
 	{
-		log(successLabelColor, Level.SuccessLabel, successMessageColor, message)
+		if(atLevel(Level.Info))
+			log(successLabelColor, Level.SuccessLabel, successMessageColor, message)
 	}
 	def trace(t: => Throwable)
 	{
@@ -145,16 +146,19 @@ class ConsoleLogger extends BasicLogger
 	}
 	private def log(labelColor: String, label: String, messageColor: String, message: String) =
 	{
-		setColor(Console.RESET)
-		System.out.print('[')
-		setColor(labelColor)
-		System.out.print(label)
-		setColor(Console.RESET)
-		System.out.print("] ")
-		setColor(messageColor)
-		System.out.print(message)
-		setColor(Console.RESET)
-		System.out.println()
+		for(line <- message.split("""\n"""))
+		{
+			setColor(Console.RESET)
+			System.out.print('[')
+			setColor(labelColor)
+			System.out.print(label)
+			setColor(Console.RESET)
+			System.out.print("] ")
+			setColor(messageColor)
+			System.out.print(line)
+			setColor(Console.RESET)
+			System.out.println()
+		}
 	}
 }
 
