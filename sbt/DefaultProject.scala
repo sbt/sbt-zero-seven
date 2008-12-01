@@ -5,11 +5,7 @@ package sbt
 
 /** The default project when no project is explicitly configured and the common base class for
 * configuring a project.*/
-class DefaultProject(val info: ProjectInfo, val dependencies: Iterable[Project]) extends BasicScalaProject
-{
-	/** Constructs this project with the given info and with no dependencies.*/
-	def this(i: ProjectInfo) = this(i, Nil)
-}
+class DefaultProject(val info: ProjectInfo) extends BasicScalaProject
 
 abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveManagedProject
 {
@@ -17,6 +13,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	/** The class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
 	def mainClass: Option[String] = None
+	def dependencies = info.dependencies
 
 	val mainCompileConditional = new CompileConditional(mainCompileConfiguration)
 	val testCompileConditional = new CompileConditional(testCompileConfiguration)
@@ -37,8 +34,8 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	
 	def projectID: ModuleID =
 	{
-		val normalizedName = info.name.toLowerCase.replaceAll("""\s+""", "-")
-		normalizedName % normalizedName % info.currentVersion.toString
+		val normalizedName = name.toLowerCase.replaceAll("""\s+""", "-")
+		normalizedName % normalizedName % version.toString
 	}
 	def excludeIDs = projectID :: Nil
 	def manager = SimpleManager(projectID, repositories, libraryDependencies.toList: _*)
@@ -62,8 +59,8 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	/** The options provided to the 'doc' and 'docTest' actions.*/
 	def documentOptions: Seq[ScaladocOption] =
 		LinkSource ::
-		documentTitle(info.name + " " + info.currentVersion + " API") ::
-		windowTitle(info.name + " " + info.currentVersion + " API") ::
+		documentTitle(name + " " + version + " API") ::
+		windowTitle(name + " " + version + " API") ::
 		Nil
 	/** The options provided to the 'test' action.*/
 	def testOptions: Seq[TestOption] = Nil
@@ -238,7 +235,7 @@ trait BasicProjectPaths extends Project
 	
 	//////////// Paths ///////////
 		
-	def defaultJarBaseName = info.name + "-" + info.currentVersion.toString
+	def defaultJarBaseName = name + "-" + version.toString
 	def defaultJarName = defaultJarBaseName + ".jar"
 	
 	def outputDirectoryName = DefaultOutputDirectoryName

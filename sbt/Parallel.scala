@@ -20,13 +20,16 @@ object ParallelRunner
 			}
 			try
 			{
-				p.tasks.get(action).flatMap( task =>
+				p.runAndSaveEnvironment
 				{
-					if(p == project || !task.interactive)
-						task.run
-					else
-						task.runDependenciesOnly
-				})
+					p.tasks.get(action).flatMap( task =>
+					{
+						if(p == project || !task.interactive)
+							task.run
+						else
+							task.runDependenciesOnly
+					})
+				}
 			}
 			finally
 			{
@@ -37,7 +40,7 @@ object ParallelRunner
 				}
 			}
 		}
-		run(project, (p: Project) => p.info.name, runProject, maximumTasks)
+		run(project, (p: Project) => p.name, runProject, maximumTasks)
 	}
 
 	def run[D <: Dag[D]](node: D, name: D => String, action: D => Option[String], maximumTasks: Int): List[JobFailure] =

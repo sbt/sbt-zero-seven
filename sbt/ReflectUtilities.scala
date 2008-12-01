@@ -1,21 +1,27 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 David MacIver
+ * Copyright 2008 David MacIver, Mark Harrah
  */
 package sbt;
 
 import scala.collection._
 
-object ReflectUtilities{
-	def camelCaseToActionName(name : String) = {
-		val buffer = new StringBuilder();
-		for (char <- name){
+object ReflectUtilities
+{
+	def transformCamelCase(name: String, separator: Char) =
+	{
+		val buffer = new StringBuilder
+		for(char <- name)
+		{
 			import java.lang.Character._
-			if (isUpperCase(char)){
-				buffer += '-';
-				buffer += toLowerCase(char);
-			} else buffer += char;
+			if(isUpperCase(char))
+			{
+				buffer += separator
+				buffer += toLowerCase(char)
+			}
+			else
+				buffer += char
 		}
-		buffer.toString;
+		buffer.toString
 	}
 
 	def ancestry(clazz : Class[_]) : List[Class[_]] = 
@@ -27,21 +33,20 @@ object ReflectUtilities{
 			flatMap(_.getDeclaredFields).
 			map(f => (f.getName, f)):_*)
 	
-	def allVals[T](self : AnyRef)(implicit mt : scala.reflect.Manifest[T]) : Map[String, T] = {
-		val mappings = new mutable.OpenHashMap[String, T];
+	def allValsC[T](self: AnyRef, clazz: Class[T]): Map[String, T] =
+	{
+		val mappings = new mutable.OpenHashMap[String, T]
 		val correspondingFields = fields(self.getClass)
-
-		for (method <- self.getClass.getMethods){
-			if ((method.getParameterTypes.length == 0) &&
-					mt.erasure.isAssignableFrom(method.getReturnType) &&
-					(correspondingFields.get(method.getName) match {
-							case Some(field) => field.getType == method.getReturnType
-							case None => false })){
-				mappings(method.getName) = method.invoke(self).asInstanceOf[T];
+		for(method <- self.getClass.getMethods)
+		{
+			if(method.getParameterTypes.length == 0 && clazz.isAssignableFrom(method.getReturnType))
+			{
+				for(field <- correspondingFields.get(method.getName) if field.getType == method.getReturnType)
+					mappings(method.getName) = method.invoke(self).asInstanceOf[T]
 			}
 		}
-	
-		mappings;
+		mappings
 	}
-
+	def allVals[T](self: AnyRef)(implicit mt: scala.reflect.Manifest[T]): Map[String, T] =
+		allValsC(self, mt.erasure).asInstanceOf[Map[String,T]]
 }

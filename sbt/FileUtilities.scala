@@ -204,6 +204,9 @@ object FileUtilities
 	
 	def open[T](file: File, log: Logger, constructor: File => T): Either[String, T] =
 	{
+		val parent = file.getParentFile
+		if(parent != null)
+			createDirectory(parent, log)
 		try { Right(constructor(file)) }
 		catch
 		{

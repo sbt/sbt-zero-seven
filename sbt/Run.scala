@@ -60,6 +60,7 @@ object Run
 						for(pathString <- bootClasspath if pathString.length > 0) yield
 							(new java.io.File(pathString)).toURI.toURL
 					log.info("Running " + mainClass + " ...")
+					log.debug("  Classpath:" + (classpathURLs ++ extraURLs).mkString("\n\t", "\n\t",""))
 					executeTrapExit( ObjectRunner.run(classpathURLs ++ extraURLs, mainClass, options.toList), log )
 				}
 				catch

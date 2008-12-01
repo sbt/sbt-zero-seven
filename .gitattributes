@@ -22,6 +22,7 @@ sbt/Conditional.scala -text
 sbt/Dag.scala -text
 sbt/DefaultProject.scala -text
 sbt/DotGraph.scala -text
+sbt/Environment.scala -text
 sbt/FileUtilities.scala -text
 sbt/LineReader.scala -text
 sbt/Logger.scala -text

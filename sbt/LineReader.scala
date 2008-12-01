@@ -15,7 +15,7 @@ class JLineReader(initialProject: Project, projectAction: String, generalCommand
 	private val projectCompletor =
 	{
 		val startCompletor = simpleCompletor(projectAction :: Nil)
-		val projectsCompletor = simpleCompletor(initialProject.topologicalSort.map(_.info.name))
+		val projectsCompletor = simpleCompletor(initialProject.topologicalSort.map(_.name))
 		val argumentCompletors = Array(startCompletor, projectsCompletor, new NullCompletor)
 		new ArgumentCompletor(argumentCompletors, SingleArgumentDelimiter)
 	}
@@ -36,11 +36,19 @@ class JLineReader(initialProject: Project, projectAction: String, generalCommand
 			(buffer.charAt(pos) == ' ') && buffer.substring(0, pos).trim.indexOf(' ') == -1
 	}
 	
+	private def propertyCompletor(project: Project) =
+	{
+		val startCompletor = simpleCompletor(Main.GetAction :: Main.SetAction :: Nil)
+		val nameCompletor = simpleCompletor(project.propertyNames)
+		val completors = Array(startCompletor, nameCompletor, new NullCompletor)
+		new ArgumentCompletor(completors)
+	}
+	
 	private def simpleCompletor(completions: Iterable[String]) = new SimpleCompletor(completions.toList.toArray)
 	def changeProject(project: Project)
 	{
 		val taskCompletor = simpleCompletor(project.taskNames)
-		completor.setCompletors( Array(generalCompletor, taskCompletor, projectCompletor) )
+		completor.setCompletors( Array(generalCompletor, taskCompletor, projectCompletor, propertyCompletor(project)) )
 	}
 	def readLine(prompt: String) =
 		reader.readLine(prompt) match

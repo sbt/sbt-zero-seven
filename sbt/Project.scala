@@ -8,7 +8,7 @@ import scala.collection._
 import FileUtilities._
 import Project._
 
-trait Project extends TaskManager with Dag[Project]
+trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 {
 	/** The logger for this project definition. */
 	final val log: Logger = logImpl
@@ -16,6 +16,10 @@ trait Project extends TaskManager with Dag[Project]
 	
 	/** Basic project information. */
 	def info: ProjectInfo
+	/** The project name. */
+	final def name: String = projectName.value
+	/** The project version. */
+	final def version: Version = projectVersion.value
 	/** The tasks declared on this project. */
 	def tasks: Map[String, Task]
 	/** The names of all available tasks that may be called through `act`.  These include
@@ -78,7 +82,7 @@ trait Project extends TaskManager with Dag[Project]
 							{
 								if(multiProject)
 									showProjectHeader(project)
-								task.run orElse run(remaining)
+								project.runAndSaveEnvironment( task.run ) orElse run(remaining)
 							}
 						}
 				}
@@ -105,7 +109,7 @@ trait Project extends TaskManager with Dag[Project]
 	private def showBuildOrder(order: Iterable[Project])
 	{
 		log.debug("Project build order:")
-		order.foreach(x => log.debug("    " + x.info.name) )
+		order.foreach(x => log.debug("    " + x.name) )
 		log.debug("")
 	}
 	
@@ -115,41 +119,28 @@ trait Project extends TaskManager with Dag[Project]
 	implicit def filter(simplePattern: String): NameFilter = new GlobFilter(simplePattern)
 	
 	/** Loads the project at the given path and declares the project to have the given
-	* dependencies.  This method will configure the project according to 
-	* metadata/info in the directory denoted by path.*/
-	def project(path: Path, deps: Project*): Project = getProject(Project.loadProject(path, deps), path)
+	* dependencies.  This method will configure the project according to the
+	* metadata/ directory in the directory denoted by path.*/
+	def project(path: Path, deps: Project*): Project = getProject(Project.loadProject(path, deps, Some(this)), path)
+	
 	/** Loads the project at the given path using the given name and inheriting this project's version.
 	* The builder class is the default builder class, sbt.DefaultProject. The loaded project is declared
-	* to have the given dependencies. Any metadata/info file for the project is ignored.*/
-	def project(path: Path, name: String, deps: Project*): Project = 
-		project(path, name, ProjectInfo.DefaultBuilderClass, deps: _*)
+	* to have the given dependencies. Any metadata/build/ directory for the project is ignored.*/
+	def project(path: Path, name: String, deps: Project*): Project = project(path, name, Project.DefaultBuilderClass, deps: _*)
+	
 	/** Loads the project at the given path using the given name and inheriting it's version from this project.
 	* The Project implementation used is given by builderClass.  The dependencies are declared to be
-	* deps. Any metadata/info file for the project is ignored.*/
-	def project[P <: Project](path: Path, name: String, builderClass: Class[P], deps: Project*): Project =
+	* deps. Any metadata/build/ directory for the project is ignored.*/
+	def project[P <: Project](path: Path, name: String, builderClass: Class[P], deps: Project*): P =
 	{
-		checkDependencies(name, deps)
 		require(builderClass != this.getClass, "Cannot recursively construct projects of same type: " + builderClass.getName)
-		val newInfo = new ProjectInfo(name, info.currentVersion, builderClass.getName, path.asFile)(false)
-		Project.loadProject(newInfo, builderClass, deps)
+		project(path, name, info => Project.constructProject(info, builderClass), deps: _*)
 	}
 	/** Loads the project at the given path using the given name and inheriting it's version from this project.
-	* The construct function is used to obtain the Project instance. Any metadata/info file for the project
-	* is ignored.  The project is declared to have no dependencies.*/
-	def project(path: Path, name: String, construct: ProjectInfo => Project): Project =
-	{
-		val newInfo = new ProjectInfo(name, info.currentVersion, "", path.asFile)(false)
-		construct(newInfo)
-	}
-	/** Loads the project at the given path using the given name and inheriting it's version from this project.
-	* The construct function is used to obtain the Project instance. Any metadata/info file for the project
-	* is ignored.  The construct function is passed the dependencies given by deps.*/
-	def project(path: Path, name: String, construct: (ProjectInfo, Iterable[Project]) => Project, deps: Iterable[Project]): Project =
-	{
-		checkDependencies(name, deps)
-		val newInfo = new ProjectInfo(name, info.currentVersion, "", path.asFile)(false)
-		construct(newInfo, deps)
-	}
+	* The construct function is used to obtain the Project instance. Any metadata/build/ directory for the project
+	* is ignored.  The project is declared to have the dependencies given by deps.*/
+	def project[P <: Project](path: Path, name: String, construct: ProjectInfo => P, deps: Project*): P =
+		initialize(construct(ProjectInfo(path.asFile, deps, Some(this))), Some(SetupInfo(name, None, false)))
 	
 	/** Initializes the project directories when a user has requested that sbt create a new project.*/
 	def initializeDirectories() {}
@@ -165,8 +156,28 @@ trait Project extends TaskManager with Dag[Project]
 	* projects have not been defined with the same output directories. */
 	def outputDirectories: Iterable[Path] = Nil
 	
+	final def envBackingPath = info.builderPath / Project.DefaultEnvBackingName
+	
 	private def getProject(e: Either[String,Project], path: Path): Project =
 		e.fold(m => Predef.error("Error getting project " + path + " : " + m), x => x)
+		
+	final val projectVersion = property[Version]
+	final val projectName = propertyLocalF[String](NonEmptyStringFormat)
+	protected final override def parentEnvironment = info.parent
+	
+	def runAndSaveEnvironment[T](toRun: => Option[String]): Option[String] =
+	{
+		try
+		{
+			val runResult = toRun // execute the action
+			val saveResult = saveEnvironment() // always run saveEnvironment 
+			runResult orElse saveResult // precendence given to the runResult error if both have an error
+		}
+		catch
+		{
+			case _ => saveEnvironment()
+		}
+	}
 }
 object Reflective
 {
@@ -174,7 +185,7 @@ object Reflective
 	{
 		val mappings = new mutable.OpenHashMap[String, T]
 		for ((name, value) <- ReflectUtilities.allVals[T](obj))
-			mappings(ReflectUtilities.camelCaseToActionName(name)) = value
+			mappings(ReflectUtilities.transformCamelCase(name, '-')) = value
 		mappings
 	}
 }
@@ -198,14 +209,16 @@ trait ReflectiveModules extends Project
 trait ReflectiveProject extends ReflectiveModules with ReflectiveTasks
 
 /** This Project subclass is used to contain other projects as dependencies.*/
-class ParentProject(val info: ProjectInfo, protected val deps: Iterable[Project])
-	extends ReflectiveProject
+class ParentProject(val info: ProjectInfo) extends ReflectiveProject
 {
-	def this(info: ProjectInfo) = this(info, Nil)
-	def dependencies = deps ++ subProjects.values.toList
+	def dependencies = info.dependencies ++ subProjects.values.toList
 }
 object Project
 {
+	val DefaultEnvBackingName = "build.properties"
+	val DefaultBuilderClassName = "sbt.DefaultProject"
+	val DefaultBuilderClass = Class.forName(DefaultBuilderClassName).asSubclass(classOf[Project])
+	
 	/** The logger that should be used before the project definition is loaded.*/
 	private val log = new ConsoleLogger
 	log.setLevel(Level.Trace)
@@ -216,22 +229,27 @@ object Project
 	val ProjectClassName = classOf[Project].getName
 	
 	/** Loads the project in the current working directory.*/
-	def loadProject: Either[String, Project] = loadProject(new File("."), Nil).right.flatMap(checkOutputDirectories)
+	def loadProject: Either[String, Project] = loadProject(new File("."), Nil, None).right.flatMap(checkOutputDirectories)
 	/** Loads the project in the directory given by 'path' and with the given dependencies.*/
-	def loadProject(path: Path, deps: Iterable[Project]): Either[String, Project] = loadProject(path.asFile, deps)
+	def loadProject(path: Path, deps: Iterable[Project], parent: Option[Project]): Either[String, Project] =
+		loadProject(path.asFile, deps, parent)
 	/** Loads the project in the directory given by 'projectDirectory' and with the given dependencies.*/
-	private def loadProject(projectDirectory: File, deps: Iterable[Project]): Either[String, Project] =
+	private def loadProject(projectDirectory: File, deps: Iterable[Project], parent: Option[Project]): Either[String, Project] =
+	{
+		val info = ProjectInfo(projectDirectory, deps, parent)
+		ProjectInfo.setup(info, log) match
+		{
+			case SetupError(message) => Left(message)
+			case AlreadySetup => loadProject(info, None)
+			case setup: SetupInfo => loadProject(info, Some(setup))
+		}
+	}
+	private def loadProject(info: ProjectInfo, setupInfo: Option[SetupInfo]): Either[String, Project] =
 	{
 		try
 		{
-			for(info <- ProjectInfo.load(projectDirectory, log).right;
-				classAndLoader <- getProjectDefinition(info).right) yield
-			{
-				val (builderClassName, loader) = classAndLoader
-				val builderClass = Class.forName(builderClassName, false, loader)
-				require(classOf[Project].isAssignableFrom(builderClass), "Builder class '" + builderClass + "' does not extend Project.")
-				loadProject(info, builderClass.asSubclass(classOf[Project]), deps)
-			}
+			for(builderClass <- getProjectDefinition(info).right) yield
+				initialize(constructProject(info, builderClass), setupInfo)
 		}
 		catch
 		{
@@ -242,6 +260,7 @@ object Project
 					else ite.getCause
 				errorLoadingProject(cause)
 			}
+			case nme: NoSuchMethodException => Left("Constructor with one argument of type sbt.ProjectInfo required for project definition.")
 			case e: Exception => errorLoadingProject(e)
 		}
 	}
@@ -251,59 +270,54 @@ object Project
 		log.trace(e)
 		Left("Error loading project: " + e.toString)
 	}
-	/** Loads the project for the given `info`, represented by an instance of 'builderClass', and
-	* with the given dependencies.*/
-	private def loadProject[P <: Project](info: ProjectInfo, builderClass: Class[P], deps: Iterable[Project]): Project =
+	/** Loads the project for the given `info` and represented by an instance of 'builderClass'.*/
+	private def constructProject[P <: Project](info: ProjectInfo, builderClass: Class[P]): P =
+		builderClass.getConstructor(classOf[ProjectInfo]).newInstance(info)
+	/** Checks the project's dependencies, initializes its environment, and possibly its directories.*/
+	private def initialize[P <: Project](p: P, setupInfo: Option[SetupInfo]): P =
 	{
-		checkDependencies(info.name, deps)
-		val project =
+		p.initializeEnvironment()
+		for(setup <- setupInfo)
 		{
-			val project1 =
-				if(deps.isEmpty)
-				{
-					try
-					{
-						val singleArgConstructor = builderClass.getConstructor(classOf[ProjectInfo])
-						Some(singleArgConstructor.newInstance(info))
-					}
-					catch { case _ => None }
-				}
-				else
-					None
-			project1.getOrElse
-			{
-				val constructor = builderClass.getConstructor(classOf[ProjectInfo], classOf[Iterable[Project]])
-				constructor.newInstance(info, deps)
-			}
+			p.projectName() = setup.name
+			for(v <- setup.version)
+				p.projectVersion() = v
+			for(errorMessage <- p.saveEnvironment())
+				log.error(errorMessage)
+			if(setup.initializeDirectories)
+				p.initializeDirectories()
 		}
-		if(info.initializeDirectories)
-			project.initializeDirectories()
-		project
+		val useName = p.projectName.get.getOrElse("at " + p.info.projectDirectory.getCanonicalPath)
+		checkDependencies(useName, p.info.dependencies)
+		p
 	}
 	/** Compiles the project definition classes and returns the project definition class name
 	* and the class loader that should be used to load the definition. */
-	private def getProjectDefinition(info: ProjectInfo): Either[String, (String, ClassLoader)] =
+	private def getProjectDefinition(info: ProjectInfo): Either[String, Class[P] forSome { type P <: Project }] =
 	{
 		val builderProjectPath = info.builderPath / BuilderProjectDirectoryName
 		if(builderProjectPath.asFile.isDirectory)
 		{
-			val builderInfo = ProjectInfo(info.name + " Builder", info.currentVersion,
-				classOf[BuilderProject].getName, builderProjectPath.asFile)(false)
-			val builderProject = new BuilderProject(builderInfo)
+			val builderProject = new BuilderProject(ProjectInfo(builderProjectPath.asFile, Nil, None))
 			builderProject.compile.run.toLeft
 			{
-				val compileClassPath = Array(builderProject.compilePath.asURL)
-				import java.net.URLClassLoader
-				val loader = new URLClassLoader(compileClassPath, getClass.getClassLoader)
 				builderProject.projectDefinition match
 				{
-					case Some(definition) => (definition, loader)
-					case None => (info.builderClassName, loader)
+					case Some(definition) =>
+					{
+						val compileClassPath = Array(builderProject.compilePath.asURL)
+						import java.net.URLClassLoader
+						val loader = new URLClassLoader(compileClassPath, getClass.getClassLoader)
+						val builderClass = Class.forName(definition, false, loader)
+						require(classOf[Project].isAssignableFrom(builderClass), "Builder class '" + builderClass + "' does not extend Project.")
+						builderClass.asSubclass(classOf[Project])
+					}
+					case None => DefaultBuilderClass
 				}
 			}
 		}
 		else
-			Right((info.builderClassName, getClass.getClassLoader))
+			Right(DefaultBuilderClass)
 	}
 	/** Verifies that the given list of project dependencies contains no nulls.  The
 	* String argument should be the project name with the dependencies.*/
@@ -345,7 +359,7 @@ object Project
 			{
 				val s =
 					for((path, projectsSharingPath) <- shared) yield
-						projectsSharingPath.map(_.info.name).mkString(", ") + " share " + FileUtilities.printableFilename(path.asFile)
+						projectsSharingPath.map(_.name).mkString(", ") + " share " + FileUtilities.printableFilename(path.asFile)
 				s.mkString("\n\t")
 			}
 			Some("The same directory is used for output for multiple projects:\n\t" + sharedString +
@@ -356,7 +370,7 @@ object Project
 	/** Writes the project name and a separator to the project's log at the info level.*/
 	def showProjectHeader(project: Project)
 	{
-		val projectHeader = "Project " + project.info.name
+		val projectHeader = "Project " + project.name
 		project.log.info("")
 		project.log.info(projectHeader)
 		project.log.info(("=": scala.runtime.RichString) * projectHeader.length)

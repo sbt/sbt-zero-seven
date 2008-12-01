@@ -89,5 +89,4 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject
 				None
 		}
 	}
-	
 }

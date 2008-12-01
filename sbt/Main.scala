@@ -19,13 +19,16 @@ object Main
 		Project.loadProject match
 		{
 			case Left(errorMessage) => println(errorMessage)
-			case Right(project) => startProject(project, args, startTime)
+			case Right(project) =>
+			{
+				if(fillUndefinedProjectProperties(project.topologicalSort.toList))
+					startProject(project, args, startTime)
+			}
 		}
 	}
 	private def startProject(project: Project, args: Array[String], startTime: Long)
 	{
-		val i = project.info
-		project.log.info("Building project " + i.name + " " + i.currentVersion.toString + " using " + project.getClass.getName)
+		project.log.info("Building project " + project.name + " " + project.version.toString + " using " + project.getClass.getName)
 		if(args.length == 0)
 		{
 			project.log.info("No actions specified, interactive session started.")
@@ -53,6 +56,10 @@ object Main
 	val ShowProjectsAction = "projects"
 	/** The list of lowercase action names that may be used to terminate the program.*/
 	val TerminateActions: Iterable[String] = "exit" :: "quit" :: Nil
+	/** The name of the action that sets the value of the property given as its argument.*/
+	val SetAction = "set"
+	/** The name of the action that gets the value of the property given as its argument.*/
+	val GetAction = "get"
 	
 	/** The list of all available commands at the interactive prompt in addition to the tasks defined
 	* by a project.*/
@@ -65,25 +72,22 @@ object Main
 	def interactive(baseProject: Project)
 	{
 		val reader = new JLineReader(baseProject, ProjectAction, interactiveCommands)
+		
 		def loop(currentProject: Project)
 		{
 			reader.readLine("> ") match
 			{
 				case Some(line) =>
+				{
 					val trimmed = line.trim
 					if(trimmed.isEmpty)
 						loop(currentProject)
 					else if(TerminateActions.elements.contains(trimmed.toLowerCase))
 						()
-					else if(trimmed == ShowProjectsAction)
-					{
-						baseProject.topologicalSort.foreach(listProject)
-						loop(currentProject)
-					}
 					else if(trimmed.startsWith(ProjectAction + " "))
 					{
 						val projectName = trimmed.substring(ProjectAction.length + 1)
-						baseProject.topologicalSort.find(_.info.name == projectName) match
+						baseProject.topologicalSort.find(_.name == projectName) match
 						{
 							case Some(newProject) =>
 							{
@@ -100,18 +104,31 @@ object Main
 					}
 					else
 					{
-						handleCommand(currentProject, trimmed)
+						if(trimmed == ShowProjectsAction)
+							baseProject.topologicalSort.foreach(listProject)
+						else if(trimmed == SetAction)
+							setArgumentError(currentProject.log)
+						else if(trimmed.startsWith(SetAction + " "))
+							setProperty(currentProject, trimmed.substring(SetAction.length + 1))
+						else if(trimmed == GetAction)
+							getArgumentError(currentProject.log)
+						else if(trimmed.startsWith(GetAction + " "))
+							getProperty(currentProject, trimmed.substring(GetAction.length + 1))
+						else
+							handleCommand(currentProject, trimmed)
 						loop(currentProject)
 					}
+				}
 				case None => ()
 			}
 		}
+		
 		loop(baseProject)
 	}
 	private def listProject(p: Project) = printProject("\t", p)
 	private def printProject(prefix: String, p: Project)
 	{
-		Console.println(prefix + p.info.name + " " + p.info.currentVersion)
+		Console.println(prefix + p.name + " " + p.version)
 	}
 	
 	private def handleCommand(project: Project, command: String)
@@ -124,8 +141,10 @@ object Main
 				Console.println("Current log level is " + project.log.getLevel)
 			}
 			case ShowActions =>
+			{
 				for( (name, task) <- project.deepTasks)
 					Console.println("\t" + name + task.description.map(x => ": " + x).getOrElse(""))
+			}
 			case action =>
 			{
 				Level(action) match
@@ -139,11 +158,10 @@ object Main
 	private def handleAction(project: Project, action: String)
 	{
 		val startTime = System.currentTimeMillis
-		val actionResult = project.act(action)
-		actionResult match
+		project.act(action) match
 		{
 			case Some(errorMessage) => project.log.error(errorMessage)
-			case None => 
+			case None =>
 			{
 				printTime(project, startTime, "")
 				project.log.success("Successful.")
@@ -162,4 +180,139 @@ object Main
 		val ss = if(s.isEmpty) "" else s + " "
 		project.log.info("Total " + ss + "time: " + (endTime - startTime + 500) / 1000 + " s")
 	}
+	private def undefinedMessage(property: Project#UserProperty[_]): String =
+	{
+		property.resolve match
+		{
+			case vu: UndefinedValue => " is not defined."
+			case e: ResolutionException => " has invalid value: " + e.toString
+			case _ => ""
+		}
+	}
+	private def fillUndefinedProperties(project: Project, properties: List[(String, Project#Property[_])], first: Boolean): Boolean =
+	{
+		properties match
+		{
+			case (name, variable) :: tail =>
+			{
+				val shouldAdvanceOrQuit =
+					variable match
+					{
+						case property: Project#UserProperty[_] =>
+							if(first)
+								project.log.error(" Property '" + name + "' " + undefinedMessage(property))
+							val newValue = Console.readLine("  Enter new value for " + name + " : ")
+							Console.println()
+							if(newValue == null)
+								None
+							else
+							{
+								try
+								{
+									property.setStringValue(newValue)
+									Some(true)
+								}
+								catch
+								{
+									case e =>
+										project.log.error("Invalid value: " + e.getMessage)
+										Some(false)
+								}
+							}
+						case _ => Some(true)
+					}
+				shouldAdvanceOrQuit match
+				{
+					case Some(shouldAdvance) => fillUndefinedProperties(project, if(shouldAdvance) tail else properties, shouldAdvance)
+					case None => false
+				}
+			}
+			case Nil => true
+		}
+	}
+	private def fillUndefinedProjectProperties(projects: List[Project]): Boolean =
+	{
+		projects match
+		{
+			case project :: remaining =>
+			{
+				val uninitialized = project.uninitializedProperties.toList
+				if(uninitialized.isEmpty)
+					true
+				else
+				{
+					project.log.error("Project in " + FileUtilities.printableFilename(project.info.projectDirectory) +
+						" has undefined properties.")
+					val result = fillUndefinedProperties(project, uninitialized, true) && fillUndefinedProjectProperties(remaining)
+					project.saveEnvironment()
+					result
+				}
+			}
+			case Nil => true
+		}
+	}
+	private def getProperty(project: Project, propertyName: String)
+	{
+		if(propertyName.isEmpty)
+			project.log.error("No property name specified.")
+		else
+		{
+			project.getPropertyNamed(propertyName) match
+			{
+				case Some(property) =>
+				{
+					property.resolve match
+					{
+						case u: UndefinedValue => project.log.error("Value of property '" + propertyName + "' is undefined.")
+						case ResolutionException(m, e) => project.log.error(m)
+						case DefinedValue(value, isInherited, isDefault) => Console.println(value.toString)
+					}
+				}
+				case None =>
+				{
+					val value = System.getProperty(propertyName)
+					if(value == null)
+						project.log.error("No property with name '" + propertyName + "' defined.")
+					else
+						Console.println(value)
+				}
+			}
+		}
+	}
+	private def setProperty(project: Project, propertyNameAndValue: String)
+	{
+		val m = """(\S+)(\s+\S.*)?""".r.pattern.matcher(propertyNameAndValue)
+		if(m.matches())
+		{
+			val name = m.group(1)
+			val newValue =
+			{
+				val v = m.group(2)
+				if(v == null) "" else v.trim
+			}
+			project.getPropertyNamed(name) match
+			{
+				case Some(property) =>
+				{
+					val succeeded =
+						try
+						{
+							property.setStringValue(newValue)
+							Console.println(" Set property '" + name + "' = '" + newValue + "'")
+						}
+						catch { case e => project.log.error("Error setting property '" + name + "' in " + project.environmentLabel + ": " + e.toString) }
+					project.saveEnvironment()
+				}
+				case None =>
+				{
+					System.setProperty(name, newValue)
+					project.log.info(" Set system property '" + name + "' = '" + newValue + "'")
+				}
+			}
+		}
+		else
+			setArgumentError(project.log)
+	}
+	private def setArgumentError(log: Logger) { log.error("Invalid arguments for 'set': expected property name and new value.") }
+	private def getArgumentError(log: Logger) { log.error("Invalid arguments for 'get': expected property name.") }
 }

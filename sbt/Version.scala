@@ -22,14 +22,7 @@ object Version
 	{
 		val trimmed = v.trim
 		if(trimmed.isEmpty)
-			Left("No project version specified")
-		else if(trimmed.charAt(0) == '"')
-		{
-			if(trimmed.length == 1 || trimmed.charAt(trimmed.length - 1) != '"')
-				Left("Closing \" not found")
-			else
-				Right(OpaqueVersion(trimmed))
-		}
+			Left("Version cannot be empty.")
 		else
 		{
 			val matcher = versionPattern.matcher(trimmed)
