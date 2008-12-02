@@ -21,7 +21,8 @@ object Main
 			case Left(errorMessage) => println(errorMessage)
 			case Right(project) =>
 			{
-				if(fillUndefinedProjectProperties(project.topologicalSort.toList))
+				// in interactive mode, fill all undefined properties
+				if(args.length > 0 || fillUndefinedProjectProperties(project.topologicalSort.toList))
 					startProject(project, args, startTime)
 			}
 		}
@@ -106,12 +107,8 @@ object Main
 					{
 						if(trimmed == ShowProjectsAction)
 							baseProject.topologicalSort.foreach(listProject)
-						else if(trimmed == SetAction)
-							setArgumentError(currentProject.log)
 						else if(trimmed.startsWith(SetAction + " "))
 							setProperty(currentProject, trimmed.substring(SetAction.length + 1))
-						else if(trimmed == GetAction)
-							getArgumentError(currentProject.log)
 						else if(trimmed.startsWith(GetAction + " "))
 							getProperty(currentProject, trimmed.substring(GetAction.length + 1))
 						else
@@ -135,6 +132,8 @@ object Main
 	{
 		command match
 		{
+			case GetAction => getArgumentError(project.log)
+			case SetAction => setArgumentError(project.log)
 			case ShowCurrent =>
 			{
 				printProject("Current project is ", project)
@@ -168,11 +167,14 @@ object Main
 			}
 		}
 	}
+	/** Sets the logging level on the given project.*/
 	private def setLevel(project: Project, level: Level.Value)
 	{
 		project.topologicalSort.foreach(_.log.setLevel(level))
 		Console.println("Set log level to " + project.log.getLevel)
 	}
+	/** Prints the elapsed time to the given project's log using the given
+	* initial time and the label 's'.*/
 	private def printTime(project: Project, startTime: Long, s: String)
 	{
 		val endTime = System.currentTimeMillis()
@@ -180,6 +182,7 @@ object Main
 		val ss = if(s.isEmpty) "" else s + " "
 		project.log.info("Total " + ss + "time: " + (endTime - startTime + 500) / 1000 + " s")
 	}
+	/** Provides a partial message describing why the given property is undefined. */
 	private def undefinedMessage(property: Project#UserProperty[_]): String =
 	{
 		property.resolve match
@@ -189,6 +192,8 @@ object Main
 			case _ => ""
 		}
 	}
+	/** Prompts the user for the value of undefined properties.  'first' is true if this is the first time
+	* that the current property has been prompted.*/
 	private def fillUndefinedProperties(project: Project, properties: List[(String, Project#Property[_])], first: Boolean): Boolean =
 	{
 		properties match
@@ -230,6 +235,8 @@ object Main
 			case Nil => true
 		}
 	}
+	/** Iterates over the undefined properties in the given projects, prompting the user for the value of each undefined
+	* property.*/
 	private def fillUndefinedProjectProperties(projects: List[Project]): Boolean =
 	{
 		projects match
@@ -251,6 +258,7 @@ object Main
 			case Nil => true
 		}
 	}
+	/** Prints the value of the property with the given name in the given project. */
 	private def getProperty(project: Project, propertyName: String)
 	{
 		if(propertyName.isEmpty)
@@ -272,13 +280,16 @@ object Main
 				{
 					val value = System.getProperty(propertyName)
 					if(value == null)
-						project.log.error("No property with name '" + propertyName + "' defined.")
+						project.log.error("No property named '" + propertyName + "' is defined.")
 					else
 						Console.println(value)
 				}
 			}
 		}
 	}
+	/** Separates the space separated property name/value pair and stores the value in the user-defined property
+	* with the given name in the given project.  If no such property exists, the value is stored in a system
+	* property. */
 	private def setProperty(project: Project, propertyNameAndValue: String)
 	{
 		val m = """(\S+)(\s+\S.*)?""".r.pattern.matcher(propertyNameAndValue)

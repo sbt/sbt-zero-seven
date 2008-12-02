@@ -81,7 +81,7 @@ trait BasicEnvironment extends Environment
 		private[BasicEnvironment] val manifest: Manifest[T]) extends Property[T]
 	{
 		/** The name of this property is used for persistence in the properties file and as an identifier in messages.*/
-		lazy val name = variableMap.find( p => p._2 eq this ).map(_._1)
+		lazy val name = propertyMap.find( p => p._2 eq this ).map(_._1)
 		/** Gets the name of this property or an alternative if the name is not available.*/
 		private def nameString = name.getOrElse("<unnamed>")
 		/** The lazily evaluated default value for this property.*/
@@ -108,7 +108,7 @@ trait BasicEnvironment extends Environment
 				case None => UndefinedValue(nameString, environmentLabel)
 			}
 		}
-		private def parentProperty = for(parent <- parentEnvironment; n <- name; prop <- parent.variableMap.get(n)) yield prop
+		private def parentProperty = for(parent <- parentEnvironment; n <- name; prop <- parent.propertyMap.get(n)) yield prop
 		
 		private def tryToInherit[R](prop: BasicEnvironment#UserProperty[R]): PropertyResolution[T] =
 		{
@@ -130,7 +130,7 @@ trait BasicEnvironment extends Environment
 		/** Explicitly sets the value for this property by converting the given string value.*/
 		private[sbt] def setStringValue(s: String) { update(format.fromString(s)) }
 	}
-	
+	/** Implementation of 'Property' for system properties (i.e. System.getProperty/setProperty) */
 	private class SystemProperty[T](val name: String, lazyDefaultValue: => Option[T], val format: Format[T]) extends Property[T]
 	{
 		def resolve =
@@ -147,6 +147,8 @@ trait BasicEnvironment extends Environment
 				}
 			}
 		}
+		/** Handles resolution when the property has no explicit value.  If there is a default value, that is returned,
+		* otherwise, UndefinedValue is returned.*/
 		private def notFound =
 		{
 			defaultValue match
@@ -182,18 +184,18 @@ trait BasicEnvironment extends Environment
 	def propertyOptional[T](defaultValue: => T)(implicit manifest: Manifest[T], format: Format[T]): Property[T] =
 		new UserProperty[T](Some(defaultValue), format, true, manifest)
 	
-	private type AnyVariable = Property[T] forSome {type T}
 	private type AnyProperty = UserProperty[T] forSome {type T}
-	private val variableMap = new scala.collection.mutable.HashMap[String, AnyProperty]
+	/** Maps property name to property.  The map is populated by 'initializeEnvironment'.*/
+	private val propertyMap = new scala.collection.mutable.HashMap[String, AnyProperty]
 	
 	import java.util.Properties
+	/** Initializes 'propertyMap' by reflectively listing the vals on this object that
+	* reference a UserProperty. */
 	private[sbt] def initializeEnvironment()
 	{
-		val varMap = Environment.reflectiveMappings(this, classOf[AnyVariable])
-		
-		val propertyMap = new scala.collection.mutable.HashMap[String, AnyProperty]
-		for( (name, property: AnyProperty) <- varMap)
-			variableMap(name) = property
+		val vals = Environment.reflectiveMappings(this, classOf[AnyProperty])
+		for( (name, property) <- vals)
+			propertyMap(name) = property
 		
 		val properties = new Properties
 		for(errorMsg <- PropertiesUtilities.load(properties, envBackingPath, log))
@@ -202,30 +204,30 @@ trait BasicEnvironment extends Environment
 		for(name <- PropertiesUtilities.propertyNames(properties))
 		{
 			val propertyValue = properties.getProperty(name)
-			variableMap.get(name) match
+			propertyMap.get(name) match
 			{
 				case Some(property) => property.setStringValue(propertyValue)
 				case None =>
 				{
 					val p = new UserProperty[String](None, StringFormat, false, Manifest.classType(classOf[String]))
 					p() = propertyValue
-					variableMap(name) = p
+					propertyMap(name) = p
 					log.warn("Property '" + name + "' from " + environmentLabel + " is not used.")
 				}
 			}
 		}
 	}
-	def propertyNames: Iterable[String] = variableMap.keys.toList
-	def getPropertyNamed(name: String): Option[UserProperty[_]] = variableMap.get(name)
-	def propertyNamed(name: String): UserProperty[_] = variableMap(name)
+	def propertyNames: Iterable[String] = propertyMap.keys.toList
+	def getPropertyNamed(name: String): Option[UserProperty[_]] = propertyMap.get(name)
+	def propertyNamed(name: String): UserProperty[_] = propertyMap(name)
 	def saveEnvironment(): Option[String] =
 	{
 		val properties = new Properties
-		for( (name, variable) <- variableMap; stringValue <- variable.getStringValue)
+		for( (name, variable) <- propertyMap; stringValue <- variable.getStringValue)
 			properties.setProperty(name, stringValue)
 		PropertiesUtilities.write(properties, "Project properties", envBackingPath, log)
 	}
-	private[sbt] def uninitializedProperties: Iterable[(String, Property[_])] = variableMap.filter(_._2.get.isEmpty)
+	private[sbt] def uninitializedProperties: Iterable[(String, Property[_])] = propertyMap.filter(_._2.get.isEmpty)
 	
 	
 	implicit val IntFormat: Format[Int] = new SimpleFormat[Int] { def fromString(s: String) = java.lang.Integer.parseInt(s) }
