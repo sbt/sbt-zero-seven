@@ -178,6 +178,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 			case _ => saveEnvironment()
 		}
 	}
+	override def toString = "Project " + projectName.get.getOrElse("at " + environmentLabel)
 }
 object Reflective
 {

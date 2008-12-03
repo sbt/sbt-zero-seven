@@ -124,6 +124,8 @@ trait BasicEnvironment extends Environment
 				case DefinedValue(v, isInherited, isDefault) => DefinedValue(v, true, isDefault)
 				case x => x
 			}
+			
+		override def toString = nameString + "=" + resolve
 		
 		/** Gets the explicitly set value converted to a 'String'.*/
 		private[sbt] def getStringValue: Option[String] = explicitValue.map(format.toString)
@@ -170,6 +172,7 @@ trait BasicEnvironment extends Environment
 				log.warn("Error setting system property '" + name + "': " + e.toString)
 			}
 		}
+		override def toString = name + "=" + resolve
 	}
 	
 	def system[T](propertyName: String)(implicit format: Format[T]): Property[T] =
@@ -184,17 +187,21 @@ trait BasicEnvironment extends Environment
 	def propertyOptional[T](defaultValue: => T)(implicit manifest: Manifest[T], format: Format[T]): Property[T] =
 		new UserProperty[T](Some(defaultValue), format, true, manifest)
 	
-	private type AnyProperty = UserProperty[T] forSome {type T}
+	private type AnyUserProperty = UserProperty[_]//T] forSome {type T}
 	/** Maps property name to property.  The map is populated by 'initializeEnvironment'.*/
-	private val propertyMap = new scala.collection.mutable.HashMap[String, AnyProperty]
+	private val propertyMap = new scala.collection.mutable.HashMap[String, AnyUserProperty]
 	
 	import java.util.Properties
 	/** Initializes 'propertyMap' by reflectively listing the vals on this object that
 	* reference a UserProperty. */
 	private[sbt] def initializeEnvironment()
 	{
+		// AnyProperty is required because the return type of the property*[T] methods is Property[T]
+		// and so the vals we are looking for have type Property[T] and not UserProperty[T]
+		// We then only keep instances of UserProperty
+		type AnyProperty = Property[_]
 		val vals = Environment.reflectiveMappings(this, classOf[AnyProperty])
-		for( (name, property) <- vals)
+		for( (name, property: AnyUserProperty) <- vals)
 			propertyMap(name) = property
 		
 		val properties = new Properties

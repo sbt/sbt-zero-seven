@@ -22,7 +22,7 @@ object Main
 			case Right(project) =>
 			{
 				// in interactive mode, fill all undefined properties
-				if(args.length > 0 || fillUndefinedProjectProperties(project.topologicalSort.toList))
+				if(args.length > 0 || fillUndefinedProjectProperties(project.topologicalSort.toList.reverse))
 					startProject(project, args, startTime)
 			}
 		}
@@ -245,7 +245,7 @@ object Main
 			{
 				val uninitialized = project.uninitializedProperties.toList
 				if(uninitialized.isEmpty)
-					true
+					fillUndefinedProjectProperties(remaining)
 				else
 				{
 					project.log.error("Project in " + FileUtilities.printableFilename(project.info.projectDirectory) +
