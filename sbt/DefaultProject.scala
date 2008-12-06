@@ -188,6 +188,8 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val graph = graphTask(graphPath, mainCompileConditional.analysis).dependsOn(compile)
 	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, updateOptions: _*) describedAs UpdateDescription
 	lazy val cleanLib = cleanLibTask(managedDependencyPath) describedAs CleanLibDescription
+	lazy val incrementVersion = task { incrementVersionNumber(); None } describedAs IncrementVersionDescription
+	lazy val release = (compile && test && packageAll && incrementVersion) describedAs ReleaseDescription
 	
 	import StringUtilities.nonEmpty
 	implicit def toGroupID(groupID: String): GroupID =
@@ -236,6 +238,10 @@ object BasicScalaProject
 		"Resolves and retrieves automatically managed dependencies."
 	val CleanLibDescription =
 		"Deletes the managed library directory."
+	val IncrementVersionDescription =
+		"Increments the micro part of the version (the third number) by one. (This is only valid for versions of the form #.#.#.*)"
+	val ReleaseDescription =
+		"Compiles, tests, generates documentation, packages, and increments the version."
 		
 	val ScalaCheckPropertiesClassName = "org.scalacheck.Properties" 
 }

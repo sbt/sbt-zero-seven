@@ -157,6 +157,16 @@ trait ScalaProject extends Project
 			val jarPath = outputDirectory / jarName
 			FileUtilities.pack(sources.get, jarPath, manifest, recursive, log)
 		}
+	
+	def incrementVersionNumber()
+	{
+		for(BasicVersion(major, minor, micro, extra) <- projectVersion.get)
+		{
+			val newVersion = BasicVersion(major, minor, Some(micro.getOrElse(0) + 1), extra)
+			log.info("Changing version to " + newVersion)
+			projectVersion() = newVersion
+		}
+	}
 }
 trait ManagedScalaProject extends ScalaProject
 {
