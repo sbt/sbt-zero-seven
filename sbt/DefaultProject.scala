@@ -18,23 +18,29 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	val mainCompileConditional = new CompileConditional(mainCompileConfiguration)
 	val testCompileConditional = new CompileConditional(testCompileConfiguration)
 
-	def allSources = (mainScalaSourcePath +++ mainResourcesPath +++ testScalaSourcePath +++ testResourcesPath) ** defaultIncludeAll
-	def mainSources = mainScalaSourcePath ** defaultIncludeAll * "*.scala"
-	def testSources = testScalaSourcePath ** defaultIncludeAll * "*.scala"
-	def mainResources = (mainResourcesPath ##) ** defaultIncludeAll
-	def testResources = (testResourcesPath ##) ** defaultIncludeAll
+	def defaultExcludes = ".svn" | ".cvs"
+	
+	def allSources =
+	{
+		val sourceDirs = (mainScalaSourcePath +++ mainResourcesPath +++ testScalaSourcePath +++ testResourcesPath)
+		descendents(sourceDirs, "*")
+	}
+	/** Short for parent.descendentsExcept(include, defaultExcludes)*/
+	def descendents(parent: PathFinder, include: NameFilter) = parent.descendentsExcept(include, defaultExcludes)
+	
+	def mainSources = descendents(mainScalaSourcePath, "*.scala")
+	def testSources = descendents(testScalaSourcePath, "*.scala")
+	def mainResources = descendents(mainResourcesPath ##, "*")
+	def testResources = descendents(testResourcesPath ##, "*")
 	
 	def mainClasses = (mainCompilePath ##) ** "*.class"
 	def testClasses = (testCompilePath ##) ** "*.class"
 	
-	def defaultExcludes = ".svn" | ".cvs"
-	def defaultIncludeAll = -defaultExcludes
-	
 	import Project._
 	
+	def normalizedName = name.toLowerCase.replaceAll("""\s+""", "-")
 	def projectID: ModuleID =
 	{
-		val normalizedName = name.toLowerCase.replaceAll("""\s+""", "-")
 		normalizedName % normalizedName % version.toString
 	}
 	def excludeIDs = projectID :: Nil
@@ -101,9 +107,9 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 				configDirectory
 			else
 				managedDependencyPath / Configurations.Default
-		useDirectory ** defaultIncludeAll * "*.jar"
+		descendents(useDirectory, "*.jar")
 	}
-	def unmanagedClasspath: PathFinder = dependencyPath ** "*.jar"
+	def unmanagedClasspath: PathFinder = descendents(dependencyPath, "*.jar")
 	def projectClasspath(config: String, includeTestCompilePath: Boolean) =
 	{
 		val base = mainCompilePath +++ unmanagedClasspath +++ managedClasspath(config)
@@ -238,7 +244,7 @@ trait BasicProjectPaths extends Project
 	import BasicProjectPaths._
 	
 	//////////// Paths ///////////
-		
+	
 	def defaultJarBaseName = name + "-" + version.toString
 	def defaultJarName = defaultJarBaseName + ".jar"
 	

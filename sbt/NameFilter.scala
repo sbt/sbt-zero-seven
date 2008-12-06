@@ -9,6 +9,7 @@ trait NameFilter extends NotNull
 {
 	def accept(name: String): Boolean
 	def | (filter: NameFilter): NameFilter = new SimpleFilter( name => accept(name) || filter.accept(name) )
+	def & (filter: NameFilter): NameFilter = new SimpleFilter( name => accept(name) && filter.accept(name) )
 	def - (filter: NameFilter): NameFilter = new SimpleFilter( name => accept(name) && !filter.accept(name) )
 	def unary_- : NameFilter = new SimpleFilter( name => !accept(name) )
 }
@@ -24,9 +25,20 @@ class PatternFilter(pattern: Pattern) extends NameFilter
 {
 	def accept(name: String) = pattern.matcher(name).matches
 }
-class GlobFilter(expression: String) extends PatternFilter(GlobFilter.makePattern(expression))
+object AllPassFilter extends NameFilter
+{
+	def accept(name: String) = true
+}
 
 object GlobFilter
 {
-	def makePattern(expression: String) = Pattern.compile(expression.split("\\*").map(Pattern.quote).mkString(".*"))
+	def apply(expression: String): NameFilter =
+	{
+		if(expression == "*")
+			AllPassFilter
+		else if(expression.indexOf('*') < 0)
+			new ExactFilter(expression)
+		else
+			new PatternFilter(Pattern.compile(expression.split("\\*").map(Pattern.quote).mkString(".*")))
+	}
 }

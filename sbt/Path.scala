@@ -11,7 +11,11 @@ import scala.collection.mutable.{Set, HashSet}
 sealed abstract class Path extends PathFinder with NotNull
 {
 	def ## : Path = new BaseDirectory(this)
-	private[sbt] def addTo(pathSet: Set[Path]) { pathSet += this }
+	private[sbt] def addTo(pathSet: Set[Path])
+	{
+		if(asFile.exists)
+			pathSet += this
+	}
 	override def / (component: String): Path = if(component == ".") this else new RelativePath(this, component)
 	def asFile: File
 	def asURL = asFile.toURI.toURL
@@ -154,11 +158,14 @@ sealed abstract class PathFinder extends NotNull
 {
 	/** The union of the paths found by this with the paths found by 'paths'.*/
 	def +++(paths: PathFinder): PathFinder = new Paths(this, paths)
-	def ***(filter: NameFilter): PathFinder = new DescendentPathFinder(this, filter, false)
-	def **(filter: NameFilter): PathFinder = new DescendentPathFinder(this, filter, true)
+	def ---(excludePaths: PathFinder): PathFinder = new ExcludePaths(this, excludePaths)
+	def **(filter: NameFilter): PathFinder = new DescendentOrSelfPathFinder(this, filter)
 	def *(filter: NameFilter): PathFinder = new ChildPathFinder(this, filter)
 	def / (literal: String): PathFinder = new ChildPathFinder(this, new ExactFilter(literal))
 	final def \ (literal: String): PathFinder = this / literal
+
+	def descendentsExcept(include: NameFilter, intermediateExclude: NameFilter): PathFinder =
+		(this ** include) --- (this ** intermediateExclude ** include)
 	
 	/** Evaluates this finder.*/
 	final def get: scala.collection.Set[Path] =
@@ -175,26 +182,26 @@ private abstract class FilterPath extends PathFinder with FileFilter
 	def filter: NameFilter
 	final def accept(file: File) = filter.accept(file.getName)
 	
-	protected object DirectoryFilter extends FileFilter
-	{
-		def accept(file: File) = file.isDirectory && FilterPath.this.accept(file)
-	}
 	protected def handlePath(path: Path, pathSet: Set[Path])
 	{
 		for(matchedFile <- wrapNull(path.asFile.listFiles(this)))
 			pathSet += path / matchedFile.getName
 	}
 }
-private class DescendentPathFinder(val parent: PathFinder, val filter: NameFilter, val includeSelf: Boolean) extends FilterPath
+private class DescendentOrSelfPathFinder(val parent: PathFinder, val filter: NameFilter) extends FilterPath
 {
 	private[sbt] def addTo(pathSet: Set[Path])
 	{
 		for(path <- parent.get)
 		{
-			if(includeSelf && accept(path.asFile))
+			if(accept(path.asFile))
 				pathSet += path
 			handlePathDescendent(path, pathSet)
 		}
+	}
+	protected object DirectoryFilter extends FileFilter
+	{
+		def accept(file: File) = file.isDirectory
 	}
 	private def handlePathDescendent(path: Path, pathSet: Set[Path])
 	{
@@ -217,5 +224,19 @@ private class Paths(a: PathFinder, b: PathFinder) extends PathFinder
 	{
 		a.addTo(pathSet)
 		b.addTo(pathSet)
+	}
+}
+private class ExcludePaths(include: PathFinder, exclude: PathFinder) extends PathFinder
+{
+	private[sbt] def addTo(pathSet: Set[Path])
+	{
+		val includeSet = new HashSet[Path]
+		include.addTo(includeSet)
+		
+		val excludeSet = new HashSet[Path]
+		exclude.addTo(excludeSet)
+		
+		includeSet --= excludeSet
+		pathSet ++= includeSet
 	}
 }

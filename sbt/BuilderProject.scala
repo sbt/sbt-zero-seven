@@ -17,13 +17,11 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject
 	def dependencyPath = path(DefaultDependencyDirectoryName)
 	
 	def defaultExcludes = ".svn" | ".cvs"
-	def defaultIncludeAll = -defaultExcludes
-	def libraries = dependencyPath ** defaultIncludeAll * "*.jar"
+	def libraries = dependencyPath.descendentsExcept("*.jar", defaultExcludes)
 	
 	def compileOptions = Deprecation :: Unchecked :: Nil
 	override def tasks = Map.empty
 	def dependencies = Nil
-	
 	
 	def projectClasspath = compilePath +++ libraries +++
 		Path.lazyPathFinder { new ProjectDirectory(FileUtilities.sbtJar) :: Nil }
@@ -66,7 +64,7 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject
 		new CompileConfiguration
 		{
 			def label = "builder"
-			def sources = sourcePath ** defaultIncludeAll * "*.scala"
+			def sources = sourcePath.descendentsExcept("*.scala", defaultExcludes)
 			def outputDirectory = compilePath
 			def classpath = projectClasspath
 			def analysisPath = outputPath / DefaultMainAnalysisDirectoryName

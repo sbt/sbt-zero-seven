@@ -231,7 +231,7 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 			/** This checks that the plugin accounted for all classes in the output directory.*/
 			val classes = scala.collection.mutable.HashSet(analysis.allProducts.toSeq: _*)
 			var missed = 0
-			for(c <- (outputDirectory ** new GlobFilter("*.class")).get)
+			for(c <- (outputDirectory ** GlobFilter("*.class")).get)
 			{
 				if(!classes.contains(c))
 				{
