@@ -7,7 +7,7 @@ import java.io.{File, FileFilter}
 import scala.collection.Set
 import scala.collection.mutable.{HashSet, ListBuffer}
 
-object ClasspathUtilities
+private[sbt] object ClasspathUtilities
 {
 	def isArchive(path: Path): Boolean = isArchive(path.asFile)
 	def isArchive(file: File): Boolean = isArchiveName(file.getName)

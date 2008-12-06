@@ -9,12 +9,12 @@ import java.util.jar.{JarEntry, JarOutputStream, Manifest}
 
 object FileUtilities
 {
-	val BufferSize = 8192
-	val Newline = System.getProperty("line.separator")
+	private val BufferSize = 8192
+	private val Newline = System.getProperty("line.separator")
 	
-	val PathSeparatorPattern = java.util.regex.Pattern.compile("""[;:]""")
+	private val PathSeparatorPattern = java.util.regex.Pattern.compile("""[;:]""")
 
-	def pathSplit(s: String) = PathSeparatorPattern.split(s)
+	private[sbt] def pathSplit(s: String) = PathSeparatorPattern.split(s)
 	
 	def pack(sources: Iterable[Path], outputJar: Path, manifest: Manifest, recursive: Boolean, log: Logger) =
 	{
@@ -202,7 +202,7 @@ object FileUtilities
 		}
 	}
 	
-	def open[T](file: File, log: Logger, constructor: File => T): Either[String, T] =
+	private def open[T](file: File, log: Logger, constructor: File => T): Either[String, T] =
 	{
 		val parent = file.getParentFile
 		if(parent != null)
@@ -217,10 +217,10 @@ object FileUtilities
 			}
 		}
 	}
-	def fileInputStream(file: File, log: Logger) = open(file, log, (f: File) => new FileInputStream(f))
-	def fileOutputStream(file: File, log: Logger) = open(file, log, (f: File) => new FileOutputStream(f))
-	def fileWriter(file: File, log: Logger) = open(file, log, (f: File) => new FileWriter(f))
-	def fileReader(file: File, log: Logger) = open(file, log, (f: File) => new FileReader(f))
+	private def fileInputStream(file: File, log: Logger) = open(file, log, (f: File) => new FileInputStream(f))
+	private def fileOutputStream(file: File, log: Logger) = open(file, log, (f: File) => new FileOutputStream(f))
+	private def fileWriter(file: File, log: Logger) = open(file, log, (f: File) => new FileWriter(f))
+	private def fileReader(file: File, log: Logger) = open(file, log, (f: File) => new FileReader(f))
 	private def io[T <: Closeable](file: File, open: (File, Logger) => Either[String, T],
 		f: T => Option[String], op: String, log: Logger): Option[String] =
 	{
@@ -253,7 +253,7 @@ object FileUtilities
 	def readStream(file: File, log: Logger)(f: InputStream => Option[String]): Option[String] =
 		io(file, fileInputStream, f, "reading", log)
 	
-	def wrapNull(a: Array[File]): Array[File] =
+	private[sbt] def wrapNull(a: Array[File]): Array[File] =
 		if(a == null)
 			new Array[File](0)
 		else

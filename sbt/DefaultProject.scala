@@ -180,8 +180,8 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val docAll = (doc && docTest) describedAs DocAllDescription
 	lazy val packageAll = (`package` && packageTest && packageSrc && packageDocs) describedAs PackageAllDescription
 	lazy val graph = graphTask(graphPath, mainCompileConditional.analysis).dependsOn(compile)
-	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, updateOptions: _*)
-	lazy val cleanLib = cleanLibTask(managedDependencyPath)
+	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, updateOptions: _*) describedAs UpdateDescription
+	lazy val cleanLib = cleanLibTask(managedDependencyPath) describedAs CleanLibDescription
 	
 	import StringUtilities.nonEmpty
 	implicit def toGroupID(groupID: String): GroupID =
@@ -199,7 +199,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 object BasicScalaProject
 {
 	val CleanDescription =
-		"Deletes all generated files (the target directory and the analysis directory)."
+		"Deletes all generated files (the target directory)."
 	val MainCompileDescription =
 		"Compiles main sources."
 	val TestCompileDescription =
@@ -211,7 +211,7 @@ object BasicScalaProject
 	val TestDocDescription =
 		"Generates API documentation for test Scala source files using scaladoc."
 	val RunDescription =
-		"Runs the main class specified for the project or starts the console if main class is undefined."
+		"Runs the main class specified for the project or starts the console if main class is not specified."
 	val ConsoleDescription =
 		"Starts the Scala interpreter with the project classes on the classpath."
 	val PackageDescription =
@@ -226,6 +226,10 @@ object BasicScalaProject
 		"Executes all package tasks."
 	val DocAllDescription =
 		"Generates both main and test documentation."
+	val UpdateDescription =
+		"Resolves and retrieves automatically managed dependencies."
+	val CleanLibDescription =
+		"Deletes the managed library directory."
 		
 	val ScalaCheckPropertiesClassName = "org.scalacheck.Properties" 
 }
