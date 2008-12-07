@@ -117,7 +117,7 @@ trait ScalaProject extends Project
 			Scaladoc(label, sources.get, classpathString, outputDirectory, options.flatMap(_.asList), log)
 		}
 
-	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: String, options: PackageOption*) =
+	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: PackageOption*) =
 		task
 		{
 			import scala.collection.jcl.Map

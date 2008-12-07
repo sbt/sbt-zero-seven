@@ -189,7 +189,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, updateOptions: _*) describedAs UpdateDescription
 	lazy val cleanLib = cleanLibTask(managedDependencyPath) describedAs CleanLibDescription
 	lazy val incrementVersion = task { incrementVersionNumber(); None } describedAs IncrementVersionDescription
-	lazy val release = (compile && test && packageAll && incrementVersion) describedAs ReleaseDescription
+	lazy val release = (test && packageAll && incrementVersion) describedAs ReleaseDescription
 	
 	import StringUtilities.nonEmpty
 	implicit def toGroupID(groupID: String): GroupID =
