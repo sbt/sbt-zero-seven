@@ -34,11 +34,13 @@ object GlobFilter
 {
 	def apply(expression: String): NameFilter =
 	{
+		require(!expression.exists(java.lang.Character.isISOControl), "Control characters not allowed in filter expression.")
 		if(expression == "*")
 			AllPassFilter
-		else if(expression.indexOf('*') < 0)
+		else if(expression.indexOf('*') < 0) // includes case where expression is empty
 			new ExactFilter(expression)
 		else
-			new PatternFilter(Pattern.compile(expression.split("\\*").map(Pattern.quote).mkString(".*")))
+			new PatternFilter(Pattern.compile(expression.split("\\*", -1).map(quote).mkString(".*")))
 	}
+	private def quote(s: String) = if(s.isEmpty) "" else Pattern.quote(s.replaceAll("\n", """\n"""))
 }

@@ -86,7 +86,7 @@ sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) e
 	def products(source: Path) = productMap.get(source)
 	
 	def allSources = sourceDependencyMap.keySet
-	def allProducts = productMap.keySet
+	def allProducts: Set[Path] = HashSet(productMap.values.toList.flatten[Path].toSeq : _*)
 	def allExternals = externalDependencyMap.keySet
 	
 	def allExternalDependencies = readOnlyIterable(externalDependencyMap)
