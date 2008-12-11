@@ -160,13 +160,18 @@ trait ScalaProject extends Project
 	
 	def incrementVersionNumber()
 	{
-		for(BasicVersion(major, minor, micro, extra) <- projectVersion.get)
+		projectVersion.get match
 		{
-			val newVersion = BasicVersion(major, minor, Some(micro.getOrElse(0) + 1), extra)
-			log.info("Changing version to " + newVersion)
-			projectVersion() = newVersion
+			case v: BasicVersion =>
+			{
+				val newVersion = incrementImpl(v)
+				log.info("Changing version to " + newVersion)
+				projectVersion() = newVersion
+			}
+			case _ => ()
 		}
 	}
+	protected def incrementImpl(v: BasicVersion): Version = v.incrementMicro
 }
 trait ManagedScalaProject extends ScalaProject
 {

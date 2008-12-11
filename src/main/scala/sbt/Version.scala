@@ -6,16 +6,30 @@ package sbt
 sealed trait Version extends NotNull
 case class BasicVersion(major: Int, minor: Option[Int], micro: Option[Int], extra: Option[String]) extends Version
 {
+	import Version._
+	require(major >= 0)
+	requirePositive(minor)
+	requirePositive(micro)
+	require(isValidExtra(extra))
+	
+	def incrementMicro = BasicVersion(major, minor, increment(micro), extra)
+	def incrementMinor = BasicVersion(major, increment(minor), micro, extra)
+	def incrementMajor = BasicVersion(major+1, minor, micro, extra)
+	
 	override def toString = major +
 		minor.map(minorI => "." + minorI + micro.map(microI => "." + microI).getOrElse("")).getOrElse("") +
 			extra.map(x => "-" + x).getOrElse("")
 }
 case class OpaqueVersion(value: String) extends Version
 {
+	require(!value.isEmpty)
 	override def toString = value
 }
 object Version
 {
+	private[sbt] def increment(i: Option[Int]) = Some(i.getOrElse(0) + 1)
+	private[sbt] def requirePositive(i: Option[Int]) { i.foreach(x => require(x >= 0)) }
+	
 	import java.util.regex.Pattern
 	val versionPattern = Pattern.compile("""(\d+)(?:\.(\d+)(?:\.(\d+))?)?(?:-(.+))?""")
 	def fromString(v: String): Either[String, Version] =
@@ -34,15 +48,13 @@ object Version
 					val v = group(index)
 					if(v == null) None else Some(v)
 				}
-				def toInt(index: Int) =
-				{
-					val v = group(index)
-					if(v == null) None else Some(v.toInt)
-				}
+				def toInt(index: Int) = toOption(index).map(_.toInt)
 				Right(BasicVersion(group(1).toInt, toInt(2), toInt(3), toOption(4)))
 			}
 			else
 				Right(OpaqueVersion(trimmed))
 		}
 	}
+	def isValidExtra(e: Option[String]): Boolean = e.map(isValidExtra).getOrElse(true)
+	def isValidExtra(s: String): Boolean = !(s.trim.isEmpty || s.exists(java.lang.Character.isISOControl))
 }

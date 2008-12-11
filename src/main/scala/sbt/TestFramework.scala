@@ -129,6 +129,7 @@ import java.net.{URL, URLClassLoader}
 private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], parent: ClassLoader)
 	extends URLClassLoader(urls, parent) with NotNull
 {
+	require(parent != null) // included because a null parent is legitimate in Java
 	@throws(classOf[ClassNotFoundException])
 	override def loadClass(className: String, resolve: Boolean): Class[_] =
 	{
@@ -136,10 +137,10 @@ private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], par
 		val found =
 			if(loaded == null)
 			{
-				if(className.startsWith(runnerClassName)) // this is required to get nested classes and closures
+				if(className.startsWith(runnerClassName)) // startsWith is required to get nested classes and closures
 					findClass(className)
 				else
-					super.loadClass(className, resolve)
+					parent.loadClass(className)
 			}
 			else
 				loaded

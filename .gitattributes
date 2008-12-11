@@ -46,3 +46,4 @@ src/main/scala/sbt/TrapExit.scala -text
 src/main/scala/sbt/Version.scala -text
 src/test/scala/sbt/DagSpecification.scala -text
 src/test/scala/sbt/NameFilterSpecification.scala -text
+src/test/scala/sbt/VersionSpecification.scala -text
