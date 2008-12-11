@@ -22,7 +22,7 @@ case class BasicVersion(major: Int, minor: Option[Int], micro: Option[Int], extr
 }
 case class OpaqueVersion(value: String) extends Version
 {
-	require(!value.isEmpty)
+	require(!value.trim.isEmpty)
 	override def toString = value
 }
 object Version

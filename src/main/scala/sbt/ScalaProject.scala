@@ -162,13 +162,13 @@ trait ScalaProject extends Project
 	{
 		projectVersion.get match
 		{
-			case v: BasicVersion =>
+			case Some(v: BasicVersion) =>
 			{
 				val newVersion = incrementImpl(v)
 				log.info("Changing version to " + newVersion)
 				projectVersion() = newVersion
 			}
-			case _ => ()
+			case a => ()
 		}
 	}
 	protected def incrementImpl(v: BasicVersion): Version = v.incrementMicro
