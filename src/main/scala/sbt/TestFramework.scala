@@ -37,7 +37,7 @@ abstract class BasicTestRunner extends TestRunner
 		}
 		catch
 		{
-			case e: Exception =>
+			case e =>
 			{
 				log.error("Could not run test " + testClass + ": " + e.toString)
 				log.trace(e)
@@ -82,7 +82,7 @@ object TestFramework
 	}
 	private def doRunTests(classpath: Iterable[Path], tests: Map[TestFramework, Set[String]], log: Logger): Option[String] =
 	{
-		val loader = getLoader(classpath)
+		val loader: ClassLoader = new IntermediateLoader(classpath.map(_.asURL).toSeq.toArray, getClass.getClassLoader)
 		
 		import Result._
 		var result: Value = Passed
@@ -119,29 +119,18 @@ object TestFramework
 			}
 		}
 	}
-	private def getLoader(classpath: Iterable[Path]): ClassLoader =
-	{
-		import java.net.URLClassLoader
-		new URLClassLoader(classpath.map(_.asURL).toSeq.toArray, getClass.getClassLoader)
-	}
 }
 import java.net.{URL, URLClassLoader}
-private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], parent: ClassLoader)
-	extends URLClassLoader(urls, parent) with NotNull
+private abstract class LoaderBase(urls: Array[URL], parent: ClassLoader) extends URLClassLoader(urls, parent) with NotNull
 {
 	require(parent != null) // included because a null parent is legitimate in Java
 	@throws(classOf[ClassNotFoundException])
-	override def loadClass(className: String, resolve: Boolean): Class[_] =
+	override final def loadClass(className: String, resolve: Boolean): Class[_] =
 	{
 		val loaded = findLoadedClass(className)
 		val found =
 			if(loaded == null)
-			{
-				if(className.startsWith(runnerClassName)) // startsWith is required to get nested classes and closures
-					findClass(className)
-				else
-					parent.loadClass(className)
-			}
+				doLoadClass(className)
 			else
 				loaded
 			
@@ -149,6 +138,43 @@ private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], par
 			resolveClass(found)
 		found
 	}
+	protected def doLoadClass(className: String): Class[_]
+	protected final def selfLoadClass(className: String): Class[_] = super.loadClass(className, false)
+}
+private class IntermediateLoader(urls: Array[URL], parent: ClassLoader) extends LoaderBase(urls, parent) with NotNull
+{
+	def doLoadClass(className: String): Class[_] =
+	{
+		 // if this loader is asked to load an sbt class, it must be because the project we are testing is sbt itself,
+		 // so we want to load the version of classes on the project classpath, not the parent
+		if(className.startsWith(Loaders.SbtPackage))
+		{
+			//println("Intermediate load sbt class '" + className + "'")
+			findClass(className)
+		}
+		else
+		{
+			//println("Intermediate load non-sbt class '" + className + "'")
+			selfLoadClass(className)
+		}
+	}
+}
+private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], parent: ClassLoader, grandparent: ClassLoader)
+	extends LoaderBase(urls, parent) with NotNull
+{
+	def doLoadClass(className: String): Class[_] =
+	{
+		if(className.startsWith(runnerClassName)) // startsWith is required to get nested classes and closures
+			findClass(className)
+		else if(className.startsWith(Loaders.SbtPackage)) // we circumvent the parent loader because we know that we want the
+			grandparent.loadClass(className)              // version of sbt that is currently the builder (not the project being built)
+		else
+			parent.loadClass(className)
+	}
+}
+private object Loaders
+{
+	val SbtPackage = "sbt."
 }
 sealed abstract class LazyTestFramework extends TestFramework
 {
@@ -157,12 +183,12 @@ sealed abstract class LazyTestFramework extends TestFramework
 	protected def testRunnerClassName: String
 	
 	/** Creates an instance of the runner given by 'testRunnerClassName'.*/
-	final def testRunner(loader: ClassLoader, log: Logger): TestRunner =
+	final def testRunner(projectLoader: ClassLoader, log: Logger): TestRunner =
 	{
 		val runnerClassName = testRunnerClassName
-		val lazyLoader = new LazyFrameworkLoader(runnerClassName, Array(FileUtilities.sbtJar.toURI.toURL), loader)
+		val lazyLoader = new LazyFrameworkLoader(runnerClassName, Array(FileUtilities.sbtJar.toURI.toURL), projectLoader, getClass.getClassLoader)
 		val runnerClass = Class.forName(runnerClassName, true, lazyLoader).asSubclass(classOf[TestRunner])
-		runnerClass.getConstructor(classOf[Logger]).newInstance(log)
+		runnerClass.getConstructor(classOf[Logger], classOf[ClassLoader]).newInstance(log, projectLoader)
 	}
 }
 /** The test framework definition for ScalaTest.*/
@@ -207,12 +233,12 @@ object SpecsFramework extends LazyTestFramework
 *  framework are defined.*/
 
 /** The test runner for ScalaCheck tests. */
-private class ScalaCheckRunner(val log: Logger) extends BasicTestRunner
+private class ScalaCheckRunner(val log: Logger, testLoader: ClassLoader) extends BasicTestRunner
 {
 	import org.scalacheck.{Pretty, Properties, Test}
-	def runTest(testClass: String): Result.Value =
+	def runTest(testClassName: String): Result.Value =
 	{
-		val test = ModuleUtilities.getObject(testClass, getClass.getClassLoader).asInstanceOf[Properties]
+		val test = ModuleUtilities.getObject(testClassName, testLoader).asInstanceOf[Properties]
 		if(Test.checkProperties(test, Test.defaultParams, propReport, testReport).find(!_._2.passed).isEmpty)
 			Result.Passed
 		else
@@ -230,12 +256,12 @@ private class ScalaCheckRunner(val log: Logger) extends BasicTestRunner
 	}
 }
 /** The test runner for ScalaTest suites. */
-private class ScalaTestRunner(val log: Logger) extends BasicTestRunner
+private class ScalaTestRunner(val log: Logger, testLoader: ClassLoader) extends BasicTestRunner
 {
 	def runTest(testClassName: String): Result.Value =
 	{
 		import org.scalatest.{Stopper, Suite}
-		val testClass = Class.forName(testClassName, true, getClass.getClassLoader).asSubclass(classOf[Suite])
+		val testClass = Class.forName(testClassName, true, testLoader).asSubclass(classOf[Suite])
 		val test = testClass.newInstance
 		val reporter = new ScalaTestReporter
 		val stopper = new Stopper { override def stopRequested = false }
@@ -288,16 +314,16 @@ private class ScalaTestRunner(val log: Logger) extends BasicTestRunner
 	}
 }
 /** The test runner for specs tests. */
-private class SpecsRunner(val log: Logger) extends BasicTestRunner
+private class SpecsRunner(val log: Logger, testLoader: ClassLoader) extends BasicTestRunner
 {
 	import org.specs.Specification
 	import org.specs.runner.TextFormatter
 	import org.specs.specification.{Example, Sus}
 	
 	val Indent = "  "
-	def runTest(testClass: String): Result.Value =
+	def runTest(testClassName: String): Result.Value =
 	{
-		val test = ModuleUtilities.getObject(testClass, getClass.getClassLoader).asInstanceOf[Specification]
+		val test = ModuleUtilities.getObject(testClassName, testLoader).asInstanceOf[Specification]
 		reportSpecification(test, "")
 		if(test.isFailing)
 			Result.Failed
