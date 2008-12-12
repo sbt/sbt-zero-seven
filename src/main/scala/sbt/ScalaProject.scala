@@ -75,13 +75,17 @@ trait ScalaProject extends Project
 		val Private = Value("private")
 	}
 
-	def consoleTask(classpath : PathFinder) = 
+	def consoleTask(classpath : PathFinder): Task = 
 		interactiveTask { Run.console(classpath.get, log) }
 
-	def runTask(mainClass: Option[String], classpath: PathFinder, options: String*) =	
+	def runTask(mainClass: Option[String], classpath: PathFinder, options: String*): Task =
+		runTask(mainClass, classpath, options)
+	def runTask(mainClass: Option[String], classpath: PathFinder, options: => Seq[String]): Task =
 		interactiveTask { Run(mainClass, classpath.get, options, log) }
 
-	def cleanTask(paths: PathFinder, options: CleanOption*) =
+	def cleanTask(paths: PathFinder, options: CleanOption*): Task =
+		cleanTask(paths, options)
+	def cleanTask(paths: PathFinder, options: => Seq[CleanOption]): Task =
 		task {
 			val pathClean = FileUtilities.clean(paths.get, log)
 			for(ClearAnalysis(analysis) <- options)
@@ -92,7 +96,9 @@ trait ScalaProject extends Project
 			pathClean
 		}
 
-	def testTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: TestOption*) = 
+	def testTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: TestOption*): Task =
+		testTask(frameworks, classpath, analysis, options)
+	def testTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]): Task =
 		task
 		{
 			import scala.collection.mutable.HashSet
@@ -109,15 +115,19 @@ trait ScalaProject extends Project
 			TestFramework.runTests(frameworks, classpath.get, tests, log)
 		}
 
-	def graphTask(outputDirectory: Path, analysis: CompileAnalysis) = task { DotGraph(analysis, outputDirectory, log) }
-	def scaladocTask(label: String, sources: PathFinder, outputDirectory: Path, classpath: PathFinder, options: ScaladocOption*) =
+	def graphTask(outputDirectory: Path, analysis: CompileAnalysis): Task = task { DotGraph(analysis, outputDirectory, log) }
+	def scaladocTask(label: String, sources: PathFinder, outputDirectory: Path, classpath: PathFinder, options: ScaladocOption*): Task =
+		scaladocTask(label, sources, outputDirectory, classpath, options)
+	def scaladocTask(label: String, sources: PathFinder, outputDirectory: Path, classpath: PathFinder, options: => Seq[ScaladocOption]): Task =
 		task
 		{
 			val classpathString = Path.makeString(classpath.get)
 			Scaladoc(label, sources.get, classpathString, outputDirectory, options.flatMap(_.asList), log)
 		}
 
-	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: PackageOption*) =
+	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: PackageOption*): Task =
+		packageTask(sources, outputDirectory, jarName, options)
+	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: => Seq[PackageOption]): Task =
 		task
 		{
 			import scala.collection.jcl.Map
@@ -182,7 +192,9 @@ trait ManagedScalaProject extends ScalaProject
 	final val QuietUpdate = new ManagedFlagOption
 	final case class LibraryManager(m: Manager) extends ManagedOption
 	
-	def updateTask(outputPattern: String, managedDependencyPath: Path, options: ManagedOption*) =
+	def updateTask(outputPattern: String, managedDependencyPath: Path, options: ManagedOption*): Task =
+		updateTask(outputPattern, managedDependencyPath, options)
+	def updateTask(outputPattern: String, managedDependencyPath: Path, options: => Seq[ManagedOption]) =
 		task
 		{
 			var synchronize = false

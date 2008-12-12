@@ -7,12 +7,13 @@ sealed trait Version extends NotNull
 case class BasicVersion(major: Int, minor: Option[Int], micro: Option[Int], extra: Option[String]) extends Version
 {
 	import Version._
-	require(major >= 0)
+	require(major >= 0, "Major revision must be nonnegative.")
+	require(minor.isDefined || micro.isEmpty, "Cannot define micro revision without defining minor revision.")
 	requirePositive(minor)
 	requirePositive(micro)
 	require(isValidExtra(extra))
 	
-	def incrementMicro = BasicVersion(major, minor, increment(micro), extra)
+	def incrementMicro = BasicVersion(major, minor orElse Some(0), increment(micro), extra)
 	def incrementMinor = BasicVersion(major, increment(minor), micro, extra)
 	def incrementMajor = BasicVersion(major+1, minor, micro, extra)
 	

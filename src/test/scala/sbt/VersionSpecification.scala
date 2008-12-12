@@ -11,11 +11,22 @@ object VersionSpecification extends Properties("Version")
 	specify("Empty or whitespace only string not allowed, all others allowed",
 		(s: String) => Version.fromString(s).isLeft == s.trim.isEmpty)
 	specify("BasicVersion round trips", checkRoundTrip _)
+	specify("BasicVersion increment major", checkIncrementMajor _)
+	specify("BasicVersion increment minor", checkIncrementMinor _)
+	specify("BasicVersion increment micro", checkIncrementMicro _)
 	
 	private def checkRoundTrip(v: BasicVersion) =
 	{
 		val v2 = Version.fromString(v.toString)
 		v2.isRight && v2.right.get == v
+	}
+	private def checkIncrementMinor(v: BasicVersion) = checkIncrement(v, _.incrementMinor)
+	private def checkIncrementMajor(v: BasicVersion) = checkIncrement(v, _.incrementMajor)
+	private def checkIncrementMicro(v: BasicVersion) = checkIncrement(v, _.incrementMicro)
+	private def checkIncrement(v: BasicVersion, increment: (BasicVersion => BasicVersion)) =
+	{
+		val vNew = increment(v)
+		checkRoundTrip(vNew)  && vNew != v
 	}
 }
 object ArbitraryVersion
@@ -31,7 +42,13 @@ object ArbitraryVersion
 			minor <- arbOption[Int].arbitrary
 			micro <- arbOption[Int].arbitrary
 			extra <- genExtra }
-		yield BasicVersion(abs(major), minor.map(abs), micro.map(abs), extra)
+		yield
+		{
+			 if(minor.isEmpty && micro.isDefined)
+			 	BasicVersion(abs(major), micro.map(abs), None, extra)
+			 else
+			 	BasicVersion(abs(major), minor.map(abs), micro.map(abs), extra)
+		}
 	lazy val genOpaqueVersion = for(versionString <- arbString.arbitrary if !versionString.trim.isEmpty) yield OpaqueVersion(versionString)
 	lazy val genVersion = Gen.frequency((5,genBasicVersion), (1,genOpaqueVersion))
 	
