@@ -33,6 +33,7 @@ trait ScalaProject extends Project
 	val Deprecation = CompileOption("-deprecation")
 	val ExplainTypes = CompileOption("-explaintypes")
 	val Optimize = CompileOption("-optimise")
+	def Optimise = Optimize
 	val Verbose = CompileOption("-verbose")
 	val Unchecked = CompileOption("-unchecked")
 	val DisableWarnings = CompileOption("-nowarn")
