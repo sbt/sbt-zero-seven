@@ -15,13 +15,10 @@ private[sbt] object ClasspathUtilities
 	// (jars, dirs)
 	def separate(paths: Iterable[File]): (Iterable[File], Iterable[File]) = paths.partition(isArchive)
 	def separatePaths(paths: Iterable[Path]) = separate(paths.map(_.asFile.getCanonicalFile))
-	def buildSearchPaths(classpath: Iterable[Path]): (Set[File], Iterable[File]) =
+	def buildSearchPaths(classpath: Iterable[Path]): (Set[File], Set[File]) =
 	{
 		val (jars, dirs) = separatePaths(classpath)
-		val jarSet = new HashSet[File]
-		jarSet ++= jars
-		jarSet ++= extraJars
-		(jarSet, dirs ++ extraDirs)
+		(linkedSet(jars ++ extraJars), linkedSet(dirs ++ extraDirs))
 	}
 	def onClasspath(classpathJars: Set[File], classpathDirectories: Iterable[File], file: File): Boolean =
 	{
@@ -38,7 +35,7 @@ private[sbt] object ClasspathUtilities
 		val settings = (new GenericRunnerCommand(Nil, message => error(message))).settings
 		val bootPaths = FileUtilities.pathSplit(settings.bootclasspath.value).map(p => new File(p)).toList
 		val (bootJars, bootDirs) = separate(bootPaths)
-		val extJars = 
+		val extJars =
 		{
 			val buffer = new ListBuffer[File]
 			def findJars(dir: File)
@@ -49,8 +46,15 @@ private[sbt] object ClasspathUtilities
 			}
 			for(path <- FileUtilities.pathSplit(settings.extdirs.value); val dir = new File(path) if dir.isDirectory)
 				findJars(dir)
-			buffer.readOnly
+			buffer.readOnly.map(_.getCanonicalFile)
 		}
-		(extJars ++ bootJars, bootDirs)
+		(linkedSet(extJars ++ bootJars), linkedSet(bootDirs))
+	}
+	private def linkedSet[T](s: Iterable[T]): Set[T] =
+	{
+		import scala.collection.jcl.Conversions.convertSet
+		val set: scala.collection.mutable.Set[T] = new java.util.LinkedHashSet[T]
+		set ++= s
+		set.readOnly
 	}
 }

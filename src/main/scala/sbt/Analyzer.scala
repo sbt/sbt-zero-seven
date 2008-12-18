@@ -171,7 +171,7 @@ class Analyzer(val global: Global) extends Plugin
 	{
 		import scala.tools.nsc.util.NoPosition
 		if(!path.asFile.exists)
-			unit.warning(NoPosition, "Non-existing path in list-class stage: " + path)
+			unit.warning(NoPosition, "Non-existing path during class listing stage (This is a bug in sbt, please report it): " + path)
 	}
 	private def isTopLevelModule(sym: Symbol): Boolean =
 		atPhase (currentRun.picklerPhase.next) {
