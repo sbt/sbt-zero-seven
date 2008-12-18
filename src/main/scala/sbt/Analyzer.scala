@@ -139,8 +139,8 @@ class Analyzer(val global: Global) extends Plugin
 					def addGenerated(separatorRequired: Boolean)
 					{
 						val classPath = pathOfClass(outputPath, sym, separatorRequired)
-						checkPath(unit, classPath)
-						callback.generatedClass(sourcePath, classPath)
+						if(classPath.asFile.exists)
+							callback.generatedClass(sourcePath, classPath)
 					}
 					if(sym.isModuleClass && !sym.isImplClass)
 					{
@@ -167,12 +167,6 @@ class Analyzer(val global: Global) extends Plugin
 			None
 	}
 	
-	private def checkPath(unit: CompilationUnit, path: Path)
-	{
-		import scala.tools.nsc.util.NoPosition
-		if(!path.asFile.exists)
-			unit.warning(NoPosition, "Non-existing path during class listing stage (This is a bug in sbt, please report it): " + path)
-	}
 	private def isTopLevelModule(sym: Symbol): Boolean =
 		atPhase (currentRun.picklerPhase.next) {
 			sym.isModuleClass && !sym.isImplClass && !sym.isNestedClass
