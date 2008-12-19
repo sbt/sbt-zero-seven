@@ -44,7 +44,8 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		normalizedName % normalizedName % version.toString
 	}
 	def excludeIDs = projectID :: Nil
-	def manager = SimpleManager(projectID, repositories, libraryDependencies.toList: _*)
+	def defaultExtraRepositories: Iterable[Resolver] = ScalaToolsReleases :: Nil
+	def manager = SimpleManager(projectID, repositories ++ defaultExtraRepositories, libraryDependencies.toList: _*)
 	
 	/** The options provided to the 'update' action.*/
 	def updateOptions: Seq[ManagedOption] =
