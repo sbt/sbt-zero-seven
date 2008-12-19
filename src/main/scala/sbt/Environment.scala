@@ -76,6 +76,10 @@ trait BasicEnvironment extends Environment
 	/** The identifier used in messages to refer to this environment. */
 	def environmentLabel = envBackingPath.asFile.getCanonicalPath
 	
+	private[this] var isModified = false
+	private[this] def setEnvironmentModified(modified: Boolean) { synchronized { isModified = modified } }
+	private[this] def isEnvironmentModified = synchronized { isModified }
+	
 	/** Implementation of 'Property' for user-defined properties. */
 	private[sbt] class UserProperty[T](lazyDefaultValue: => Option[T], format: Format[T], inheritEnabled: Boolean,
 		private[BasicEnvironment] val manifest: Manifest[T]) extends Property[T]
@@ -88,7 +92,7 @@ trait BasicEnvironment extends Environment
 		private lazy val defaultValue = lazyDefaultValue
 		/** The explicitly set value for this property.*/
 		private var explicitValue: Option[T] = None
-		def update(v: T): Unit = synchronized { explicitValue = Some(v) }
+		def update(v: T): Unit = synchronized { explicitValue = Some(v); setEnvironmentModified(true) }
 		def resolve: PropertyResolution[T] =
 			synchronized
 			{
@@ -223,16 +227,24 @@ trait BasicEnvironment extends Environment
 				}
 			}
 		}
+		setEnvironmentModified(false)
 	}
 	def propertyNames: Iterable[String] = propertyMap.keys.toList
 	def getPropertyNamed(name: String): Option[UserProperty[_]] = propertyMap.get(name)
 	def propertyNamed(name: String): UserProperty[_] = propertyMap(name)
 	def saveEnvironment(): Option[String] =
 	{
-		val properties = new Properties
-		for( (name, variable) <- propertyMap; stringValue <- variable.getStringValue)
-			properties.setProperty(name, stringValue)
-		PropertiesUtilities.write(properties, "Project properties", envBackingPath, log)
+		if(isEnvironmentModified)
+		{
+			val properties = new Properties
+			for( (name, variable) <- propertyMap; stringValue <- variable.getStringValue)
+				properties.setProperty(name, stringValue)
+			val result = PropertiesUtilities.write(properties, "Project properties", envBackingPath, log)
+			setEnvironmentModified(false)
+			result
+		}
+		else
+			None
 	}
 	private[sbt] def uninitializedProperties: Iterable[(String, Property[_])] = propertyMap.filter(_._2.get.isEmpty)
 	
