@@ -44,17 +44,17 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		normalizedName % normalizedName % version.toString
 	}
 	def excludeIDs = projectID :: Nil
-	def defaultExtraRepositories: Iterable[Resolver] = ScalaToolsReleases :: Nil
-	def manager = SimpleManager(projectID, repositories ++ defaultExtraRepositories, libraryDependencies.toList: _*)
+	def manager = SimpleManager(true, projectID, repositories, libraryDependencies.toList: _*)
 	
+	def baseUpdateOptions = Validate :: Synchronize :: QuietUpdate :: AddScalaToolsReleases :: Nil
 	/** The options provided to the 'update' action.*/
 	def updateOptions: Seq[ManagedOption] =
 	{
-		val baseOptions = Validate :: Synchronize :: QuietUpdate :: Nil
-		if(manager.dependencies.isEmpty)
-			baseOptions
+		val m = manager
+		if(m.dependencies.isEmpty && m.resolvers.isEmpty)
+			baseUpdateOptions
 		else
-			LibraryManager(manager) :: baseOptions
+			LibraryManager(m) :: baseUpdateOptions
 	}
 	/** The options provided to the 'compile' action.*/
 	def compileOptions: Seq[CompileOption] = Deprecation :: Nil

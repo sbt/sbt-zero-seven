@@ -26,7 +26,7 @@ object ManageDependencies
 	def defaultPOM(project: Path) = project / DefaultMavenFilename
 	
 	def update(projectDirectory: Path, outputPattern: String, managedLibDirectory: Path,
-		manager: Manager, validate: Boolean, synchronize: Boolean, quiet: Boolean, log: Logger) =
+		manager: Manager, validate: Boolean, synchronize: Boolean, quiet: Boolean, addScalaTools: Boolean, log: Logger) =
 	{
 		val logger = new IvyLogger(log)
 		Message.setDefaultLogger(logger)
@@ -48,66 +48,100 @@ object ManageDependencies
 			configFile match
 			{
 				case Some(path) => ivy.configure(path.asFile)
-				case None => configureDefaults(true)
+				case None => configureDefaults()
 			}
 		}
-		def configureDefaults(includeScalaTools: Boolean)
+		def configureDefaults()
 		{
 			ivy.configureDefault
 			val settings = ivy.getSettings
-			if(includeScalaTools)
+			if(addScalaTools)
+			{
+				log.debug("Added Scala Tools Releases repository.")
 				addResolvers(settings, ScalaToolsReleases :: Nil, log)
+			}
 			settings.setBaseDir(projectDirectory.asFile)
+		}
+		def addDependencies(module: ModuleID, dependencies: Iterable[ModuleID]) =
+		{
+			val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(module))
+			for(dependency <- dependencies)
+			{
+				val dependencyDescriptor = new DefaultDependencyDescriptor(moduleID, toID(dependency), false, false, true)
+				dependencyDescriptor.addDependencyConfiguration("*", "*")
+				moduleID.addDependency(dependencyDescriptor)
+			}
+				
+			val artifact = DefaultArtifact.newIvyArtifact(moduleID.getResolvedModuleRevisionId, moduleID.getPublicationDate)
+			moduleID.setModuleArtifact(artifact)
+			moduleID.check()
+			Right(moduleID)
+		}
+		def autodetectConfiguration()
+		{
+			log.debug("Autodetecting configuration.")
+			val defaultIvyConfigFile = defaultIvyConfiguration(projectDirectory).asFile
+			if(defaultIvyConfigFile.canRead)
+				ivy.configure(defaultIvyConfigFile)
+			else
+				configureDefaults()
+		}
+		def autodetectDependencies =
+		{
+			log.debug("Autodetecting dependencies.")
+			val defaultPOMFile = defaultPOM(projectDirectory).asFile
+			if(defaultPOMFile.canRead)
+				readPom(defaultPOMFile)
+			else
+			{
+				val defaultIvy = defaultIvyFile(projectDirectory).asFile
+				if(defaultIvy.canRead)
+					readIvyFile(defaultIvy)
+				else
+					Left("No readable dependency configuration found.  Need " + DefaultIvyFilename + " or " + DefaultMavenFilename)
+			}
 		}
 		def moduleDescriptor =
 			manager match
 			{
 				case MavenManager(configuration, pom) =>
 				{
+					log.debug("Maven configuration explicitly requested.")
 					configure(configuration)
 					readPom(pom.asFile)
 				}
 				case IvyManager(configuration, dependencies) =>
 				{
+					log.debug("Ivy configuration explicitly requested.")
 					configure(configuration)
 					readIvyFile(dependencies.asFile)
 				}
 				case AutoDetectManager =>
 				{
-					val defaultIvyConfigFile = defaultIvyConfiguration(projectDirectory).asFile
-					if(defaultIvyConfigFile.canRead)
-						ivy.configure(defaultIvyConfigFile)
-					else
-						configureDefaults(true)
-					val defaultPOMFile = defaultPOM(projectDirectory).asFile
-					if(defaultPOMFile.canRead)
-						readPom(defaultPOMFile)
-					else
-					{
-						val defaultIvy = defaultIvyFile(projectDirectory).asFile
-						if(defaultIvy.canRead)
-							readIvyFile(defaultIvy)
-						else
-							Left("No readable dependency configuration found.  Need " + DefaultIvyConfigFilename + " or " + DefaultMavenFilename)
-					}
+					log.debug("No dependency manager explicitly specified.")
+					autodetectConfiguration()
+					autodetectDependencies
 				}
 				case sm: SbtManager =>
 				{
 					import sm._
-					configureDefaults(false)
-					addResolvers(ivy.getSettings, resolvers, log)
-					val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(module))
-					for(dependency <- dependencies)
+					if(resolvers.isEmpty && autodetectUnspecified)
 					{
-						val dependencyDescriptor = new DefaultDependencyDescriptor(moduleID, toID(dependency), false, false, true)
-						dependencyDescriptor.addDependencyConfiguration("*", "*")
-						moduleID.addDependency(dependencyDescriptor)
+						autodetectConfiguration()
 					}
-						
-					val artifact = DefaultArtifact.newIvyArtifact(moduleID.getResolvedModuleRevisionId, moduleID.getPublicationDate)
-					moduleID.setModuleArtifact(artifact)
-					moduleID.check()
-					Right(moduleID)
+					else
+					{
+						log.debug("Using inline configuration.")
+						configureDefaults()
+						addResolvers(ivy.getSettings, resolvers, log)
+					}
+					if(dependencies.isEmpty && autodetectUnspecified)
+						autodetectDependencies
+					else
+					{
+						log.debug("Using inline dependencies.")
+						addDependencies(module, dependencies)
+					}
 				}
 			}
 		def processModule(module: ModuleDescriptor) =
@@ -189,8 +223,9 @@ trait SbtManager extends Manager
 	def module: ModuleID
 	def resolvers: Iterable[Resolver]
 	def dependencies: Iterable[ModuleID]
+	def autodetectUnspecified: Boolean
 }
-case class SimpleManager(module: ModuleID, resolvers: Iterable[Resolver], dependencies: ModuleID*)  extends SbtManager
+case class SimpleManager(autodetectUnspecified: Boolean, module: ModuleID, resolvers: Iterable[Resolver], dependencies: ModuleID*) extends SbtManager
 
 final case class ModuleID(organization: String, name: String, revision: String) extends NotNull
 {
