@@ -44,14 +44,16 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		normalizedName % normalizedName % version.toString
 	}
 	def excludeIDs = projectID :: Nil
-	def manager = SimpleManager(true, projectID, repositories, libraryDependencies.toList: _*)
+	def manager = SimpleManager(ivyXML, true, projectID, repositories, libraryDependencies.toList: _*)
 	
+	def outputPattern = "[conf]/[artifact](-[revision]).[ext]"
+	def ivyXML: scala.xml.NodeSeq = scala.xml.NodeSeq.Empty
 	def baseUpdateOptions = Validate :: Synchronize :: QuietUpdate :: AddScalaToolsReleases :: Nil
 	/** The options provided to the 'update' action.*/
 	def updateOptions: Seq[ManagedOption] =
 	{
 		val m = manager
-		if(m.dependencies.isEmpty && m.resolvers.isEmpty)
+		if(m.dependencies.isEmpty && m.resolvers.isEmpty && ivyXML.isEmpty)
 			baseUpdateOptions
 		else
 			LibraryManager(m) :: baseUpdateOptions
@@ -187,8 +189,9 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val docAll = (doc && docTest) describedAs DocAllDescription
 	lazy val packageAll = (`package` && packageTest && packageSrc && packageDocs) describedAs PackageAllDescription
 	lazy val graph = graphTask(graphPath, mainCompileConditional.analysis).dependsOn(compile)
-	lazy val update = updateTask("[conf]/[artifact](-[revision]).[ext]", managedDependencyPath, updateOptions) describedAs UpdateDescription
+	lazy val update = updateTask(outputPattern, managedDependencyPath, updateOptions) describedAs UpdateDescription
 	lazy val cleanLib = cleanLibTask(managedDependencyPath) describedAs CleanLibDescription
+	lazy val cleanCache = cleanCacheTask(managedDependencyPath, updateOptions) describedAs CleanCacheDescription
 	lazy val incrementVersion = task { incrementVersionNumber(); None } describedAs IncrementVersionDescription
 	lazy val release = (test && packageAll && incrementVersion) describedAs ReleaseDescription
 	
@@ -239,6 +242,8 @@ object BasicScalaProject
 		"Resolves and retrieves automatically managed dependencies."
 	val CleanLibDescription =
 		"Deletes the managed library directory."
+	val CleanCacheDescription =
+		"Deletes the cache of artifacts downloaded for automatically managed dependencies."
 	val IncrementVersionDescription =
 		"Increments the micro part of the version (the third number) by one. (This is only valid for versions of the form #.#.#.*)"
 	val ReleaseDescription =

@@ -194,33 +194,34 @@ trait ManagedScalaProject extends ScalaProject
 	final val AddScalaToolsReleases = new ManagedFlagOption
 	final case class LibraryManager(m: Manager) extends ManagedOption
 	
-	def updateTask(outputPattern: String, managedDependencyPath: Path, options: ManagedOption*): Task =
-		updateTask(outputPattern, managedDependencyPath, options)
-	def updateTask(outputPattern: String, managedDependencyPath: Path, options: => Seq[ManagedOption]) =
+	private def withConfigurations(outputPattern: String, managedDependencyPath: Path, options: Seq[ManagedOption])
+		(doWith: (IvyConfiguration, UpdateConfiguration) => Option[String]) =
+	{
+		var synchronize = false
+		var validate = false
+		var quiet = false
+		var addScalaTools = false
+		var manager: Manager = AutoDetectManager
+		for(option <- options)
+		{
+			option match
+			{
+				case Synchronize => synchronize = true
+				case Validate => validate = true
+				case LibraryManager(m) => manager = m
+				case QuietUpdate => quiet = true
+				case AddScalaToolsReleases => addScalaTools = true
+				case _ => log.warn("Ignored unknown managed option " + option)
+			}
+		}
+		val ivyConfiguration = IvyConfiguration(info.projectPath, managedDependencyPath, manager, validate, addScalaTools, log)
+		val updateConfiguration = UpdateConfiguration(outputPattern, synchronize, quiet)
+		doWith(ivyConfiguration, updateConfiguration)
+	}
+	private def withIvyTask(doTask: => Option[String]) =
 		task
 		{
-			var synchronize = false
-			var validate = false
-			var quiet = false
-			var addScalaTools = false
-			var manager: Manager = AutoDetectManager
-			for(option <- options)
-			{
-				option match
-				{
-					case Synchronize => synchronize = true
-					case Validate => validate = true
-					case LibraryManager(m) => manager = m
-					case QuietUpdate => quiet = true
-					case AddScalaToolsReleases => addScalaTools = true
-					case _ => log.warn("Ignored unknown managed option " + option)
-				}
-			}
-			try
-			{
-				ManageDependencies.update(info.projectPath, outputPattern, managedDependencyPath, manager,
-					validate, synchronize, quiet, addScalaTools, log)
-			}
+			try { doTask }
 			catch
 			{
 				case e: NoClassDefFoundError =>
@@ -228,6 +229,14 @@ trait ManagedScalaProject extends ScalaProject
 					Some("Apache Ivy is required for dependency management (" + e.toString + ")")
 			}
 		}
+	def updateTask(outputPattern: String, managedDependencyPath: Path, options: ManagedOption*): Task =
+		updateTask(outputPattern, managedDependencyPath, options)
+	def updateTask(outputPattern: String, managedDependencyPath: Path, options: => Seq[ManagedOption]) =
+		withIvyTask(withConfigurations(outputPattern, managedDependencyPath, options)(ManageDependencies.update))
+		
+	def cleanCacheTask(managedDependencyPath: Path, options: => Seq[ManagedOption]) =
+		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) => ManageDependencies.cleanCache(ivyConf) })
+		
 	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, log) }
 }
 object ScalaProject

@@ -12,9 +12,13 @@ import core.settings.IvySettings
 import plugins.parser.ModuleDescriptorParser
 import plugins.parser.m2.PomModuleDescriptorParser
 import plugins.parser.xml.XmlModuleDescriptorParser
+import plugins.repository.BasicResource
 import plugins.resolver.{DependencyResolver, ChainResolver, IBiblioResolver}
 import util.{Message, MessageLogger}
 
+final case class IvyConfiguration(projectDirectory: Path, managedLibDirectory: Path, manager: Manager, validate: Boolean,
+	addScalaTools: Boolean, log: Logger)
+final case class UpdateConfiguration(outputPattern: String, synchronize: Boolean, quiet: Boolean)
 object ManageDependencies
 {
 	val DefaultIvyConfigFilename = "ivysettings.xml"
@@ -25,14 +29,14 @@ object ManageDependencies
 	def defaultIvyConfiguration(project: Path) = project / DefaultIvyConfigFilename
 	def defaultPOM(project: Path) = project / DefaultMavenFilename
 	
-	def update(projectDirectory: Path, outputPattern: String, managedLibDirectory: Path,
-		manager: Manager, validate: Boolean, synchronize: Boolean, quiet: Boolean, addScalaTools: Boolean, log: Logger) =
+	private def withIvy(config: IvyConfiguration)(doWithIvy: (Ivy, ModuleDescriptor) => Option[String]) =
 	{
+		import config._
 		val logger = new IvyLogger(log)
 		Message.setDefaultLogger(logger)
 		val ivy = Ivy.newInstance()
 		ivy.getLoggerEngine.pushLogger(logger)
-				
+		
 		def readDependencyFile(file: File, parser: ModuleDescriptorParser) =
 		{
 			try
@@ -43,6 +47,20 @@ object ManageDependencies
 		}
 		def readPom(pomFile: File) = readDependencyFile(pomFile, PomModuleDescriptorParser.getInstance)
 		def readIvyFile(ivyFile: File) = readDependencyFile(ivyFile, XmlModuleDescriptorParser.getInstance)
+		def parseXMLDependencies(xml: scala.xml.NodeSeq) = parseDependencies(xml.toString)
+		def parseDependencies(xml: String): Either[String, ModuleDescriptor] =
+		{
+			try
+			{
+				val parser = new XmlModuleDescriptorParser.Parser(XmlModuleDescriptorParser.getInstance, ivy.getSettings)
+				val resource = new ByteResource(xml.getBytes)
+				parser.setInput(resource.openStream)
+				parser.setResource(resource)
+				parser.parse()
+				Right(parser.getModuleDescriptor)
+			}
+			catch { case e: Exception => log.trace(e); Left("Could not read dependencies: " + e.toString) }
+		}
 		def configure(configFile: Option[Path])
 		{
 			configFile match
@@ -62,9 +80,8 @@ object ManageDependencies
 			}
 			settings.setBaseDir(projectDirectory.asFile)
 		}
-		def addDependencies(module: ModuleID, dependencies: Iterable[ModuleID]) =
+		def addDependencies(moduleID: DefaultModuleDescriptor, dependencies: Iterable[ModuleID])
 		{
-			val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(module))
 			for(dependency <- dependencies)
 			{
 				val dependencyDescriptor = new DefaultDependencyDescriptor(moduleID, toID(dependency), false, false, true)
@@ -75,7 +92,6 @@ object ManageDependencies
 			val artifact = DefaultArtifact.newIvyArtifact(moduleID.getResolvedModuleRevisionId, moduleID.getPublicationDate)
 			moduleID.setModuleArtifact(artifact)
 			moduleID.check()
-			Right(moduleID)
 		}
 		def autodetectConfiguration()
 		{
@@ -126,26 +142,74 @@ object ManageDependencies
 				{
 					import sm._
 					if(resolvers.isEmpty && autodetectUnspecified)
-					{
 						autodetectConfiguration()
-					}
 					else
 					{
 						log.debug("Using inline configuration.")
 						configureDefaults()
 						addResolvers(ivy.getSettings, resolvers, log)
 					}
-					if(dependencies.isEmpty && autodetectUnspecified)
+					if(dependencies.isEmpty && dependenciesXML.isEmpty && autodetectUnspecified)
 						autodetectDependencies
 					else
 					{
-						log.debug("Using inline dependencies.")
-						addDependencies(module, dependencies)
+						val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(module))
+						if(dependenciesXML.isEmpty)
+						{
+							log.debug("Using inline dependencies specified in Scala.")
+							addDependencies(moduleID, dependencies)
+							Right(moduleID)
+						}
+						else
+						{
+							val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(module))
+							for(xmlModuleID <- parseXMLDependencies(wrapped(module, dependenciesXML)).right) yield
+							{
+								log.debug("Using inline dependencies specified in Scala and XML.")
+								xmlModuleID.getConfigurations.foreach(moduleID.addConfiguration)
+								xmlModuleID.getDependencies.foreach(moduleID.addDependency)
+								for(artifact <- xmlModuleID.getAllArtifacts; conf <- artifact.getConfigurations)
+									moduleID.addArtifact(conf, artifact)
+								addDependencies(moduleID, dependencies)
+								moduleID
+							}
+						}
 					}
 				}
 			}
-		def processModule(module: ModuleDescriptor) =
+		def wrapped(module: ModuleID, dependencies: scala.xml.NodeSeq) =
 		{
+			import module._
+			<ivy-module version="2.0">
+				<info organisation="{organization}" module="{name}"/>
+				{dependencies}
+			</ivy-module>
+		}
+		
+		this.synchronized // Ivy is not thread-safe.  In particular, it uses a static DocumentBuilder, which is not thread-safe
+		{
+			ivy.pushContext()
+			try
+			{
+				moduleDescriptor.fold(Some(_), doWithIvy(ivy, _))
+			}
+			finally { ivy.popContext() }
+		}
+	}
+	def cleanCache(config: IvyConfiguration) =
+	{
+		def doClean(ivy: Ivy, module: ModuleDescriptor) =
+		{
+			try { ivy.getSettings.getRepositoryCacheManagers.foreach(_.clean()); None }
+			catch { case e: Exception => config.log.trace(e); Some("Could not clean cache: " + e.toString) }
+		}
+		withIvy(config)(doClean)
+	}
+	def update(ivyConfig: IvyConfiguration, updateConfig: UpdateConfiguration) =
+	{
+		def processModule(ivy: Ivy, module: ModuleDescriptor) =
+		{
+			import updateConfig._
 			try
 			{
 				val resolveOptions = new ResolveOptions
@@ -158,7 +222,7 @@ object ManageDependencies
 				{
 					val retrieveOptions = new RetrieveOptions
 					retrieveOptions.setSync(synchronize)
-					val patternBase = managedLibDirectory.asFile.getCanonicalPath
+					val patternBase = ivyConfig.managedLibDirectory.asFile.getCanonicalPath
 					val pattern =
 						if(patternBase.endsWith(File.separator))
 							patternBase + outputPattern
@@ -168,18 +232,10 @@ object ManageDependencies
 					None
 				}
 			}
-			catch { case e: Exception => log.trace(e); Some("Could not process dependencies: " + e.toString) }
+			catch { case e: Exception => ivyConfig.log.trace(e); Some("Could not process dependencies: " + e.toString) }
 		}
 		
-		this.synchronized // Ivy is not thread-safe.  In particular, it uses a static DocumentBuilder, which is not thread-safe
-		{
-			ivy.pushContext()
-			try
-			{
-				moduleDescriptor.fold(Some(_), processModule)
-			}
-			finally { ivy.popContext() }
-		}
+		withIvy(ivyConfig)(processModule)
 	}
 	private def addResolvers(settings: IvySettings, resolvers: Iterable[Resolver], log: Logger)
 	{
@@ -212,6 +268,11 @@ object ManageDependencies
 		import m._
 		ModuleRevisionId.newInstance(organization, name, revision)
 	}
+	private class ByteResource(bytes: Array[Byte]) extends
+		BasicResource("Inline XML dependencies", true, bytes.length, System.currentTimeMillis, true)
+	{
+		override def openStream = new java.io.ByteArrayInputStream(bytes)
+	}
 }
 
 sealed abstract class Manager extends NotNull
@@ -224,8 +285,10 @@ trait SbtManager extends Manager
 	def resolvers: Iterable[Resolver]
 	def dependencies: Iterable[ModuleID]
 	def autodetectUnspecified: Boolean
+	def dependenciesXML: scala.xml.NodeSeq
 }
-case class SimpleManager(autodetectUnspecified: Boolean, module: ModuleID, resolvers: Iterable[Resolver], dependencies: ModuleID*) extends SbtManager
+case class SimpleManager(dependenciesXML: scala.xml.NodeSeq, autodetectUnspecified: Boolean,
+	module: ModuleID, resolvers: Iterable[Resolver], dependencies: ModuleID*) extends SbtManager
 
 final case class ModuleID(organization: String, name: String, revision: String) extends NotNull
 {
