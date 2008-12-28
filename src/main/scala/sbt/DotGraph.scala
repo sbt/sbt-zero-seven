@@ -23,15 +23,15 @@ object DotGraph
 					for( (dependsOn, dependants) <- graph; dependant <- dependants)
 						writeLine(valueToString(dependant) + " -> " + keyToString(dependsOn))
 					writeLine("}")
-					None
+					Right(())
 				}
 			}
 		}
 		FileUtilities.createDirectory(outputDir, log) orElse
 		generateGraph(BasicAnalysis.DependenciesFileName, "dependencies", analysis.allDependencies,
-			sourceToString, sourceToString) orElse
+			sourceToString, sourceToString).left.toOption orElse
 		generateGraph(BasicAnalysis.ExternalDependenciesFileName, "externalDependencies", analysis.allExternalDependencies,
-			fileToString, sourceToString)
+			fileToString, sourceToString).left.toOption
 	}
 	private def sourceToString(source: Path) = fileToString(source.asFile)
 	private def fileToString(file: File) =

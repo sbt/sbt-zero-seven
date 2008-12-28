@@ -6,4 +6,5 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	def extraResources = descendents(info.projectPath / "licenses", "*") +++ "LICENSE" +++ "NOTICE"
 	override def mainResources = super.mainResources +++ extraResources
 	override def mainClass = Some("sbt.Main")
+	override def testOptions = ExcludeTests("sbt.ReflectiveSpecification" :: Nil) :: Nil
 }

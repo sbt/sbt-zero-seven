@@ -91,6 +91,7 @@ object Path
 	
 	def checkComponent(c: String): String =
 	{
+		require(c.length > 0, "Path component must not be empty")
 		require(c.indexOf('/') == -1, "Path component '" + c + "' must not have forward slashes in it")
 		require(c.indexOf('\\') == -1, "Path component '" + c + "' must not have backslashes in it")
 		require(c != "..", "Path component cannot be '..'")
@@ -99,10 +100,13 @@ object Path
 	}
 	def fromString(projectPath: Path, value: String): Path =
 	{
-		val components = value.split("""[/\\]""")
-		for(component <- components)
-			checkComponent(component)
-		(projectPath /: components)( (path, component) => path / component )
+		if(value.isEmpty)
+			projectPath
+		else
+		{
+			val components = value.split("""[/\\]""")
+			(projectPath /: components)( (path, component) => path / component )
+		}
 	}
 	def baseAncestor(path: Path): Option[Path] =
 		path match
@@ -119,7 +123,7 @@ object Path
 	{
 		val pathString = file.getCanonicalPath
 		if(pathString.startsWith(basePathString))
-			Some(Path.fromString(basePath, pathString.substring(basePathString.length)))
+			Some(fromString(basePath, pathString.substring(basePathString.length)))
 		else
 			None
 	}

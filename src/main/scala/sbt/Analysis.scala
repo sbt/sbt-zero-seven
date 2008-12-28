@@ -172,11 +172,7 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 		{
 			val basePath = (outputDirectory ##)
 			for(c <- products(sources.get)) yield
-				Path.relativize(basePath, c) match
-				{
-					case Some(relativized) => relativized
-					case None => c
-				}
+				Path.relativize(basePath, c).getOrElse(c)
 		}
 		
 	override protected def loadExtra() =
@@ -196,13 +192,13 @@ import java.io.{FileInputStream, FileOutputStream, InputStream, OutputStream}
 object PropertiesUtilities
 {
 	def write(properties: Properties, label: String, to: Path, log: Logger) =
-		FileUtilities.writeStream(to.asFile, log)((output: OutputStream) => { properties.store(output, label); None })
+		FileUtilities.writeStream(to.asFile, log)((output: OutputStream) => { properties.store(output, label); Right(()) }).left.toOption
 	
 	def load(properties: Properties, from: Path, log: Logger): Option[String] =
 	{
 		val file = from.asFile
 		if(file.exists)
-			FileUtilities.readStream(file, log)( (input: InputStream) => { properties.load(input); None })
+			FileUtilities.readStream(file, log)( (input: InputStream) => { properties.load(input); Right(()) }).left.toOption
 		else
 			None
 	}

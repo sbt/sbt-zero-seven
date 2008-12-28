@@ -221,7 +221,7 @@ object Project
 	val DefaultBuilderClass = Class.forName(DefaultBuilderClassName).asSubclass(classOf[Project])
 	
 	/** The logger that should be used before the project definition is loaded.*/
-	private val log = new ConsoleLogger
+	private[sbt] val log = new ConsoleLogger
 	log.setLevel(Level.Trace)
 	
 	/** The name of the directory for project definitions.*/
@@ -235,7 +235,7 @@ object Project
 	def loadProject(path: Path, deps: Iterable[Project], parent: Option[Project]): Either[String, Project] =
 		loadProject(path.asFile, deps, parent)
 	/** Loads the project in the directory given by 'projectDirectory' and with the given dependencies.*/
-	private def loadProject(projectDirectory: File, deps: Iterable[Project], parent: Option[Project]): Either[String, Project] =
+	private[sbt] def loadProject(projectDirectory: File, deps: Iterable[Project], parent: Option[Project]): Either[String, Project] =
 	{
 		val info = ProjectInfo(projectDirectory, deps, parent)
 		ProjectInfo.setup(info, log) match

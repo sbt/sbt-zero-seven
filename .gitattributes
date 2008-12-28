@@ -45,5 +45,9 @@ src/main/scala/sbt/TestFramework.scala -text
 src/main/scala/sbt/TrapExit.scala -text
 src/main/scala/sbt/Version.scala -text
 src/test/scala/sbt/DagSpecification.scala -text
+src/test/scala/sbt/FileUtilitiesSpecification.scala -text
 src/test/scala/sbt/NameFilterSpecification.scala -text
+src/test/scala/sbt/PathSpecification.scala -text
+src/test/scala/sbt/ReflectSpecification.scala -text
+src/test/scala/sbt/TestUtilities.scala -text
 src/test/scala/sbt/VersionSpecification.scala -text

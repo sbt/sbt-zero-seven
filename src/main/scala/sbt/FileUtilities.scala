@@ -4,7 +4,10 @@
 package sbt
 
 import java.io.{Closeable, File, FileInputStream, FileOutputStream, InputStream, OutputStream}
-import java.io.{FileReader, FileWriter, Reader, Writer}
+import java.io.{ByteArrayOutputStream, InputStreamReader, OutputStreamWriter}
+import java.io.{BufferedReader, BufferedWriter, FileReader, FileWriter, Reader, Writer}
+import java.nio.charset.{Charset, CharsetDecoder, CharsetEncoder}
+import java.nio.channels.FileChannel
 import java.util.jar.{JarEntry, JarOutputStream, Manifest}
 
 object FileUtilities
@@ -122,6 +125,25 @@ object FileUtilities
 		catch { case e: Exception => () }
 	}
 
+	def touch(file: File, log: Logger): Option[String] =
+	{
+		try
+		{
+			if(file.exists)
+				None
+			else
+				createDirectory(file.getParentFile, log) orElse { file.createNewFile(); None }
+		}
+		catch
+		{
+			case e =>
+			{
+				log.trace(e)
+				Some("Could not create file " + printableFilename(file) + ": " + e.toString)
+			}
+			
+		}
+	}
 	def createDirectory(dir: File, log: Logger): Option[String] =
 	{
 		try
@@ -141,10 +163,10 @@ object FileUtilities
 		}
 		catch
 		{
-			case e: Exception =>
+			case e =>
 			{
 				log.trace(e)
-				Some("Could not create directory " + printableFilename(dir) + ": " + e.getMessage)
+				Some("Could not create directory " + printableFilename(dir) + ": " + e.toString)
 			}
 		}
 	}
@@ -154,6 +176,85 @@ object FileUtilities
 			case Nil => None
 			case head :: tail => createDirectory(head, log) orElse createDirectories(tail, log)
 		}
+	private val MaximumTries = 10
+	def createTemporaryDirectory(log: Logger) =
+	{
+		def create(tries: Int): Either[String, File] =
+		{
+			if(tries > MaximumTries)
+				Left("Could not create temporary directory.")
+			else
+			{
+				val randomName = "sbt_" + java.lang.Integer.toHexString(random.nextInt)
+				val f = new File(temporaryDirectory, randomName)
+				
+				if(createDirectory(f, log).isEmpty)
+					Right(f)
+				else
+					create(tries + 1)
+			}
+		}
+		create(0)
+	}
+
+	def doInTemporaryDirectory[T](log: Logger)(action: File => Either[String, T]): Either[String, T] =
+	{
+		def doInDirectory(dir: File): Either[String, T] =
+		{
+			try
+			{
+				action(dir)
+			}
+			catch
+			{
+				case e => log.trace(e); Left(e.toString)
+			}
+			finally
+			{
+				delete(dir, true, log)
+			}
+		}
+		createTemporaryDirectory(log).right.flatMap(doInDirectory)
+	}
+	def copyFile(sourceFile: File, targetFile: File, log: Logger): Option[String] =
+	{
+		require(sourceFile.exists)
+		require(!sourceFile.isDirectory)
+		require(!targetFile.exists)
+		readChannel(sourceFile, log)(
+			in => writeChannel(targetFile, log) {
+				out => {
+					val copied = out.transferFrom(in, 0, in.size)
+					if(copied == in.size)
+						Right(())
+					else
+						Left("Could not copy '" + sourceFile + "' to '" + targetFile + "' (" + copied + "/" + in.size + " bytes copied)")
+				}
+			}
+		).left.toOption
+	}
+	
+	def copyDirectory(source: File, target: File, log: Logger): Option[String] =
+	{
+		require(source.isDirectory)
+		require(!target.exists)
+		def copyDirectory(sourceDir: File, targetDir: File): Option[String] =
+			createDirectory(targetDir, log) orElse copyContents(sourceDir, targetDir)
+		def copyContents(sourceDir: File, targetDir: File): Option[String] =
+			sourceDir.listFiles.foldLeft(None: Option[String])
+			{
+				(result, file) =>
+					result orElse
+					{
+						val targetFile = new File(targetDir, file.getName)
+						if(file.isDirectory)
+							copyDirectory(file, targetFile)
+						else
+							copyFile(file, targetFile, log)
+					}
+			}
+		copyDirectory(source, target)
+	}
 
 	def printableFilename(file: File) =
 	{
@@ -210,48 +311,113 @@ object FileUtilities
 		try { Right(constructor(file)) }
 		catch
 		{
-			case e: Exception => 
+			case e: Exception =>
 			{
 				log.trace(e)
 				Left("Error opening " + printableFilename(file) + ": " + e.getMessage)
 			}
 		}
 	}
+	private def fileOutputChannel(file: File, log: Logger) = open(file, log, (f: File) => (new FileOutputStream(f)).getChannel)
+	private def fileInputChannel(file: File, log: Logger) = open(file, log, (f: File) => (new FileInputStream(f)).getChannel)
 	private def fileInputStream(file: File, log: Logger) = open(file, log, (f: File) => new FileInputStream(f))
 	private def fileOutputStream(file: File, log: Logger) = open(file, log, (f: File) => new FileOutputStream(f))
-	private def fileWriter(file: File, log: Logger) = open(file, log, (f: File) => new FileWriter(f))
-	private def fileReader(file: File, log: Logger) = open(file, log, (f: File) => new FileReader(f))
-	private def io[T <: Closeable](file: File, open: (File, Logger) => Either[String, T],
-		f: T => Option[String], op: String, log: Logger): Option[String] =
+	private def fileWriter(charset: Charset)(file: File, log: Logger) =
+		open(file, log, (f: File) => new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f), charset)) )
+	private def fileReader(charset: Charset)(file: File, log: Logger) =
+		open(file, log, (f: File) => new BufferedReader(new InputStreamReader(new FileInputStream(f), charset)) )
+	private def io[T <: Closeable, R](file: File, open: (File, Logger) => Either[String, T],
+		f: T => Either[String, R], op: String, log: Logger): Either[String, R] =
 	{
-		open(file, log) match
+		def processStream(stream: T) =
 		{
-			case Left(errorMessage) => Some(errorMessage)
-			case Right(stream) =>
-				try
+			try { f(stream) }
+			catch
+			{
+				case e: Exception => 
 				{
-					f(stream)
+					log.trace(e)
+					Left("Error " + op + " file " + printableFilename(file) + ": " + e.getMessage)
 				}
-				catch
+			}
+			finally { closeNoException(stream) }
+		}
+		open(file, log).right flatMap processStream
+	}
+	def write(file: File, content: String, log: Logger): Option[String] = write(file, content, Charset.defaultCharset, log)
+	def write(file: File, content: String, charset: Charset, log: Logger): Option[String] =
+	{
+		if(charset.newEncoder.canEncode(content))
+			(write(file, charset, log) { w =>  w.write(content); Right(()) }).left.toOption
+		else
+			Some("String cannot be encoded by default charset.")
+	}
+	def write[R](file: File, log: Logger)(f: Writer => Either[String, R]): Either[String, R] =
+		write(file, Charset.defaultCharset, log)(f)
+	def write[R](file: File, charset: Charset, log: Logger)(f: Writer => Either[String, R]): Either[String, R] =
+		io(file, fileWriter(charset), f, "writing", log)
+	def read[R](file: File, log: Logger)(f: Reader => Either[String, R]): Either[String, R] =
+		read(file, Charset.defaultCharset, log)(f)
+	def read[R](file: File, charset: Charset, log: Logger)(f: Reader => Either[String, R]): Either[String, R] =
+		io(file, fileReader(charset), f, "reading", log)
+	// error is in Left, value is in Right
+	def readString(file: File, log: Logger): Either[String, String] = readString(file, Charset.defaultCharset, log)
+	def readString(file: File, charset: Charset, log: Logger): Either[String, String] =
+	{
+		read(file, charset, log) {
+			in =>
+			{
+				val builder = new StringBuilder
+				val buffer = new Array[Char](BufferSize)
+				def readNext()
 				{
-					case e: Exception => 
+					val read = in.read(buffer, 0, buffer.length)
+					if(read >= 0)
 					{
-						log.trace(e)
-						Some("Error " + op + " file " + printableFilename(file) + ": " + e.getMessage)
+						builder.append(buffer, 0, read)
+						readNext()
 					}
+					else
+						None
 				}
-				finally { closeNoException(stream) }
+				readNext()
+				Right(builder.toString)
+			}
 		}
 	}
-	def write(file: File, log: Logger)(f: Writer => Option[String]): Option[String] =
-		io(file, fileWriter, f, "writing", log)
-	def read(file: File, log: Logger)(f: Reader => Option[String]): Option[String] =
-		io(file, fileReader, f, "reading", log)
+	def writeBytes(file: File, bytes: Array[Byte], log: Logger) =
+		writeStream(file, log)	
+		{ out =>
+			out.write(bytes)
+			Right(())
+		}
+	def readBytes(file: File, log: Logger): Either[String, Array[Byte]] =
+		readStream(file, log)
+		{ in =>
+			val out = new ByteArrayOutputStream
+			val buffer = new Array[Byte](BufferSize)
+			def readNext()
+			{
+				val read = in.read(buffer)
+				if(read >= 0)
+				{
+					out.write(buffer, 0, read)
+					readNext()
+				}
+			}
+			readNext()
+			Right(out.toByteArray)
+		}
 		
-	def writeStream(file: File, log: Logger)(f: OutputStream => Option[String]): Option[String] =
+	def writeStream[R](file: File, log: Logger)(f: OutputStream => Either[String, R]): Either[String, R] =
 		io(file, fileOutputStream, f, "writing", log)
-	def readStream(file: File, log: Logger)(f: InputStream => Option[String]): Option[String] =
+	def readStream[R](file: File, log: Logger)(f: InputStream => Either[String, R]): Either[String, R] =
 		io(file, fileInputStream, f, "reading", log)
+		
+	def writeChannel[R](file: File, log: Logger)(f: FileChannel => Either[String, R]): Either[String, R] =
+		io(file, fileOutputChannel, f, "writing", log)
+	def readChannel[R](file: File, log: Logger)(f: FileChannel => Either[String, R]): Either[String, R] =
+		io(file, fileInputChannel, f, "reading", log)
 	
 	private[sbt] def wrapNull(a: Array[File]): Array[File] =
 		if(a == null)
@@ -264,6 +430,8 @@ object FileUtilities
 		writer.write(line)
 		writer.write(Newline)
 	}
-			
+	
+	val temporaryDirectory = new File(System.getProperty("java.io.tmpdir"))
 	lazy val sbtJar: File = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
+	private val random = new java.util.Random
 }

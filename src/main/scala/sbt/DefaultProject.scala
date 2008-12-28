@@ -94,7 +94,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 			case None => log.success("Successfully initialized directory structure.")
 		}
 	}
-	def consoleConfiguration = Configurations.Runtime
+	def consoleConfiguration = Configurations.Test
 	
 	def docClasspath = fullClasspath(Configurations.Compile)
 	def compileClasspath = fullClasspath(Configurations.Compile)
