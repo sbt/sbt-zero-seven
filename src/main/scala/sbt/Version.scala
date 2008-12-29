@@ -50,7 +50,11 @@ object Version
 					if(v == null) None else Some(v)
 				}
 				def toInt(index: Int) = toOption(index).map(_.toInt)
-				Right(BasicVersion(group(1).toInt, toInt(2), toInt(3), toOption(4)))
+				val extra = toOption(4)
+				if(isValidExtra(extra))
+					Right(BasicVersion(group(1).toInt, toInt(2), toInt(3), extra))
+				else
+					Right(OpaqueVersion(trimmed))
 			}
 			else
 				Right(OpaqueVersion(trimmed))

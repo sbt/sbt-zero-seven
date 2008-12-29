@@ -134,6 +134,7 @@ object Main
 		{
 			case GetAction => getArgumentError(project.log)
 			case SetAction => setArgumentError(project.log)
+			case ProjectAction => setProjectError(project.log)
 			case ShowCurrent =>
 			{
 				printProject("Current project is ", project)
@@ -326,4 +327,5 @@ object Main
 	}
 	private def setArgumentError(log: Logger) { log.error("Invalid arguments for 'set': expected property name and new value.") }
 	private def getArgumentError(log: Logger) { log.error("Invalid arguments for 'get': expected property name.") }
+	private def setProjectError(log: Logger) { log.error("Invalid arguments for 'project': expected project name.") }
 }

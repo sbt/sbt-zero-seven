@@ -174,26 +174,47 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		def options = testCompileOptions.map(_.asString)
 	}
 	
-	lazy val compile = task { mainCompileConditional.run } describedAs MainCompileDescription
-	lazy val testCompile = task { testCompileConditional.run } dependsOn compile describedAs TestCompileDescription
-	lazy val clean = cleanTask(outputPath, cleanOptions) describedAs CleanDescription
-	lazy val run = runTask(mainClass, runClasspath, runOptions).dependsOn(compile) describedAs RunDescription
-	lazy val console = consoleTask(consoleClasspath).dependsOn(testCompile) describedAs ConsoleDescription
-	lazy val doc = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
-	lazy val docTest = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions).dependsOn(testCompile) describedAs TestDocDescription
-	lazy val test = testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
-	lazy val `package` = packageTask(mainClasses +++ mainResources, outputPath, defaultJarName, mainClass.map(MainClassOption(_)).toList).dependsOn(compile) describedAs PackageDescription
-	lazy val packageTest = packageTask(testClasses +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription
-	lazy val packageDocs = packageTask(mainDocPath ##, outputPath, defaultJarBaseName + "-docs.jar", Recursive).dependsOn(doc) describedAs DocPackageDescription
-	lazy val packageSrc = packageTask(allSources, outputPath, defaultJarBaseName + "-src.jar") describedAs SourcePackageDescription
-	lazy val docAll = (doc && docTest) describedAs DocAllDescription
-	lazy val packageAll = (`package` && packageTest && packageSrc && packageDocs) describedAs PackageAllDescription
-	lazy val graph = graphTask(graphPath, mainCompileConditional.analysis).dependsOn(compile)
-	lazy val update = updateTask(outputPattern, managedDependencyPath, updateOptions) describedAs UpdateDescription
-	lazy val cleanLib = cleanLibTask(managedDependencyPath) describedAs CleanLibDescription
-	lazy val cleanCache = cleanCacheTask(managedDependencyPath, updateOptions) describedAs CleanCacheDescription
-	lazy val incrementVersion = task { incrementVersionNumber(); None } describedAs IncrementVersionDescription
-	lazy val release = (test && packageAll && incrementVersion) describedAs ReleaseDescription
+	protected def compileAction = task { mainCompileConditional.run } describedAs MainCompileDescription
+	protected def testCompileAction = task { testCompileConditional.run } dependsOn compile describedAs TestCompileDescription
+	protected def cleanAction = cleanTask(outputPath, cleanOptions) describedAs CleanDescription
+	protected def runAction = runTask(mainClass, runClasspath, runOptions).dependsOn(compile) describedAs RunDescription
+	protected def consoleAction = consoleTask(consoleClasspath).dependsOn(testCompile) describedAs ConsoleDescription
+	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
+	protected def docTestAction = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions).dependsOn(testCompile) describedAs TestDocDescription
+	protected def testAction = testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
+	protected def packageAction = packageTask(mainClasses +++ mainResources, outputPath, defaultJarName, mainClass.map(MainClassOption(_)).toList).dependsOn(compile) describedAs PackageDescription
+	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription
+	protected def packageDocsAction = packageTask(mainDocPath ##, outputPath, defaultJarBaseName + "-docs.jar", Recursive).dependsOn(doc) describedAs DocPackageDescription
+	protected def packageSrcAction = packageTask(allSources, outputPath, defaultJarBaseName + "-src.jar") describedAs SourcePackageDescription
+	protected def docAllAction = (doc && docTest) describedAs DocAllDescription
+	protected def packageAllAction = (`package` && packageTest && packageSrc && packageDocs) describedAs PackageAllDescription
+	protected def graphAction = graphTask(graphPath, mainCompileConditional.analysis).dependsOn(compile)
+	protected def updateAction = updateTask(outputPattern, managedDependencyPath, updateOptions) describedAs UpdateDescription
+	protected def cleanLibAction = cleanLibTask(managedDependencyPath) describedAs CleanLibDescription
+	protected def cleanCacheAction = cleanCacheTask(managedDependencyPath, updateOptions) describedAs CleanCacheDescription
+	protected def incrementVersionAction = task { incrementVersionNumber(); None } describedAs IncrementVersionDescription
+	protected def releaseAction = (test && packageAll && incrementVersion) describedAs ReleaseDescription
+	
+	lazy val compile = compileAction
+	lazy val testCompile = testCompileAction
+	lazy val clean = cleanAction
+	lazy val run = runAction
+	lazy val console = consoleAction
+	lazy val doc = docAction
+	lazy val docTest = docTestAction
+	lazy val test = testAction
+	lazy val `package` = packageAction
+	lazy val packageTest = packageTestAction
+	lazy val packageDocs = packageDocsAction
+	lazy val packageSrc = packageSrcAction
+	lazy val docAll = docAllAction
+	lazy val packageAll = packageAllAction
+	lazy val graph = graphAction
+	lazy val update = updateAction
+	lazy val cleanLib = cleanLibAction
+	lazy val cleanCache = cleanCacheAction
+	lazy val incrementVersion = incrementVersionAction
+	lazy val release = releaseAction
 	
 	import StringUtilities.nonEmpty
 	implicit def toGroupID(groupID: String): GroupID =
