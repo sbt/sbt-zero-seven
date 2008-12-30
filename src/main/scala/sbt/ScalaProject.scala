@@ -246,6 +246,22 @@ trait ManagedScalaProject extends ScalaProject
 		
 	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, log) }
 }
+trait WebScalaProject extends ScalaProject
+{
+	def runJettyTask(webappContents: PathFinder, defaultContextPath: String, warPath: Path, classpath: PathFinder) =
+		task
+		{
+			val (libs, classDirectories) = classpath.get.toList.partition(ClasspathUtilities.isArchive)
+			val classes = Path.lazyPathFinder(classDirectories) ** "*.class"
+			
+			val webInfPath = warPath / "WEB-INF"
+			//TODO: copy -> sync
+			FileUtilities.copy(webappContents.get, warPath, log) orElse
+			FileUtilities.copy(classes.get, webInfPath / "classes", log) orElse
+			FileUtilities.copy(libs, webInfPath / "lib", log) orElse
+			JettyRun(warPath, defaultContextPath, scala.xml.NodeSeq.Empty, Nil, log)
+		}
+}
 object ScalaProject
 {
 	val AnalysisDirectoryName = "analysis"

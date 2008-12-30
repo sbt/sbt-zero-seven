@@ -228,6 +228,16 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		RepositoryName(name)
 	}
 }
+abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProject
+{
+	def temporaryWarPath = outputDirectoryName / "webapp"
+	def webappPath = mainSourcePath / "webapp"
+	def jettyContextPath = "/"
+	
+	lazy val runJetty = runJettyAction
+	protected def runJettyAction =
+		runJettyTask(descendents(webappPath ##, "*"), jettyContextPath, temporaryWarPath, runClasspath)
+}
 
 object BasicScalaProject
 {
@@ -269,8 +279,6 @@ object BasicScalaProject
 		"Increments the micro part of the version (the third number) by one. (This is only valid for versions of the form #.#.#.*)"
 	val ReleaseDescription =
 		"Compiles, tests, generates documentation, packages, and increments the version."
-		
-	val ScalaCheckPropertiesClassName = "org.scalacheck.Properties" 
 }
 trait BasicProjectPaths extends Project
 {

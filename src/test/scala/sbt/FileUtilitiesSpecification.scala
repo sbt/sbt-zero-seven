@@ -1,14 +1,9 @@
+/* sbt -- Simple Build Tool
+ * Copyright 2008 Mark Harrah
+ */
 package sbt
 
 import org.scalacheck._
-
-/*
-object FileCopySpecification extends Properties("File copy")
-{
-	val dir = readOnlyResourceDirectory("file", "copy")
-
-	
-}*/
 
 object WriteContentSpecification extends Properties("Write content")
 {
