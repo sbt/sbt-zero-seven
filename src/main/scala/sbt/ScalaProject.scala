@@ -96,6 +96,9 @@ trait ScalaProject extends Project
 			}
 			pathClean
 		}
+		
+	def copyTask(sources: PathFinder, destinationDirectory: Path): Task =
+		task { FileUtilities.copy(sources.get, destinationDirectory, log) }
 
 	def testTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: TestOption*): Task =
 		testTask(frameworks, classpath, analysis, options)

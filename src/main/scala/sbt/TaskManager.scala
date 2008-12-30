@@ -7,7 +7,7 @@ trait TaskManager{
 	def task(action : => Option[String]) = 
 		new Task(None, Nil, false, action);
 	/** An interactive task is one that is not executed across all dependent projects when
-	* it is called directly.  The dependencies of the task are invoked across all dependent
+	* it is called directly.  The dependencies of the task are still invoked across all dependent
 	* projects, however. */
 	def interactiveTask(action: => Option[String]) = new Task(None, Nil, true, action)
 

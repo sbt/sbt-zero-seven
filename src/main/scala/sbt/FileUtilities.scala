@@ -216,11 +216,49 @@ object FileUtilities
 		}
 		createTemporaryDirectory(log).right.flatMap(doInDirectory)
 	}
+	
+	def copy(sources: Iterable[Path], destinationDirectory: Path, log: Logger): Option[String] =
+	{
+		val target = destinationDirectory.asFile
+		val creationError =
+			if(target.isDirectory)
+				None
+			else
+				createDirectory(target, log)
+		def copy(sources: List[Path]): Option[String] =
+		{
+			sources match
+			{
+				case src :: remaining =>
+				{
+					val from = src.asFile
+					val to = Path.fromString(destinationDirectory, src.relativePath).asFile
+					val result =
+						if(!to.exists || from.lastModified > to.lastModified)
+						{
+							if(from.isDirectory)
+								createDirectory(to, log)
+							else
+								copyFile(from, to, log)
+						}
+						else
+							None
+					result match
+					{
+						case None => copy(remaining)
+						case error => error
+					}
+				}
+				case Nil => None
+			}
+		}
+		creationError orElse copy(sources.toList)
+	}
+	
 	def copyFile(sourceFile: File, targetFile: File, log: Logger): Option[String] =
 	{
 		require(sourceFile.exists)
 		require(!sourceFile.isDirectory)
-		require(!targetFile.exists)
 		readChannel(sourceFile, log)(
 			in => writeChannel(targetFile, log) {
 				out => {
