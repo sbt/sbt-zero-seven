@@ -17,7 +17,7 @@ import plugins.resolver.{DependencyResolver, ChainResolver, IBiblioResolver}
 import util.{Message, MessageLogger}
 
 final case class IvyConfiguration(projectDirectory: Path, managedLibDirectory: Path, manager: Manager, validate: Boolean,
-	addScalaTools: Boolean, log: Logger)
+	addScalaTools: Boolean, errorIfNoConfiguration: Boolean, log: Logger)
 final case class UpdateConfiguration(outputPattern: String, synchronize: Boolean, quiet: Boolean)
 object ManageDependencies
 {
@@ -25,9 +25,9 @@ object ManageDependencies
 	val DefaultIvyFilename = "ivy.xml"
 	val DefaultMavenFilename = "pom.xml"
 	
-	def defaultIvyFile(project: Path) = project / DefaultIvyFilename
-	def defaultIvyConfiguration(project: Path) = project / DefaultIvyConfigFilename
-	def defaultPOM(project: Path) = project / DefaultMavenFilename
+	private def defaultIvyFile(project: Path) = project / DefaultIvyFilename
+	private def defaultIvyConfiguration(project: Path) = project / DefaultIvyConfigFilename
+	private def defaultPOM(project: Path) = project / DefaultMavenFilename
 	
 	private def withIvy(config: IvyConfiguration)(doWithIvy: (Ivy, ModuleDescriptor) => Option[String]) =
 	{
@@ -113,8 +113,15 @@ object ManageDependencies
 				val defaultIvy = defaultIvyFile(projectDirectory).asFile
 				if(defaultIvy.canRead)
 					readIvyFile(defaultIvy)
-				else
+				else if(config.errorIfNoConfiguration)
 					Left("No readable dependency configuration found.  Need " + DefaultIvyFilename + " or " + DefaultMavenFilename)
+				else
+				{
+					log.warn("No readable dependency configuration found.")
+					val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(ModuleID("", "", "")))
+					addDependencies(moduleID, Nil)
+					Right(moduleID)
+				}
 			}
 		}
 		def moduleDescriptor =
@@ -162,7 +169,6 @@ object ManageDependencies
 						}
 						else
 						{
-							val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(module))
 							for(xmlModuleID <- parseXMLDependencies(wrapped(module, dependenciesXML)).right) yield
 							{
 								log.debug("Using inline dependencies specified in Scala and XML.")

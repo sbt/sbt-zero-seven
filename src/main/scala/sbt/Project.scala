@@ -120,24 +120,24 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	
 	/** Loads the project at the given path and declares the project to have the given
 	* dependencies.  This method will configure the project according to the
-	* metadata/ directory in the directory denoted by path.*/
+	* project/ directory in the directory denoted by path.*/
 	def project(path: Path, deps: Project*): Project = getProject(Project.loadProject(path, deps, Some(this)), path)
 	
 	/** Loads the project at the given path using the given name and inheriting this project's version.
 	* The builder class is the default builder class, sbt.DefaultProject. The loaded project is declared
-	* to have the given dependencies. Any metadata/build/ directory for the project is ignored.*/
+	* to have the given dependencies. Any project/build/ directory for the project is ignored.*/
 	def project(path: Path, name: String, deps: Project*): Project = project(path, name, Project.DefaultBuilderClass, deps: _*)
 	
 	/** Loads the project at the given path using the given name and inheriting it's version from this project.
 	* The Project implementation used is given by builderClass.  The dependencies are declared to be
-	* deps. Any metadata/build/ directory for the project is ignored.*/
+	* deps. Any project/build/ directory for the project is ignored.*/
 	def project[P <: Project](path: Path, name: String, builderClass: Class[P], deps: Project*): P =
 	{
 		require(builderClass != this.getClass, "Cannot recursively construct projects of same type: " + builderClass.getName)
 		project(path, name, info => Project.constructProject(info, builderClass), deps: _*)
 	}
 	/** Loads the project at the given path using the given name and inheriting it's version from this project.
-	* The construct function is used to obtain the Project instance. Any metadata/build/ directory for the project
+	* The construct function is used to obtain the Project instance. Any project/build/ directory for the project
 	* is ignored.  The project is declared to have the dependencies given by deps.*/
 	def project[P <: Project](path: Path, name: String, construct: ProjectInfo => P, deps: Project*): P =
 		initialize(construct(ProjectInfo(path.asFile, deps, Some(this))), Some(SetupInfo(name, None, false)))

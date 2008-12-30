@@ -192,6 +192,7 @@ trait ManagedScalaProject extends ScalaProject
 	final val Validate = new ManagedFlagOption
 	final val QuietUpdate = new ManagedFlagOption
 	final val AddScalaToolsReleases = new ManagedFlagOption
+	final val ErrorIfNoConfiguration = new ManagedFlagOption
 	final case class LibraryManager(m: Manager) extends ManagedOption
 	
 	private def withConfigurations(outputPattern: String, managedDependencyPath: Path, options: Seq[ManagedOption])
@@ -201,6 +202,7 @@ trait ManagedScalaProject extends ScalaProject
 		var validate = false
 		var quiet = false
 		var addScalaTools = false
+		var errorIfNoConfiguration = false
 		var manager: Manager = AutoDetectManager
 		for(option <- options)
 		{
@@ -211,10 +213,12 @@ trait ManagedScalaProject extends ScalaProject
 				case LibraryManager(m) => manager = m
 				case QuietUpdate => quiet = true
 				case AddScalaToolsReleases => addScalaTools = true
+				case ErrorIfNoConfiguration => errorIfNoConfiguration = true
 				case _ => log.warn("Ignored unknown managed option " + option)
 			}
 		}
-		val ivyConfiguration = IvyConfiguration(info.projectPath, managedDependencyPath, manager, validate, addScalaTools, log)
+		val ivyConfiguration = IvyConfiguration(info.projectPath, managedDependencyPath, manager, validate,
+			addScalaTools, errorIfNoConfiguration, log)
 		val updateConfiguration = UpdateConfiguration(outputPattern, synchronize, quiet)
 		doWith(ivyConfiguration, updateConfiguration)
 	}
