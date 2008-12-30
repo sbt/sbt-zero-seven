@@ -234,9 +234,13 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	def webappPath = mainSourcePath / "webapp"
 	def jettyContextPath = "/"
 	
-	lazy val runJetty = runJettyAction
-	protected def runJettyAction =
-		runJettyTask(descendents(webappPath ##, "*"), jettyContextPath, temporaryWarPath, runClasspath)
+	lazy val prepareWebapp = prepareWebappAction
+	protected def prepareWebappAction =
+		prepareWebappTask(descendents(webappPath ##, "*"), temporaryWarPath, runClasspath) dependsOn(compile)
+	
+	lazy val jettyRun = jettyRunAction
+	protected def jettyRunAction =
+		jettyRunTask(temporaryWarPath, jettyContextPath) dependsOn(prepareWebapp)
 }
 
 object BasicScalaProject

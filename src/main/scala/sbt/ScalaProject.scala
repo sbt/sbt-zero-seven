@@ -248,19 +248,22 @@ trait ManagedScalaProject extends ScalaProject
 }
 trait WebScalaProject extends ScalaProject
 {
-	def runJettyTask(webappContents: PathFinder, defaultContextPath: String, warPath: Path, classpath: PathFinder) =
+	protected def prepareWebappTask(webappContents: PathFinder, warPath: Path, classpath: PathFinder) =
 		task
 		{
 			val (libs, classDirectories) = classpath.get.toList.partition(ClasspathUtilities.isArchive)
-			val classes = Path.lazyPathFinder(classDirectories) ** "*.class"
+			val classes = (Path.lazyPathFinder(classDirectories.map(_ ##))) ** "*.class"
 			
 			val webInfPath = warPath / "WEB-INF"
 			//TODO: copy -> sync
 			FileUtilities.copy(webappContents.get, warPath, log) orElse
 			FileUtilities.copy(classes.get, webInfPath / "classes", log) orElse
-			FileUtilities.copy(libs, webInfPath / "lib", log) orElse
-			JettyRun(warPath, defaultContextPath, scala.xml.NodeSeq.Empty, Nil, log)
+			FileUtilities.copyFlat(libs, webInfPath / "lib", log)
 		}
+	// FIXME: Exceptions are getting swallowed and not printed
+	def jettyRunTask(warPath: Path, defaultContextPath: String) =
+		task { try { JettyRun(warPath, defaultContextPath, scala.xml.NodeSeq.Empty, Nil, log) }
+			catch { case e => log.trace(e); Some("Error: " + e.toString) } }
 }
 object ScalaProject
 {

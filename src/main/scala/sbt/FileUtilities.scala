@@ -217,7 +217,23 @@ object FileUtilities
 		createTemporaryDirectory(log).right.flatMap(doInDirectory)
 	}
 	
-	def copy(sources: Iterable[Path], destinationDirectory: Path, log: Logger): Option[String] =
+	def copyFlat(sources: Iterable[Path], destinationDirectory: Path, log: Logger): Option[String] =
+	{
+		copyImpl(sources, destinationDirectory, log)
+		{
+			source =>
+			{
+				val from = source.asFile
+				val to = new File(destinationDirectory.asFile, from.getName)
+				if(!to.exists || from.lastModified > to.lastModified && !from.isDirectory)
+					copyFile(from, to, log)
+				else
+					None
+			}
+		}
+	}
+	private def copyImpl(sources: Iterable[Path], destinationDirectory: Path, log: Logger)
+		(doCopy: Path => Option[String]): Option[String] =
 	{
 		val target = destinationDirectory.asFile
 		val creationError =
@@ -231,19 +247,7 @@ object FileUtilities
 			{
 				case src :: remaining =>
 				{
-					val from = src.asFile
-					val to = Path.fromString(destinationDirectory, src.relativePath).asFile
-					val result =
-						if(!to.exists || from.lastModified > to.lastModified)
-						{
-							if(from.isDirectory)
-								createDirectory(to, log)
-							else
-								copyFile(from, to, log)
-						}
-						else
-							None
-					result match
+					doCopy(src) match
 					{
 						case None => copy(remaining)
 						case error => error
@@ -253,6 +257,26 @@ object FileUtilities
 			}
 		}
 		creationError orElse copy(sources.toList)
+	}
+	def copy(sources: Iterable[Path], destinationDirectory: Path, log: Logger): Option[String] =
+	{
+		copyImpl(sources, destinationDirectory, log)
+		{
+			source =>
+			{
+				val from = source.asFile
+				val to = Path.fromString(destinationDirectory, source.relativePath).asFile
+				if(!to.exists || from.lastModified > to.lastModified)
+				{
+					if(from.isDirectory)
+						createDirectory(to, log)
+					else
+						copyFile(from, to, log)
+				}
+				else
+					None
+			}
+		}
 	}
 	
 	def copyFile(sourceFile: File, targetFile: File, log: Logger): Option[String] =

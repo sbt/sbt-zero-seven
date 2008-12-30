@@ -2,13 +2,29 @@
  * Copyright 2008 Mark Harrah
  */
 package sbt
+/*
+import sbt._
 
+class HelloProject(val info: ProjectInfo) extends BasicWebScalaProject
+{
+	override def ivyXML =
+		<dependencies>
+			<dependency org="net.liftweb" name="lift-core" rev="0.9">
+				<exclude org="junit"/>
+				<exclude org="org.igniterealtime.smack"/>
+				<exclude org="commons-io"/>
+				<exclude org="org.apache.commons"/>
+			</dependency>
+		</dependencies>
+}
+
+*/
 import java.io.File
 import scala.xml.NodeSeq
 
 object JettyRun
 {
-	def apply(war: Path, defaultContextPath: Path, jettyConfigurationXML: NodeSeq, jettyConfigurationFiles: Seq[File], log: Logger) =
+	def apply(war: Path, defaultContextPath: String, jettyConfigurationXML: NodeSeq, jettyConfigurationFiles: Seq[File], log: Logger) =
 	{
 		import org.mortbay.jetty.Server
 		import org.mortbay.jetty.nio.SelectChannelConnector
@@ -30,7 +46,7 @@ object JettyRun
 				defaultConnector.setMaxIdleTime(30000)
 				server.addConnector(defaultConnector)
 				
-				val webapp = new WebAppContext(war.asFile.getCanonicalPath, defaultContextPath.asFile.getCanonicalPath)
+				val webapp = new WebAppContext(war.asFile.getCanonicalPath, defaultContextPath)
 				server.setHandler(webapp)
 			}
 			else
@@ -40,8 +56,10 @@ object JettyRun
 				for(file <- jettyConfigurationFiles)
 					configure(new XmlConfiguration(file.toURI.toURL))
 			}
+			log.info("Starting server...")
 			server.start()
 			server.join()
+			log.info("Server terminated...")
 			None
 		}
 		catch
