@@ -1,3 +1,4 @@
+LIBS=$(find lib/ -name "*.jar" -exec echo -n {}: \;)
 mkdir -p target/classes && \
-scalac -cp lib/ivy-2.0.0-rc2.jar:lib/ScalaCheck-1.5.jar:lib/specs-1.4.0.jar:lib/scalatest-0.9.3.jar -d target/classes/ src/main/scala/sbt/*.scala && \
+scalac -cp $LIBS -d target/classes/ src/main/scala/sbt/*.scala && \
 jar -cf target/sbt.jar licenses/* LICENSE NOTICE -C src/main/resources scalac-plugin.xml -C target/classes sbt
