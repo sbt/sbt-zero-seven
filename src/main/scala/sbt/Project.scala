@@ -175,7 +175,12 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 		}
 		catch
 		{
-			case _ => saveEnvironment()
+			case e =>
+			{
+				saveEnvironment()
+				log.trace(e)
+				Some(e.toString)
+			}
 		}
 	}
 	override def toString = "Project " + projectName.get.getOrElse("at " + environmentLabel)

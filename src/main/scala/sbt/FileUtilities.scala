@@ -217,20 +217,26 @@ object FileUtilities
 		createTemporaryDirectory(log).right.flatMap(doInDirectory)
 	}
 	
-	def copyFlat(sources: Iterable[Path], destinationDirectory: Path, log: Logger): Option[String] =
+	def copyFlat(sources: Iterable[Path], destinationDirectory: Path, log: Logger) =
 	{
+		val targetSet = new scala.collection.mutable.HashSet[Path]
 		copyImpl(sources, destinationDirectory, log)
 		{
 			source =>
 			{
 				val from = source.asFile
-				val to = new File(destinationDirectory.asFile, from.getName)
+				val toPath = destinationDirectory / from.getName
+				targetSet += toPath
+				val to = toPath.asFile
 				if(!to.exists || from.lastModified > to.lastModified && !from.isDirectory)
+				{
+					log.debug("Copying " + source + " to " + toPath)
 					copyFile(from, to, log)
+				}
 				else
 					None
 			}
-		}
+		}.toLeft(targetSet.readOnly)
 	}
 	private def copyImpl(sources: Iterable[Path], destinationDirectory: Path, log: Logger)
 		(doCopy: Path => Option[String]): Option[String] =
@@ -256,27 +262,37 @@ object FileUtilities
 				case Nil => None
 			}
 		}
-		creationError orElse copy(sources.toList)
+		creationError orElse
+		{
+			try { copy(sources.toList) }
+			catch { case e => log.trace(e); Some(e.toString) }
+		}
 	}
-	def copy(sources: Iterable[Path], destinationDirectory: Path, log: Logger): Option[String] =
+	def copy(sources: Iterable[Path], destinationDirectory: Path, log: Logger) =
 	{
+		val targetSet = new scala.collection.mutable.HashSet[Path]
 		copyImpl(sources, destinationDirectory, log)
 		{
 			source =>
 			{
 				val from = source.asFile
-				val to = Path.fromString(destinationDirectory, source.relativePath).asFile
+				val toPath = Path.fromString(destinationDirectory, source.relativePath)
+				targetSet += toPath
+				val to = toPath.asFile
 				if(!to.exists || from.lastModified > to.lastModified)
 				{
 					if(from.isDirectory)
 						createDirectory(to, log)
 					else
+					{
+						log.debug("Copying " + source + " to " + toPath)
 						copyFile(from, to, log)
+					}
 				}
 				else
 					None
 			}
-		}
+		}.toLeft(targetSet.readOnly)
 	}
 	
 	def copyFile(sourceFile: File, targetFile: File, log: Logger): Option[String] =

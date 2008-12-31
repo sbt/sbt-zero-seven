@@ -206,8 +206,6 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 	protected def externalInfo(externals: Iterable[File]) =
 	{
 		val (classpathJars, classpathDirs) = ClasspathUtilities.buildSearchPaths(classpath.get)
-		log.debug("Search path jars: " + classpathJars.mkString(File.pathSeparator))
-		log.debug("Search path directories: " + classpathDirs.mkString(File.pathSeparator))
 		for(external <- externals) yield
 		{
 			val available = external.exists && ClasspathUtilities.onClasspath(classpathJars, classpathDirs, external)
