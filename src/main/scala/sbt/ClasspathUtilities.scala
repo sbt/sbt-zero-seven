@@ -75,8 +75,6 @@ private abstract class LoaderBase(urls: Array[URL], parent: ClassLoader) extends
 			
 		if(resolve)
 			resolveClass(found)
-		if(className == "net.liftweb.http.LiftFilter" || className == "javax.servlet.Filter")
-			println("Loaded " + className + " from " + found.getClassLoader.getClass.getName)
 		found
 	}
 	protected def doLoadClass(className: String): Class[_]
