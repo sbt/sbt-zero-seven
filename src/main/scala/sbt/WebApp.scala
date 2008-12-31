@@ -22,7 +22,7 @@ object JettyRun extends ExitHook
 			running = None
 		}
 	}
-	def apply(classpath: Iterable[Path], war: Path, defaultContextPath: String, jettyConfigurationXML: NodeSeq, jettyConfigurationFiles: Seq[File], log: Logger) =
+	def apply(classpath: Iterable[Path], classpathName: String, war: Path, defaultContextPath: String, jettyConfigurationXML: NodeSeq, jettyConfigurationFiles: Seq[File], log: Logger) =
 		synchronized
 		{
 			def runJetty() =
@@ -45,7 +45,7 @@ object JettyRun extends ExitHook
 				}
 				catch
 				{
-					case e: NoClassDefFoundError => runError(e, "Jetty and its dependencies must be on the runtime classpath: ", log)
+					case e: NoClassDefFoundError => runError(e, "Jetty and its dependencies must be on the " + classpathName + " classpath: ", log)
 					case e => runError(e, "Error running Jetty: ", log)
 				}
 			}

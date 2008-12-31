@@ -60,10 +60,7 @@ object TestFramework
 			None
 		}
 		else
-		{
-			try { doRunTests(classpath, mappedTests, log) }
-			catch { case e => log.trace(e); Some(e.toString) }
-		}
+			Control.trapUnit("", log) { doRunTests(classpath, mappedTests, log) }
 	}
 	private def testMap(frameworks: Iterable[TestFramework], tests: Iterable[TestDefinition]): Map[TestFramework, Set[String]] =
 	{

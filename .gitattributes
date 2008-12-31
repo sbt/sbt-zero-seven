@@ -25,6 +25,7 @@ src/main/scala/sbt/BuilderProject.scala -text
 src/main/scala/sbt/ClasspathUtilities.scala -text
 src/main/scala/sbt/Compile.scala -text
 src/main/scala/sbt/Conditional.scala -text
+src/main/scala/sbt/Control.scala -text
 src/main/scala/sbt/Dag.scala -text
 src/main/scala/sbt/DefaultProject.scala -text
 src/main/scala/sbt/DotGraph.scala -text

@@ -248,32 +248,35 @@ trait ManagedScalaProject extends ScalaProject
 }
 trait WebScalaProject extends ScalaProject
 {
-	protected def prepareWebappTask(webappContents: PathFinder, warPath: Path, classpath: PathFinder) =
+	protected def prepareWebappTask(webappContents: PathFinder, warPath: Path, classpath: PathFinder, extraJars: => Iterable[File]) =
 		task
 		{
 			val (libs, classDirectories) = classpath.get.toList.partition(ClasspathUtilities.isArchive)
 			val classes = (Path.lazyPathFinder(classDirectories.map(_ ##))) ** "*.class"
 			
 			val webInfPath = warPath / "WEB-INF"
+			val webLibDirectory = webInfPath / "lib"
 			
 			(FileUtilities.copy(webappContents.get, warPath, log).right flatMap { copiedWebapp =>
 			FileUtilities.copy(classes.get, webInfPath / "classes", log).right flatMap { copiedClasses =>
-			FileUtilities.copyFlat(libs, webInfPath / "lib", log).right flatMap { copiedLibs =>
+			FileUtilities.copyFlat(libs, webLibDirectory, log).right flatMap { copiedLibs =>
+			FileUtilities.copyFilesFlat(extraJars, webLibDirectory, log).right flatMap { copiedExtraLibs =>
 				{
 					val toRemove = scala.collection.mutable.HashSet((warPath ** "*").get.toSeq : _*)
 					toRemove --= copiedWebapp
 					toRemove --= copiedClasses
 					toRemove --= copiedLibs
+					toRemove --= copiedExtraLibs
 					val (directories, files) = toRemove.toList.partition(_.asFile.isDirectory)
 					//TODO: prune directories
 					if(log.atLevel(Level.Debug))
 						files.foreach(r => log.debug("Pruning " + r))
 					FileUtilities.clean(files, true, log).toLeft(())
 				}
-			}}}).left.toOption
+			}}}}).left.toOption
 		}
-	def jettyRunTask(warPath: Path, defaultContextPath: String, classpath: PathFinder) =
-		interactiveTask { JettyRun(classpath.get, warPath, defaultContextPath, scala.xml.NodeSeq.Empty, Nil, log) }
+	def jettyRunTask(warPath: Path, defaultContextPath: String, classpath: PathFinder, classpathName: String) =
+		interactiveTask { JettyRun(classpath.get, classpathName, warPath, defaultContextPath, scala.xml.NodeSeq.Empty, Nil, log) }
 	def jettyStopTask = interactiveTask { JettyRun.stop(); None }
 }
 object ScalaProject

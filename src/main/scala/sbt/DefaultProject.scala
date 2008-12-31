@@ -240,11 +240,18 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	
 	lazy val prepareWebapp = prepareWebappAction
 	protected def prepareWebappAction =
-		prepareWebappTask(descendents(webappPath ##, "*"), temporaryWarPath, runClasspath) dependsOn(compile)
+		prepareWebappTask(descendents(webappPath ##, "*"), temporaryWarPath, runClasspath, extraWebappJars) dependsOn(compile)
+	
+	private def extraWebappJars: Iterable[java.io.File] =
+	{
+		val externalJars = mainCompileConditional.analysis.allExternals.filter(ClasspathUtilities.isArchive)
+		//For now, just include scala-library.jar
+		externalJars.filter(_.getName == "scala-library.jar")
+	}
 	
 	lazy val jettyRun = jettyRunAction
 	protected def jettyRunAction =
-		jettyRunTask(temporaryWarPath, jettyContextPath, runClasspath) dependsOn(prepareWebapp)
+		jettyRunTask(temporaryWarPath, jettyContextPath, testClasspath, "test") dependsOn(prepareWebapp)
 		
 	lazy val jettyStop = jettyStopAction
 	protected def jettyStopAction = jettyStopTask
@@ -294,7 +301,7 @@ object BasicScalaProject
 	val CleanCacheDescription =
 		"Deletes the cache of artifacts downloaded for automatically managed dependencies."
 	val IncrementVersionDescription =
-		"Increments the micro part of the version (the third number) by one. (This is only valid for versions of the form #.#.#.*)"
+		"Increments the micro part of the version (the third number) by one. (This is only valid for versions of the form #.#.#-*)"
 	val ReleaseDescription =
 		"Compiles, tests, generates documentation, packages, and increments the version."
 }

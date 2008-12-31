@@ -58,18 +58,9 @@ object FileUtilities
 			else
 				log.warn("\tSource " + source + " does not exist.")
 		}
-		try
-		{
-			sources.foreach(add)
-			None
-		}
-		catch
-		{
-			case e: Exception =>
-				log.trace(e)
-				Some("Error writing jar: " + e.getMessage)
-		}
-		finally { closeNoException(output) }
+		Control.trapUnitAndFinally("Error writing jar: ", log)
+			{ sources.foreach(add); None } //try
+			{ closeNoException(output) } //finally
 	}
 	
 	/** Creates a JarOutputStream for the given arguments.  This method properly closes
@@ -94,7 +85,7 @@ object FileUtilities
 	
 	def transfer(in: InputStream, out: OutputStream, log: Logger): Option[String] =
 	{
-		try
+		Control.trapUnitAndFinally("Error during transfer: ", log)
 		{
 			val buffer = new Array[Byte](BufferSize)
 			def read: None.type =
@@ -110,43 +101,23 @@ object FileUtilities
 			}
 			read
 		}
-		catch
-		{
-			case e: Exception => log.trace(e); Some("Error during transfer: " + e.getMessage)
-		}
-		finally
-		{
-			closeNoException(in)
-		}
+		{ closeNoException(in) }
 	}
-	def closeNoException(c: Closeable)
-	{
-		try { c.close }
-		catch { case e: Exception => () }
-	}
+	def closeNoException(c: Closeable) { Control.trap { c.close } }
 
 	def touch(file: File, log: Logger): Option[String] =
 	{
-		try
+		Control.trapUnit("Could not create file " + printableFilename(file) + ": ", log)
 		{
 			if(file.exists)
 				None
 			else
 				createDirectory(file.getParentFile, log) orElse { file.createNewFile(); None }
 		}
-		catch
-		{
-			case e =>
-			{
-				log.trace(e)
-				Some("Could not create file " + printableFilename(file) + ": " + e.toString)
-			}
-			
-		}
 	}
 	def createDirectory(dir: File, log: Logger): Option[String] =
 	{
-		try
+		Control.trapUnit("Could not create directory " + printableFilename(dir) + ": ", log)
 		{
 			if(dir.exists)
 			{
@@ -159,14 +130,6 @@ object FileUtilities
 			{
 				dir.mkdirs()
 				None
-			}
-		}
-		catch
-		{
-			case e =>
-			{
-				log.trace(e)
-				Some("Could not create directory " + printableFilename(dir) + ": " + e.toString)
 			}
 		}
 	}
@@ -201,18 +164,9 @@ object FileUtilities
 	{
 		def doInDirectory(dir: File): Either[String, T] =
 		{
-			try
-			{
-				action(dir)
-			}
-			catch
-			{
-				case e => log.trace(e); Left(e.toString)
-			}
-			finally
-			{
-				delete(dir, true, log)
-			}
+			Control.trapAndFinally("", log)
+				{ action(dir) }
+				{ delete(dir, true, log) }
 		}
 		createTemporaryDirectory(log).right.flatMap(doInDirectory)
 	}
@@ -262,11 +216,7 @@ object FileUtilities
 				case Nil => None
 			}
 		}
-		creationError orElse
-		{
-			try { copy(sources.toList) }
-			catch { case e => log.trace(e); Some(e.toString) }
-		}
+		creationError orElse ( Control.trapUnit("", log) { copy(sources.toList) } )
 	}
 	def copy(sources: Iterable[Path], destinationDirectory: Path, log: Logger) =
 	{
@@ -295,6 +245,40 @@ object FileUtilities
 		}.toLeft(targetSet.readOnly)
 	}
 	
+	def copyFilesFlat(sources: Iterable[File], targetDirectory: Path, log: Logger) =
+	{
+		require(targetDirectory.asFile.isDirectory)
+		val byName = new scala.collection.mutable.HashMap[String, File]
+		for(source <- sources) byName.put(source.getName, source)
+		val uniquelyNamedSources = byName.values
+		val targetSet = new scala.collection.mutable.HashSet[Path]
+		def copy(source: File): Option[String] =
+		{
+			if(source.isDirectory)
+				copyAll(source.listFiles.toList)
+			else if(source.exists)
+			{
+				val targetPath = targetDirectory / source.getName
+				targetSet += targetPath
+				copyFile(source, targetPath.asFile, log)
+			}
+			else
+				None
+		}
+		def copyAll(sources: List[File]): Option[String] =
+			sources match
+			{
+				case head :: tail =>
+					copy(head) match
+					{
+						case None => copyAll(tail)
+						case x => x
+					}
+				case Nil => None
+			}
+		
+		Control.trap("Error copying files: ", log) { copyAll(uniquelyNamedSources.toList).toLeft(targetSet.readOnly) }
+	}
 	def copyFile(sourceFile: File, targetFile: File, log: Logger): Option[String] =
 	{
 		require(sourceFile.exists)
@@ -358,7 +342,7 @@ object FileUtilities
 		{
 			log.log(if(quiet) Level.Debug else Level.Info, message)
 		}
-		try
+		Control.trapUnit("Error deleting file " + printableFilename(file) + ": ", log)
 		{
 			if(file.isDirectory)
 			{
@@ -373,12 +357,6 @@ object FileUtilities
 			}
 			None
 		}
-		catch
-		{
-			case e: Exception => 
-				log.trace(e)
-				Some("Error deleting file " + printableFilename(file) + ": " + e.getMessage)
-		}
 	}
 	
 	private def open[T](file: File, log: Logger, constructor: File => T): Either[String, T] =
@@ -386,15 +364,7 @@ object FileUtilities
 		val parent = file.getParentFile
 		if(parent != null)
 			createDirectory(parent, log)
-		try { Right(constructor(file)) }
-		catch
-		{
-			case e: Exception =>
-			{
-				log.trace(e)
-				Left("Error opening " + printableFilename(file) + ": " + e.getMessage)
-			}
-		}
+		Control.trap("Error opening " + printableFilename(file) + ": ", log) { Right(constructor(file)) }
 	}
 	private def fileOutputChannel(file: File, log: Logger) = open(file, log, (f: File) => (new FileOutputStream(f)).getChannel)
 	private def fileInputChannel(file: File, log: Logger) = open(file, log, (f: File) => (new FileInputStream(f)).getChannel)
@@ -404,24 +374,16 @@ object FileUtilities
 		open(file, log, (f: File) => new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f), charset)) )
 	private def fileReader(charset: Charset)(file: File, log: Logger) =
 		open(file, log, (f: File) => new BufferedReader(new InputStreamReader(new FileInputStream(f), charset)) )
+	
 	private def io[T <: Closeable, R](file: File, open: (File, Logger) => Either[String, T],
 		f: T => Either[String, R], op: String, log: Logger): Either[String, R] =
-	{
-		def processStream(stream: T) =
-		{
-			try { f(stream) }
-			catch
+			open(file, log).right flatMap
 			{
-				case e: Exception => 
-				{
-					log.trace(e)
-					Left("Error " + op + " file " + printableFilename(file) + ": " + e.getMessage)
-				}
+				stream => Control.trapAndFinally("Error " + op + " file " + printableFilename(file) + ": ", log)
+					{ f(stream) }
+					{ closeNoException(stream) }
 			}
-			finally { closeNoException(stream) }
-		}
-		open(file, log).right flatMap processStream
-	}
+	
 	def write(file: File, content: String, log: Logger): Option[String] = write(file, content, Charset.defaultCharset, log)
 	def write(file: File, content: String, charset: Charset, log: Logger): Option[String] =
 	{

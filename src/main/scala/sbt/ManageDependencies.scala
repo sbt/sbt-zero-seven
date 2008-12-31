@@ -38,19 +38,14 @@ object ManageDependencies
 		ivy.getLoggerEngine.pushLogger(logger)
 		
 		def readDependencyFile(file: File, parser: ModuleDescriptorParser) =
-		{
-			try
-			{
-				Right(parser.parseDescriptor(ivy.getSettings, file.toURI.toURL, validate))
-			}
-			catch { case e: Exception => log.trace(e); Left("Could not read dependencies: " + e.toString) }
-		}
+			Control.trap("Could not read dependencies: ", log)
+				{ Right(parser.parseDescriptor(ivy.getSettings, file.toURI.toURL, validate)) }
+		
 		def readPom(pomFile: File) = readDependencyFile(pomFile, PomModuleDescriptorParser.getInstance)
 		def readIvyFile(ivyFile: File) = readDependencyFile(ivyFile, XmlModuleDescriptorParser.getInstance)
 		def parseXMLDependencies(xml: scala.xml.NodeSeq) = parseDependencies(xml.toString)
 		def parseDependencies(xml: String): Either[String, ModuleDescriptor] =
-		{
-			try
+			Control.trap("Could not read dependencies: ", log)
 			{
 				val parser = new XmlModuleDescriptorParser.Parser(XmlModuleDescriptorParser.getInstance, ivy.getSettings)
 				val resource = new ByteResource(xml.getBytes)
@@ -59,8 +54,6 @@ object ManageDependencies
 				parser.parse()
 				Right(parser.getModuleDescriptor)
 			}
-			catch { case e: Exception => log.trace(e); Left("Could not read dependencies: " + e.toString) }
-		}
 		def configure(configFile: Option[Path])
 		{
 			configFile match
@@ -205,10 +198,9 @@ object ManageDependencies
 	def cleanCache(config: IvyConfiguration) =
 	{
 		def doClean(ivy: Ivy, module: ModuleDescriptor) =
-		{
-			try { ivy.getSettings.getRepositoryCacheManagers.foreach(_.clean()); None }
-			catch { case e: Exception => config.log.trace(e); Some("Could not clean cache: " + e.toString) }
-		}
+			Control.trapUnit("Could not clean cache: ", config.log)
+				{ ivy.getSettings.getRepositoryCacheManagers.foreach(_.clean()); None }
+		
 		withIvy(config)(doClean)
 	}
 	def update(ivyConfig: IvyConfiguration, updateConfig: UpdateConfiguration) =
@@ -216,7 +208,7 @@ object ManageDependencies
 		def processModule(ivy: Ivy, module: ModuleDescriptor) =
 		{
 			import updateConfig._
-			try
+			Control.trapUnit("Could not process dependencies: ", ivyConfig.log)
 			{
 				val resolveOptions = new ResolveOptions
 				if(quiet)
@@ -238,7 +230,6 @@ object ManageDependencies
 					None
 				}
 			}
-			catch { case e: Exception => ivyConfig.log.trace(e); Some("Could not process dependencies: " + e.toString) }
 		}
 		
 		withIvy(ivyConfig)(processModule)

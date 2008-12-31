@@ -18,14 +18,10 @@ object Run
 				log.info("Starting scala interpreter...")
 				log.debug("  Classpath: " + settings.classpath.value)
 				log.info("")
-				try
+				Control.trapUnit("Error during session: ", log)
 				{
 					val loop = new InterpreterLoop
 					executeTrapExit(loop.main(settings), log)
-				}
-				catch
-				{
-					case e: Exception => log.trace(e); Some("Error during session: " + e.toString)
 				}
 			}
 		}
@@ -52,7 +48,7 @@ object Run
 		{
 			(settings: Settings) =>
 			{
-				try
+				Control.trapUnit("Error during run: ", log)
 				{
 					val classpathURLs = classpath.map(_.asURL).toList
 					val bootClasspath = FileUtilities.pathSplit(settings.bootclasspath.value)
@@ -62,10 +58,6 @@ object Run
 					log.info("Running " + mainClass + " ...")
 					log.debug("  Classpath:" + (classpathURLs ++ extraURLs).mkString("\n\t", "\n\t",""))
 					executeTrapExit( ObjectRunner.run(classpathURLs ++ extraURLs, mainClass, options.toList), log )
-				}
-				catch
-				{
-					case e: Exception => log.trace(e); Some("Error during run: " + e.toString)
 				}
 			}
 		}

@@ -28,7 +28,7 @@ abstract class CompilerCore
 		{
 			val classpathAndOut: List[String] = OutputOptionString :: outputDir.getAbsolutePath :: classpathOption
 			
-			try
+			Control.trapUnit("Compiler error: ", log)
 			{
 				val sourceList = sources.map(_.asFile.getAbsolutePath).toList
 				if(sourceList.isEmpty)
@@ -48,10 +48,6 @@ abstract class CompilerCore
 					else
 						Some(actionUnsuccessfulMessage)
 				}
-			}
-			catch
-			{
-				case e: Exception => log.trace(e); Some("Compiler error: " + e.getMessage)
 			}
 		}
 	}
