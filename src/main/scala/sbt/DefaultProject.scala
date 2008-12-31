@@ -6,10 +6,12 @@ package sbt
 /** The default project when no project is explicitly configured and the common base class for
 * configuring a project.*/
 class DefaultProject(val info: ProjectInfo) extends BasicScalaProject
+class DefaultWebProject(val info: ProjectInfo) extends BasicWebScalaProject
+
+import BasicScalaProject._
 
 abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveManagedProject
 {
-	import BasicScalaProject._
 	/** The class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
 	def mainClass: Option[String] = None
@@ -178,6 +180,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	protected def testCompileAction = task { testCompileConditional.run } dependsOn compile describedAs TestCompileDescription
 	protected def cleanAction = cleanTask(outputPath, cleanOptions) describedAs CleanDescription
 	protected def runAction = runTask(mainClass, runClasspath, runOptions).dependsOn(compile) describedAs RunDescription
+	protected def consoleQuickAction = consoleTask(consoleClasspath) describedAs ConsoleQuickDescription
 	protected def consoleAction = consoleTask(consoleClasspath).dependsOn(testCompile) describedAs ConsoleDescription
 	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
 	protected def docTestAction = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions).dependsOn(testCompile) describedAs TestDocDescription
@@ -199,6 +202,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val testCompile = testCompileAction
 	lazy val clean = cleanAction
 	lazy val run = runAction
+	lazy val consoleQuick = consoleQuickAction
 	lazy val console = consoleAction
 	lazy val doc = docAction
 	lazy val docTest = docTestAction
@@ -240,7 +244,13 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	
 	lazy val jettyRun = jettyRunAction
 	protected def jettyRunAction =
-		jettyRunTask(temporaryWarPath, jettyContextPath) dependsOn(prepareWebapp)
+		jettyRunTask(temporaryWarPath, jettyContextPath, runClasspath) dependsOn(prepareWebapp)
+		
+	lazy val jettyStop = jettyStopAction
+	protected def jettyStopAction = jettyStopTask
+	
+	override protected def packageAction = packageTask(descendents(temporaryWarPath ##, "*"), outputPath,
+		defaultWarName, Nil) dependsOn(prepareWebapp) describedAs PackageWarDescription
 }
 
 object BasicScalaProject
@@ -261,8 +271,12 @@ object BasicScalaProject
 		"Runs the main class specified for the project or starts the console if main class is not specified."
 	val ConsoleDescription =
 		"Starts the Scala interpreter with the project classes on the classpath."
+	val ConsoleQuickDescription =
+		"Starts the Scala interpreter with the project classes on the classpath without running compile first."
 	val PackageDescription =
 		"Creates a jar file containing main classes and resources."
+	val PackageWarDescription =
+		"Creates a war file."
 	val TestPackageDescription =
 		"Creates a jar file containing test classes and resources."
 	val DocPackageDescription =
@@ -292,6 +306,7 @@ trait BasicProjectPaths extends Project
 	
 	def defaultJarBaseName = name + "-" + version.toString
 	def defaultJarName = defaultJarBaseName + ".jar"
+	def defaultWarName = defaultJarBaseName + ".war"
 	
 	def outputDirectoryName = DefaultOutputDirectoryName
 	def sourceDirectoryName = DefaultSourceDirectoryName

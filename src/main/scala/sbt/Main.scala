@@ -18,12 +18,17 @@ object Main
 		val startTime = System.currentTimeMillis
 		Project.loadProject match
 		{
-			case Left(errorMessage) => println(errorMessage)
+			case Left(errorMessage) =>
+			{
+				println(errorMessage)
+				runExitHooks(Project.log)
+			}
 			case Right(project) =>
 			{
 				// in interactive mode, fill all undefined properties
 				if(args.length > 0 || fillUndefinedProjectProperties(project.topologicalSort.toList.reverse))
 					startProject(project, args, startTime)
+				runExitHooks(project.log)
 			}
 		}
 	}
@@ -328,4 +333,29 @@ object Main
 	private def setArgumentError(log: Logger) { log.error("Invalid arguments for 'set': expected property name and new value.") }
 	private def getArgumentError(log: Logger) { log.error("Invalid arguments for 'get': expected property name.") }
 	private def setProjectError(log: Logger) { log.error("Invalid arguments for 'project': expected project name.") }
+	
+	private val exitHooks = new scala.collection.mutable.HashSet[ExitHook]
+	private[sbt] def registerExitHook(hook: ExitHook) { exitHooks += hook }
+	private[sbt] def unregisterExitHook(hook: ExitHook) { exitHooks -= hook }
+	private def runExitHooks(log: Logger)
+	{
+		for(hook <- exitHooks.toList)
+		{
+			try { hook.runBeforeExiting() }
+			catch
+			{
+				case e =>
+				{
+					log.trace(e);
+					log.error("Error running exit hook '" + hook.name + "': " + e.toString)
+				}
+			}
+		}
+	}
+}
+
+trait ExitHook extends NotNull
+{
+	def name: String
+	def runBeforeExiting(): Unit
 }

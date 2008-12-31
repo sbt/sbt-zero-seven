@@ -58,3 +58,58 @@ private[sbt] object ClasspathUtilities
 		set.readOnly
 	}
 }
+
+import java.net.{URL, URLClassLoader}
+private abstract class LoaderBase(urls: Array[URL], parent: ClassLoader) extends URLClassLoader(urls, parent) with NotNull
+{
+	require(parent != null) // included because a null parent is legitimate in Java
+	@throws(classOf[ClassNotFoundException])
+	override final def loadClass(className: String, resolve: Boolean): Class[_] =
+	{
+		val loaded = findLoadedClass(className)
+		val found =
+			if(loaded == null)
+				doLoadClass(className)
+			else
+				loaded
+			
+		if(resolve)
+			resolveClass(found)
+		if(className == "net.liftweb.http.LiftFilter" || className == "javax.servlet.Filter")
+			println("Loaded " + className + " from " + found.getClassLoader.getClass.getName)
+		found
+	}
+	protected def doLoadClass(className: String): Class[_]
+	protected final def selfLoadClass(className: String): Class[_] = super.loadClass(className, false)
+}
+private class IntermediateLoader(urls: Array[URL], parent: ClassLoader) extends LoaderBase(urls, parent) with NotNull
+{
+	def doLoadClass(className: String): Class[_] =
+	{
+		// if this loader is asked to load an sbt class, it must be because the project we are building is sbt itself,
+		 // so we want to load the version of classes on the project classpath, not the parent
+		if(className.startsWith(Loaders.SbtPackage))
+			findClass(className)
+		else
+			selfLoadClass(className)
+	}
+}
+private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], parent: ClassLoader, grandparent: ClassLoader)
+	extends LoaderBase(urls, parent) with NotNull
+{
+	def doLoadClass(className: String): Class[_] =
+	{
+		if(Loaders.isNestedOrSelf(className, runnerClassName))
+			findClass(className)
+		else if(className.startsWith(Loaders.SbtPackage)) // we circumvent the parent loader because we know that we want the
+			grandparent.loadClass(className)              // version of sbt that is currently the builder (not the project being built)
+		else
+			parent.loadClass(className)
+	}
+}
+private object Loaders
+{
+	val SbtPackage = "sbt."
+	def isNestedOrSelf(className: String, checkAgainst: String) =
+		className == checkAgainst || className.startsWith(checkAgainst + "$")
+}

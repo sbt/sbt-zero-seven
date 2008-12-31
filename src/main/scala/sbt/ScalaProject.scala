@@ -261,9 +261,10 @@ trait WebScalaProject extends ScalaProject
 			FileUtilities.copyFlat(libs, webInfPath / "lib", log)
 		}
 	// FIXME: Exceptions are getting swallowed and not printed
-	def jettyRunTask(warPath: Path, defaultContextPath: String) =
-		task { try { JettyRun(warPath, defaultContextPath, scala.xml.NodeSeq.Empty, Nil, log) }
+	def jettyRunTask(warPath: Path, defaultContextPath: String, classpath: PathFinder) =
+		interactiveTask { try { JettyRun(classpath.get, warPath, defaultContextPath, scala.xml.NodeSeq.Empty, Nil, log) }
 			catch { case e => log.trace(e); Some("Error: " + e.toString) } }
+	def jettyStopTask = interactiveTask { JettyRun.stop(); None }
 }
 object ScalaProject
 {
