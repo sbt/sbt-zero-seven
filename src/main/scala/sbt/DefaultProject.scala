@@ -99,7 +99,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	def consoleConfiguration = Configurations.Test
 	
 	def docClasspath = fullClasspath(Configurations.Compile)
-	def compileClasspath = fullClasspath(Configurations.Compile)
+	def compileClasspath = fullClasspath(Configurations.Compile) +++ fullClasspath(Configurations.Provided)
 	def testClasspath = fullClasspath(Configurations.Test, true)
 	def runClasspath = fullClasspath(Configurations.Runtime)
 	def consoleClasspath = fullClasspath(consoleConfiguration)
