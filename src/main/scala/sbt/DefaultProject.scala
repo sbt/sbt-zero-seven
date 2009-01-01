@@ -251,10 +251,10 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	
 	lazy val jettyRun = jettyRunAction
 	protected def jettyRunAction =
-		jettyRunTask(temporaryWarPath, jettyContextPath, testClasspath, "test") dependsOn(prepareWebapp)
+		jettyRunTask(temporaryWarPath, jettyContextPath, testClasspath, "test") dependsOn(prepareWebapp) describedAs(JettyRunDescription)
 		
 	lazy val jettyStop = jettyStopAction
-	protected def jettyStopAction = jettyStopTask
+	protected def jettyStopAction = jettyStopTask describedAs(JettyStopDescription)
 	
 	override protected def packageAction = packageTask(descendents(temporaryWarPath ##, "*"), outputPath,
 		defaultWarName, Nil) dependsOn(prepareWebapp) describedAs PackageWarDescription
@@ -304,6 +304,10 @@ object BasicScalaProject
 		"Increments the micro part of the version (the third number) by one. (This is only valid for versions of the form #.#.#-*)"
 	val ReleaseDescription =
 		"Compiles, tests, generates documentation, packages, and increments the version."
+	val JettyStopDescription =
+		"Stops the Jetty server that was started with the jetty-run action."
+	val JettyRunDescription =
+		"Starts the Jetty server and serves this project as a web application."
 }
 trait BasicProjectPaths extends Project
 {
