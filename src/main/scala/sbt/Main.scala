@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah, David MacIver
+ * Copyright 2008, 2009  Steven Blundy, Mark Harrah, David MacIver
  */
 package sbt
 
@@ -37,7 +37,7 @@ object Main
 		project.log.info("Building project " + project.name + " " + project.version.toString + " using " + project.getClass.getName)
 		if(args.length == 0)
 		{
-			project.log.info("No actions specified, interactive session started.")
+			project.log.info("No actions specified, interactive session started. Execute 'help' for more information.")
 			interactive(project)
 			printTime(project, startTime, "session")
 		}
@@ -66,7 +66,9 @@ object Main
 	val SetAction = "set"
 	/** The name of the action that gets the value of the property given as its argument.*/
 	val GetAction = "get"
-	
+	/** The name of the action that displays the help message. */
+	val HelpAction = "help"
+
 	/** The list of all available commands at the interactive prompt in addition to the tasks defined
 	* by a project.*/
 	protected def interactiveCommands: Iterable[String] = basicCommands.toList ++ logLevels.toList
@@ -110,7 +112,9 @@ object Main
 					}
 					else
 					{
-						if(trimmed == ShowProjectsAction)
+						if(trimmed == HelpAction)
+							displayInteractiveHelp()
+						else if(trimmed == ShowProjectsAction)
 							baseProject.topologicalSort.foreach(listProject)
 						else if(trimmed.startsWith(SetAction + " "))
 							setProperty(currentProject, trimmed.substring(SetAction.length + 1))
@@ -126,6 +130,24 @@ object Main
 		}
 		
 		loop(baseProject)
+	}
+    private def displayInteractiveHelp() = {
+		Console.println("You may execute any project action or one of the commands described below. Only one action " +
+			"may be executed at a time in interactive mode and is entered by name, as it would be at the command line." +
+			" Also, tab completion is available.")
+		Console.println("Available Commands:")
+
+		def printCmd(name:String, desc:String) = Console.println("\t" + name + ": " + desc)
+
+		printCmd("<action name>", "Executes the project specified action.")
+		printCmd(ShowCurrent, "Shows the current project and logging level of that project.")
+		printCmd(ShowActions, "Shows all available actions.")
+		printCmd(ProjectAction + " <project name>", "Sets the currently active project.")
+		printCmd(ShowProjectsAction, "Shows all available projects.")
+		printCmd(TerminateActions.elements.reduceLeft((a, b) => a + ", " + b), "Terminates the program.")
+		printCmd(SetAction + " <property> <value>", "Sets the value of the property given as its argument.")
+		printCmd(GetAction + " <property>", "Gets the value of the property given as its argument.")
+		printCmd(HelpAction, "Displays this help message.")
 	}
 	private def listProject(p: Project) = printProject("\t", p)
 	private def printProject(prefix: String, p: Project)
@@ -150,14 +172,8 @@ object Main
 				for( (name, task) <- project.deepTasks)
 					Console.println("\t" + name + task.description.map(x => ": " + x).getOrElse(""))
 			}
-			case action =>
-			{
-				Level(action) match
-				{
-					case Some(level) => setLevel(project, level)
-					case None => handleAction(project, action)
-				}
-			}
+			case Level(level) => setLevel(project, level)
+			case action => handleAction(project, action)
 		}
 	}
 	private def handleAction(project: Project, action: String)
@@ -165,7 +181,12 @@ object Main
 		val startTime = System.currentTimeMillis
 		project.act(action) match
 		{
-			case Some(errorMessage) => project.log.error(errorMessage)
+			case Some(errorMessage) =>
+			{
+				project.log.error(errorMessage)
+				project.log.info("Execute 'help' to see a list of commands and " + 
+					"'actions' for a list of available project actions")
+			}
 			case None =>
 			{
 				printTime(project, startTime, "")

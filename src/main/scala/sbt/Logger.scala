@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
@@ -172,6 +172,7 @@ object Level extends Enumeration with NotNull
 	val SuccessLabel = "success"
 	
 	def apply(s: String) = elements.find(s == _.toString)
+	private[sbt] def unapply(s: String) = apply(s)
 }
 
 trait DelegatingLogger extends Logger
