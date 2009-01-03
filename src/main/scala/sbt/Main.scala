@@ -77,10 +77,19 @@ object Main
 	/** The list of all interactive commands other than logging level.*/
 	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent)
 	
+	/** Enters interactive mode for the given root project.  It uses JLine for tab completion and
+	* history.  It returns normally when the user terminates the interactive session.  That is,
+	* it does not call System.exit to quit.
+	**/
 	def interactive(baseProject: Project)
 	{
 		val reader = new JLineReader(baseProject, ProjectAction, interactiveCommands)
 		
+		/** Prompts the user for the next command using 'currentProject' as context.
+		* If the command indicates that the user wishes to terminate the session,
+		*   the function returns.
+		* Otherwise, the command is handled and this function is called again
+		*   (tail recursively) to prompt for the next command. */
 		def loop(currentProject: Project)
 		{
 			reader.readLine("> ") match
@@ -131,7 +140,7 @@ object Main
 		
 		loop(baseProject)
 	}
-    private def displayInteractiveHelp() = {
+	private def displayInteractiveHelp() = {
 		Console.println("You may execute any project action or one of the commands described below. Only one action " +
 			"may be executed at a time in interactive mode and is entered by name, as it would be at the command line." +
 			" Also, tab completion is available.")
@@ -355,14 +364,22 @@ object Main
 	private def getArgumentError(log: Logger) { log.error("Invalid arguments for 'get': expected property name.") }
 	private def setProjectError(log: Logger) { log.error("Invalid arguments for 'project': expected project name.") }
 	
+	/** This is a list of hooks to call when sbt is finished executing.*/
 	private val exitHooks = new scala.collection.mutable.HashSet[ExitHook]
+	/** Adds a hook to call before sbt exits. */
 	private[sbt] def registerExitHook(hook: ExitHook) { exitHooks += hook }
+	/** Removes a hook. */
 	private[sbt] def unregisterExitHook(hook: ExitHook) { exitHooks -= hook }
+	/** Calls each registered exit hook, trapping any exceptions so that each hook is given a chance to run. */
 	private def runExitHooks(log: Logger)
 	{
 		for(hook <- exitHooks.toList)
 		{
-			try { hook.runBeforeExiting() }
+			try
+			{
+				log.debug("Running exit hook '" + hook.name + "'...")
+				hook.runBeforeExiting()
+			}
 			catch
 			{
 				case e =>
@@ -375,8 +392,11 @@ object Main
 	}
 }
 
+/** Defines a function to call as sbt exits.*/
 trait ExitHook extends NotNull
 {
+	/** Provides a name for this hook to be used to provide feedback to the user. */
 	def name: String
+	/** Subclasses should implement this method, which is called when this hook is executed. */
 	def runBeforeExiting(): Unit
 }
