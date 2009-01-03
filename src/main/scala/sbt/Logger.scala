@@ -16,8 +16,11 @@ trait Logger extends NotNull
 	def error(message: => String): Unit = log(Level.Error, message)
 	def success(message: => String): Unit = log(Level.Info, message)
 	def log(level: Level.Value, message: => String): Unit
+	
+	def doSynchronized[T](f: => T): T = synchronized { f }
 }
 
+/** Implements the level-setting methods of Logger.*/
 trait BasicLogger extends Logger
 {
 	private var level: Level.Value = Level.Info
@@ -27,6 +30,16 @@ trait BasicLogger extends Logger
 		level = newLevel
 	}
 }
+/** A logger that can buffer the logging done on it and then flush the buffer to the
+* delegate logger provided in the constructor.  Use 'startRecording' to start buffering
+* and then 'play' to flush the buffer to the backing logger.  The logging level set at the
+* time a message is originally logged is used, not the level at the time 'play' is
+* called.
+*
+* This class assumes that it is the only client of the delegate logger.
+*
+* This logger is not thread-safe.
+* */
 final class BufferedLogger(delegate: Logger) extends Logger
 {
 	private val buffer = new scala.collection.mutable.ListBuffer[LogEvent]
@@ -38,16 +51,16 @@ final class BufferedLogger(delegate: Logger) extends Logger
 			buffer += event
 	}
 	
+	/** Enables buffering. */
 	def startRecording()
 	{
 		recording = true
 	}
+	/** Flushes the buffer to the delegate logger.  This method executes in the
+	* doSynchronized method of the delegate so that the messages are written in order. */
 	def play()
 	{
-		System.out.synchronized
-		{
-			buffer.foreach(play)
-		}
+		delegate.doSynchronized { buffer.foreach(play) }
 	}
 	private def play(event: LogEvent)
 	{
@@ -59,17 +72,18 @@ final class BufferedLogger(delegate: Logger) extends Logger
 			case SetLevel(level) => delegate.setLevel(level)
 		}
 	}
+	/** Clears all buffered messages and disables buffering. */
 	def clear()
 	{
 		buffer.clear()
 		recording = false
 	}
-	
-	sealed trait LogEvent extends NotNull
-	case class Success(msg: String) extends LogEvent
-	case class Log(level: Level.Value, msg: String) extends LogEvent
-	case class Trace(t: Throwable) extends LogEvent
-	case class SetLevel(newLevel: Level.Value) extends LogEvent
+	// these wrap log messages so that they can be replayed later
+	private sealed trait LogEvent extends NotNull
+	private case class Success(msg: String) extends LogEvent
+	private case class Log(level: Level.Value, msg: String) extends LogEvent
+	private case class Trace(t: Throwable) extends LogEvent
+	private case class SetLevel(newLevel: Level.Value) extends LogEvent
 	
 	def setLevel(newLevel: Level.Value)
 	{
@@ -109,6 +123,10 @@ final class BufferedLogger(delegate: Logger) extends Logger
 		}
 	}
 }
+/** A logger that logs to the console.  On non-windows systems, the level labels are
+* colored. 
+*
+* This logger is not thread-safe.*/
 class ConsoleLogger extends BasicLogger
 {
 	private val os = System.getProperty("os.name")
@@ -160,8 +178,12 @@ class ConsoleLogger extends BasicLogger
 			System.out.println()
 		}
 	}
+	
+	override def doSynchronized[T](f: => T): T = synchronized { System.out.synchronized { f } }
 }
 
+/** An enumeration defining the levels available for logging.  A level includes all of the levels
+* with id larger than its own id.  For example, Warn (id=3) includes Error (id=4).*/
 object Level extends Enumeration with NotNull
 {
 	val Trace = Value(0, "trace")
@@ -169,12 +191,18 @@ object Level extends Enumeration with NotNull
 	val Info = Value(2, "info")
 	val Warn = Value(3, "warn")
 	val Error = Value(4, "error")
+	/** Defines the label to use for success messages.  A success message is logged at the info level but
+	* uses this label.  Because the label for levels is defined in this module, the success
+	* label is also defined here. */
 	val SuccessLabel = "success"
 	
+	/** Returns the level with the given name wrapped in Some, or None if no level exists for that name. */
 	def apply(s: String) = elements.find(s == _.toString)
+	/** Same as apply, defined for use in pattern matching. */
 	private[sbt] def unapply(s: String) = apply(s)
 }
 
+/** Delegates all calls to the Logger provided by 'delegate'.*/
 trait DelegatingLogger extends Logger
 {
 	protected def delegate: Logger
@@ -193,4 +221,6 @@ trait DelegatingLogger extends Logger
 	override def error(message: => String): Unit = delegate.error(message)
 	override def success(message: => String): Unit = delegate.success(message)
 	def log(level: Level.Value, message: => String) = delegate.log(level, message)
+	
+	override def doSynchronized[T](f: => T): T = delegate.doSynchronized(f)
 }
