@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
@@ -30,7 +30,7 @@ object WriteContentSpecification extends Properties("Write content")
 		val result =
 			doInTemporaryDirectory(log) { dir =>
 				val file = new java.io.File(dir, "out")
-				writeBytes(file, b, log).right.flatMap { x => readBytes(file, log) }
+				writeBytes(file, b, log).toLeft(()).right.flatMap { x => readBytes(file, log) }
 			}
 		handleResult[Array[Byte]](result, _ deepEquals b)
 	}

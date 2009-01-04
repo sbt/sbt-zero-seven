@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
@@ -192,13 +192,13 @@ import java.io.{FileInputStream, FileOutputStream, InputStream, OutputStream}
 object PropertiesUtilities
 {
 	def write(properties: Properties, label: String, to: Path, log: Logger) =
-		FileUtilities.writeStream(to.asFile, log)((output: OutputStream) => { properties.store(output, label); Right(()) }).left.toOption
+		FileUtilities.writeStream(to.asFile, log)((output: OutputStream) => { properties.store(output, label); None })
 	
 	def load(properties: Properties, from: Path, log: Logger): Option[String] =
 	{
 		val file = from.asFile
 		if(file.exists)
-			FileUtilities.readStream(file, log)( (input: InputStream) => { properties.load(input); Right(()) }).left.toOption
+			FileUtilities.readStream(file, log)( (input: InputStream) => { properties.load(input); None })
 		else
 			None
 	}

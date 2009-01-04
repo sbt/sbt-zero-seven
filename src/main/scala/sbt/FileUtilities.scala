@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
@@ -288,12 +288,12 @@ object FileUtilities
 				out => {
 					val copied = out.transferFrom(in, 0, in.size)
 					if(copied == in.size)
-						Right(())
+						None
 					else
-						Left("Could not copy '" + sourceFile + "' to '" + targetFile + "' (" + copied + "/" + in.size + " bytes copied)")
+						Some("Could not copy '" + sourceFile + "' to '" + targetFile + "' (" + copied + "/" + in.size + " bytes copied)")
 				}
 			}
-		).left.toOption
+		)
 	}
 	
 	def copyDirectory(source: File, target: File, log: Logger): Option[String] =
@@ -375,6 +375,9 @@ object FileUtilities
 	private def fileReader(charset: Charset)(file: File, log: Logger) =
 		open(file, log, (f: File) => new BufferedReader(new InputStreamReader(new FileInputStream(f), charset)) )
 	
+	private def ioOption[T <: Closeable](file: File, open: (File, Logger) => Either[String, T],
+		f: T => Option[String], op: String, log: Logger): Option[String] =
+			io(file, open, (t: T) => f(t).toLeft(()), op, log).left.toOption
 	private def io[T <: Closeable, R](file: File, open: (File, Logger) => Either[String, T],
 		f: T => Either[String, R], op: String, log: Logger): Either[String, R] =
 			open(file, log).right flatMap
@@ -388,23 +391,23 @@ object FileUtilities
 	def write(file: File, content: String, charset: Charset, log: Logger): Option[String] =
 	{
 		if(charset.newEncoder.canEncode(content))
-			(write(file, charset, log) { w =>  w.write(content); Right(()) }).left.toOption
+			write(file, charset, log) { w =>  w.write(content); None }
 		else
 			Some("String cannot be encoded by default charset.")
 	}
-	def write[R](file: File, log: Logger)(f: Writer => Either[String, R]): Either[String, R] =
+	def write(file: File, log: Logger)(f: Writer => Option[String]): Option[String] =
 		write(file, Charset.defaultCharset, log)(f)
-	def write[R](file: File, charset: Charset, log: Logger)(f: Writer => Either[String, R]): Either[String, R] =
-		io(file, fileWriter(charset), f, "writing", log)
-	def read[R](file: File, log: Logger)(f: Reader => Either[String, R]): Either[String, R] =
-		read(file, Charset.defaultCharset, log)(f)
-	def read[R](file: File, charset: Charset, log: Logger)(f: Reader => Either[String, R]): Either[String, R] =
+	def write(file: File, charset: Charset, log: Logger)(f: Writer => Option[String]): Option[String] =
+		ioOption(file, fileWriter(charset), f, "writing", log)
+	def read(file: File, log: Logger)(f: Reader => Option[String]): Option[String] =
+		unwrapEither(readValue(file, Charset.defaultCharset, log)(wrapEither(f)))
+	def readValue[R](file: File, charset: Charset, log: Logger)(f: Reader => Either[String, R]): Either[String, R] =
 		io(file, fileReader(charset), f, "reading", log)
 	// error is in Left, value is in Right
 	def readString(file: File, log: Logger): Either[String, String] = readString(file, Charset.defaultCharset, log)
 	def readString(file: File, charset: Charset, log: Logger): Either[String, String] =
 	{
-		read(file, charset, log) {
+		readValue(file, charset, log) {
 			in =>
 			{
 				val builder = new StringBuilder
@@ -425,14 +428,14 @@ object FileUtilities
 			}
 		}
 	}
-	def writeBytes(file: File, bytes: Array[Byte], log: Logger) =
+	def writeBytes(file: File, bytes: Array[Byte], log: Logger): Option[String] =
 		writeStream(file, log)	
 		{ out =>
 			out.write(bytes)
-			Right(())
+			None
 		}
 	def readBytes(file: File, log: Logger): Either[String, Array[Byte]] =
-		readStream(file, log)
+		readStreamValue(file, log)
 		{ in =>
 			val out = new ByteArrayOutputStream
 			val buffer = new Array[Byte](BufferSize)
@@ -449,16 +452,22 @@ object FileUtilities
 			Right(out.toByteArray)
 		}
 		
-	def writeStream[R](file: File, log: Logger)(f: OutputStream => Either[String, R]): Either[String, R] =
-		io(file, fileOutputStream, f, "writing", log)
-	def readStream[R](file: File, log: Logger)(f: InputStream => Either[String, R]): Either[String, R] =
+	def writeStream(file: File, log: Logger)(f: OutputStream => Option[String]): Option[String] =
+		ioOption(file, fileOutputStream, f, "writing", log)
+	def readStream(file: File, log: Logger)(f: InputStream => Option[String]): Option[String] =
+		unwrapEither(readStreamValue(file, log)(wrapEither(f)))
+	def readStreamValue[R](file: File, log: Logger)(f: InputStream => Either[String, R]): Either[String, R] =
 		io(file, fileInputStream, f, "reading", log)
 		
-	def writeChannel[R](file: File, log: Logger)(f: FileChannel => Either[String, R]): Either[String, R] =
-		io(file, fileOutputChannel, f, "writing", log)
-	def readChannel[R](file: File, log: Logger)(f: FileChannel => Either[String, R]): Either[String, R] =
+	def writeChannel(file: File, log: Logger)(f: FileChannel => Option[String]): Option[String] =
+		ioOption(file, fileOutputChannel, f, "writing", log)
+	def readChannel(file: File, log: Logger)(f: FileChannel => Option[String]): Option[String] =
+		unwrapEither(readChannelValue(file, log)(wrapEither(f)))
+	def readChannelValue[R](file: File, log: Logger)(f: FileChannel => Either[String, R]): Either[String, R] =
 		io(file, fileInputChannel, f, "reading", log)
 	
+	private def wrapEither[R](f: R => Option[String]): (R => Either[String, Unit]) = (r: R) => f(r).toLeft(())
+	private def unwrapEither(e: Either[String, Unit]): Option[String] = e.left.toOption
 	private[sbt] def wrapNull(a: Array[File]): Array[File] =
 		if(a == null)
 			new Array[File](0)

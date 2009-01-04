@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
@@ -23,15 +23,15 @@ object DotGraph
 					for( (dependsOn, dependants) <- graph; dependant <- dependants)
 						writeLine(valueToString(dependant) + " -> " + keyToString(dependsOn))
 					writeLine("}")
-					Right(())
+					None
 				}
 			}
 		}
 		FileUtilities.createDirectory(outputDir, log) orElse
 		generateGraph(BasicAnalysis.DependenciesFileName, "dependencies", analysis.allDependencies,
-			sourceToString, sourceToString).left.toOption orElse
+			sourceToString, sourceToString) orElse
 		generateGraph(BasicAnalysis.ExternalDependenciesFileName, "externalDependencies", analysis.allExternalDependencies,
-			fileToString, sourceToString).left.toOption
+			fileToString, sourceToString)
 	}
 	private def sourceToString(source: Path) = fileToString(source.asFile)
 	private def fileToString(file: File) =
