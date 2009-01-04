@@ -6,37 +6,53 @@ package sbt
 import java.io.{Closeable, File, FileInputStream, FileOutputStream, InputStream, OutputStream}
 import java.io.{ByteArrayOutputStream, InputStreamReader, OutputStreamWriter}
 import java.io.{BufferedReader, BufferedWriter, FileReader, FileWriter, Reader, Writer}
+import java.net.URL
 import java.nio.charset.{Charset, CharsetDecoder, CharsetEncoder}
 import java.nio.channels.FileChannel
 import java.util.jar.{JarEntry, JarOutputStream, Manifest}
+import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 
+/** A collection of file related methods. */
 object FileUtilities
 {
+	/** The size of the byte or char buffer used in various methods.*/
 	private val BufferSize = 8192
 	private val Newline = System.getProperty("line.separator")
-	
+	/** A pattern used to split a String by path separator characters.*/
 	private val PathSeparatorPattern = java.util.regex.Pattern.compile("""[;:]""")
 
+	/** Splits a String around path separator characters. */
 	private[sbt] def pathSplit(s: String) = PathSeparatorPattern.split(s)
 	
-	def pack(sources: Iterable[Path], outputJar: Path, manifest: Manifest, recursive: Boolean, log: Logger) =
+	def jar(sources: Iterable[Path], outputJar: Path, manifest: Manifest, recursive: Boolean, log: Logger) =
+		archive(sources, outputJar, Some(manifest), recursive, log)
+	@deprecated def pack(sources: Iterable[Path], outputJar: Path, manifest: Manifest, recursive: Boolean, log: Logger) =
+		jar(sources, outputJar, manifest, recursive, log)
+	def zip(sources: Iterable[Path], outputZip: Path, recursive: Boolean, log: Logger) =
+		archive(sources, outputZip, None, recursive, log)
+	
+	private def archive(sources: Iterable[Path], outputPath: Path, manifest: Option[Manifest], recursive: Boolean, log: Logger) =
 	{
-		log.info("Packaging " + outputJar + " ...")
-		val outputFile = outputJar.asFile
+		log.info("Packaging " + outputPath + " ...")
+		val outputFile = outputPath.asFile
 		if(outputFile.isDirectory)
 			Some("Specified output file " + printableFilename(outputFile) + " is a directory.")
 		else
 		{
 			val outputDir = outputFile.getParentFile
 			val result = createDirectory(outputDir, log) orElse
-				openJar(outputFile, manifest).flatMap(output => writeJar(sources, output, recursive, log))
+				withZipOutput(outputFile, manifest, log)
+				{ output =>
+					val createEntry: (String => ZipEntry) = if(manifest.isDefined) new JarEntry(_) else new ZipEntry(_)
+					writeZip(sources, output, recursive, log)(createEntry)
+				}
 			if(result.isEmpty)
 				log.info("Packaging complete.")
 			result
 		}
 	}
 	
-	private def writeJar(sources: Iterable[Path], output: JarOutputStream, recursive: Boolean, log: Logger) =
+	private def writeZip(sources: Iterable[Path], output: ZipOutputStream, recursive: Boolean, log: Logger)(createEntry: String => ZipEntry) =
 	{
 		def add(source: Path)
 		{
@@ -49,7 +65,7 @@ object FileUtilities
 			else if(sourceFile.exists)
 			{
 				log.debug("\tAdding " + source + " ...")
-				val nextEntry = new JarEntry(source.relativePath)
+				val nextEntry = createEntry(source.relativePath)
 				nextEntry.setTime(sourceFile.lastModified)
 				output.putNextEntry(nextEntry)
 				transferAndClose(new FileInputStream(sourceFile), output, log)
@@ -58,29 +74,91 @@ object FileUtilities
 			else
 				log.warn("\tSource " + source + " does not exist.")
 		}
-		Control.trapUnitAndFinally("Error writing jar: ", log)
-			{ sources.foreach(add); None } //try
-			{ output.close } //finally
+		sources.foreach(add)
+		None
 	}
 	
-	/** Creates a JarOutputStream for the given arguments.  This method properly closes
-	* the underlying FileOutputStream when it is be created but the JarOutputStream
-	* constructor throws an IOException.*/
-	private def openJar(file: File, manifest: Manifest): Option[JarOutputStream] =
+	private def withZipOutput(file: File, manifest: Option[Manifest], log: Logger)(f: ZipOutputStream => Option[String]): Option[String] =
 	{
-		val fileStream = new FileOutputStream(file)
-		var jarStream: Option[JarOutputStream] = None
-		try
+		writeStream(file: File, log: Logger)
 		{
-			jarStream = Some(new JarOutputStream(fileStream, manifest))
-			jarStream
+			fileOut =>
+			{
+				val (zipOut, ext) =
+					manifest match
+					{
+						case Some(mf) => (new JarOutputStream(fileOut, mf), "jar")
+						case None => (new ZipOutputStream(fileOut), "zip")
+					}
+				Control.trapUnitAndFinally("Error writing " + ext + ": ", log)
+					{ f(zipOut) } { zipOut.close }
+			}
 		}
-		catch { case e: Exception => None }
-		finally
+	}
+	import scala.collection.Set
+	def unzip(from: Path, toDirectory: Path, log: Logger): Either[String, Set[Path]] =
+		unzip(from, toDirectory, AllPassFilter, log)
+	def unzip(from: File, toDirectory: Path, log: Logger): Either[String, Set[Path]] =
+		unzip(from, toDirectory, AllPassFilter, log)
+	def unzip(from: InputStream, toDirectory: Path, log: Logger): Either[String, Set[Path]] =
+		unzip(from, toDirectory, AllPassFilter, log)
+	def unzip(from: URL, toDirectory: Path, log: Logger): Either[String, Set[Path]] =
+		unzip(from, toDirectory, AllPassFilter, log)
+	
+	def unzip(from: Path, toDirectory: Path, filter: NameFilter, log: Logger): Either[String, Set[Path]] =
+		unzip(from.asFile, toDirectory, filter, log)
+	def unzip(from: File, toDirectory: Path, filter: NameFilter, log: Logger): Either[String, Set[Path]] =
+		readStreamValue(from, log)(in => unzip(in, toDirectory, filter, log))
+	def unzip(from: URL, toDirectory: Path, filter: NameFilter, log: Logger): Either[String, Set[Path]] =
+		readStreamValue(from, log) { stream => unzip(stream, toDirectory, filter, log) }
+	def unzip(from: InputStream, toDirectory: Path, filter: NameFilter, log: Logger): Either[String, Set[Path]] =
+	{
+		createDirectory(toDirectory, log) match
 		{
-			if(jarStream.isEmpty)
-				fileStream.close
+			case Some(err) => Left(err)
+			case None =>
+			{
+				val zipInput = new ZipInputStream(from)
+				Control.trapAndFinally("Error unzipping: ", log)
+				{ extract(zipInput, toDirectory, filter, log) }
+				{ zipInput.close() }
+			}
 		}
+	}
+	private def extract(from: ZipInputStream, toDirectory: Path, filter: NameFilter, log: Logger) =
+	{
+		val set = new scala.collection.mutable.HashSet[Path]
+		def next(): Option[String] =
+		{
+			val entry = from.getNextEntry
+			if(entry == null)
+				None
+			else
+			{
+				val name = entry.getName
+				val result =
+					if(filter.accept(name))
+					{
+						val target = Path.fromString(toDirectory, name)
+						log.debug("Extracting zip entry '" + name + "' to '" + target + "'")
+						val result =
+							if(entry.isDirectory)
+								createDirectory(target, log)
+							else
+								writeStream(target.asFile, log) { out => FileUtilities.transfer(from, out, log) }
+						target.asFile.setLastModified(entry.getTime)
+						result
+					}
+					else
+					{
+						log.debug("Ignoring zip entry '" + name + "'")
+						None
+					}
+				from.closeEntry()
+				result match { case None => next(); case x => x }
+			}
+		}
+		next().toLeft(set.readOnly)
 	}
 	
 	def transfer(in: InputStream, out: OutputStream, log: Logger): Option[String] =
@@ -376,43 +454,57 @@ object FileUtilities
 			createDirectory(parent, log)
 		Control.trap("Error opening " + printableFilename(file) + ": ", log) { Right(constructor(file)) }
 	}
+	private def urlInputStream(url: URL, log: Logger) =
+		Control.trap("Error opening " + url + ": ", log) { Right(url.openStream) }
 	private def fileOutputChannel(file: File, log: Logger) = open(file, log, (f: File) => (new FileOutputStream(f)).getChannel)
 	private def fileInputChannel(file: File, log: Logger) = open(file, log, (f: File) => (new FileInputStream(f)).getChannel)
 	private def fileInputStream(file: File, log: Logger) = open(file, log, (f: File) => new FileInputStream(f))
-	private def fileOutputStream(file: File, log: Logger) = open(file, log, (f: File) => new FileOutputStream(f))
-	private def fileWriter(charset: Charset)(file: File, log: Logger) =
-		open(file, log, (f: File) => new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f), charset)) )
+	private def fileOutputStream(append: Boolean)(file: File, log: Logger) =
+		open(file, log, (f: File) => new FileOutputStream(f, append))
+	private def fileWriter(charset: Charset, append: Boolean)(file: File, log: Logger) =
+		open(file, log, (f: File) => new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f, append), charset)) )
 	private def fileReader(charset: Charset)(file: File, log: Logger) =
 		open(file, log, (f: File) => new BufferedReader(new InputStreamReader(new FileInputStream(f), charset)) )
 	
-	private def ioOption[T <: Closeable](file: File, open: (File, Logger) => Either[String, T],
+	private def ioOption[Source, T <: Closeable](src: Source, open: (Source, Logger) => Either[String, T],
 		f: T => Option[String], op: String, log: Logger): Option[String] =
-			io(file, open, (t: T) => f(t).toLeft(()), op, log).left.toOption
-	private def io[T <: Closeable, R](file: File, open: (File, Logger) => Either[String, T],
+			io(src, open, (t: T) => f(t).toLeft(()), op, log).left.toOption
+	private def io[Source, T <: Closeable, R](src: Source, open: (Source, Logger) => Either[String, T],
 		f: T => Either[String, R], op: String, log: Logger): Either[String, R] =
-			open(file, log).right flatMap
+			open(src, log).right flatMap
 			{
-				stream => Control.trapAndFinally("Error " + op + " file " + printableFilename(file) + ": ", log)
+				stream => Control.trapAndFinally("Error " + op + src + ": ", log)
 					{ f(stream) }
 					{ stream.close }
 			}
 	
+	def append(file: File, content: String, log: Logger): Option[String] = append(file, content, Charset.defaultCharset, log)
+	def append(file: File, content: String, charset: Charset, log: Logger): Option[String] =
+		write(file, content, charset, true, log)
+	
 	def write(file: File, content: String, log: Logger): Option[String] = write(file, content, Charset.defaultCharset, log)
 	def write(file: File, content: String, charset: Charset, log: Logger): Option[String] =
+		write(file, content, charset, false, log)
+	private def write(file: File, content: String, charset: Charset, append: Boolean, log: Logger): Option[String] =
 	{
 		if(charset.newEncoder.canEncode(content))
-			write(file, charset, log) { w =>  w.write(content); None }
+			write(file, charset, append, log) { w =>  w.write(content); None }
 		else
 			Some("String cannot be encoded by default charset.")
 	}
+	
 	def write(file: File, log: Logger)(f: Writer => Option[String]): Option[String] =
 		write(file, Charset.defaultCharset, log)(f)
 	def write(file: File, charset: Charset, log: Logger)(f: Writer => Option[String]): Option[String] =
-		ioOption(file, fileWriter(charset), f, "writing", log)
+		write(file, charset, false, log)(f)
+	private def write(file: File, charset: Charset, append: Boolean, log: Logger)(f: Writer => Option[String]): Option[String] =
+		ioOption(file, fileWriter(charset, append), f, "writing", log)
+		
 	def read(file: File, log: Logger)(f: Reader => Option[String]): Option[String] =
 		unwrapEither(readValue(file, Charset.defaultCharset, log)(wrapEither(f)))
 	def readValue[R](file: File, charset: Charset, log: Logger)(f: Reader => Either[String, R]): Either[String, R] =
 		io(file, fileReader(charset), f, "reading", log)
+		
 	// error is in Left, value is in Right
 	def readString(file: File, log: Logger): Either[String, String] = readString(file, Charset.defaultCharset, log)
 	def readString(file: File, charset: Charset, log: Logger): Either[String, String] =
@@ -438,12 +530,13 @@ object FileUtilities
 			}
 		}
 	}
+	def appendBytes(file: File, bytes: Array[Byte], log: Logger): Option[String] =
+		writeBytes(file, bytes, true, log)
 	def writeBytes(file: File, bytes: Array[Byte], log: Logger): Option[String] =
-		writeStream(file, log)	
-		{ out =>
-			out.write(bytes)
-			None
-		}
+		writeBytes(file, bytes, false, log)
+	private def writeBytes(file: File, bytes: Array[Byte], append: Boolean, log: Logger): Option[String] =
+		writeStream(file, append, log) { out => out.write(bytes); None }
+	
 	def readBytes(file: File, log: Logger): Either[String, Array[Byte]] =
 		readStreamValue(file, log)
 		{ in =>
@@ -462,12 +555,20 @@ object FileUtilities
 			Right(out.toByteArray)
 		}
 		
+	def appendStream(file: File, log: Logger)(f: OutputStream => Option[String]): Option[String] =
+		ioOption(file, fileOutputStream(true), f, "appending", log)
 	def writeStream(file: File, log: Logger)(f: OutputStream => Option[String]): Option[String] =
-		ioOption(file, fileOutputStream, f, "writing", log)
+		ioOption(file, fileOutputStream(false), f, "writing", log)
+	private def writeStream(file: File, append: Boolean, log: Logger)(f: OutputStream => Option[String]): Option[String] =
+		if(append) appendStream(file, log)(f) else writeStream(file, log)(f)
 	def readStream(file: File, log: Logger)(f: InputStream => Option[String]): Option[String] =
 		unwrapEither(readStreamValue(file, log)(wrapEither(f)))
 	def readStreamValue[R](file: File, log: Logger)(f: InputStream => Either[String, R]): Either[String, R] =
 		io(file, fileInputStream, f, "reading", log)
+	def readStream(url: URL, log: Logger)(f: InputStream => Option[String]): Option[String] =
+		unwrapEither(readStreamValue(url, log)(wrapEither(f)))
+	def readStreamValue[R](url: URL, log: Logger)(f: InputStream => Either[String, R]): Either[String, R] =
+		io(url, urlInputStream, f, "reading", log)
 		
 	def writeChannel(file: File, log: Logger)(f: FileChannel => Option[String]): Option[String] =
 		ioOption(file, fileOutputChannel, f, "writing", log)

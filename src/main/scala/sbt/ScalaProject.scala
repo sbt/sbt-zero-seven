@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah, David MacIver
+ * Copyright 2008, 2009 Mark Harrah, David MacIver
  */
 package sbt
 
@@ -169,7 +169,7 @@ trait ScalaProject extends Project
 			}
 			
 			val jarPath = outputDirectory / jarName
-			FileUtilities.pack(sources.get, jarPath, manifest, recursive, log)
+			FileUtilities.jar(sources.get, jarPath, manifest, recursive, log)
 		}
 	
 	def incrementVersionNumber()

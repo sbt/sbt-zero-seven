@@ -194,8 +194,9 @@ object Main
 			case Some(errorMessage) =>
 			{
 				project.log.error(errorMessage)
-				project.log.info("Execute 'help' to see a list of commands and " + 
-					"'actions' for a list of available project actions")
+				if(!project.taskNames.exists(_ == action))
+					project.log.info("Execute 'help' to see a list of commands or " + 
+						"'actions' for a list of available project actions")
 			}
 			case None =>
 			{
