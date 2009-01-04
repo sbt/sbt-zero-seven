@@ -78,7 +78,7 @@ object ManageDependencies
 			for(dependency <- dependencies)
 			{
 				val dependencyDescriptor = new DefaultDependencyDescriptor(moduleID, toID(dependency), false, false, true)
-				dependencyDescriptor.addDependencyConfiguration("*", "*")
+				dependencyDescriptor.addDependencyConfiguration("default", "default")
 				moduleID.addDependency(dependencyDescriptor)
 			}
 				
