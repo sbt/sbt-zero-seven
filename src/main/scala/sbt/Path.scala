@@ -36,9 +36,6 @@ sealed abstract class Path extends PathFinder with NotNull
 
 private final case class BaseDirectory(private[sbt] val path: Path) extends Path
 {
-	for(existingBase <- baseAncestor(path))
-		throw new IllegalArgumentException("Path " + path + " already has base component " + existingBase)
-	
 	override def toString = path.toString
 	def asFile = path.asFile
 	def relativePath = ""
