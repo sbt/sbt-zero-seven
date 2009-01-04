@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
@@ -17,6 +17,9 @@ sealed abstract class Path extends PathFinder with NotNull
 			pathSet += this
 	}
 	override def / (component: String): Path = if(component == ".") this else new RelativePath(this, component)
+	def exists = asFile.exists
+	def isDirectory = asFile.isDirectory
+	def lastModified = asFile.lastModified
 	def asFile: File
 	def asURL = asFile.toURI.toURL
 	def relativePath: String

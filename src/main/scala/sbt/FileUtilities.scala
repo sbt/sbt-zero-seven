@@ -52,7 +52,7 @@ object FileUtilities
 				val nextEntry = new JarEntry(source.relativePath)
 				nextEntry.setTime(sourceFile.lastModified)
 				output.putNextEntry(nextEntry)
-				transfer(new FileInputStream(sourceFile), output, log)
+				transferAndClose(new FileInputStream(sourceFile), output, log)
 				output.closeEntry()
 			}
 			else
@@ -60,7 +60,7 @@ object FileUtilities
 		}
 		Control.trapUnitAndFinally("Error writing jar: ", log)
 			{ sources.foreach(add); None } //try
-			{ closeNoException(output) } //finally
+			{ output.close } //finally
 	}
 	
 	/** Creates a JarOutputStream for the given arguments.  This method properly closes
@@ -79,11 +79,15 @@ object FileUtilities
 		finally
 		{
 			if(jarStream.isEmpty)
-				closeNoException(fileStream)
+				fileStream.close
 		}
 	}
 	
 	def transfer(in: InputStream, out: OutputStream, log: Logger): Option[String] =
+		transferImpl(in, out, false, log)
+	def transferAndClose(in: InputStream, out: OutputStream, log: Logger): Option[String] =
+		transferImpl(in, out, true, log)
+	private def transferImpl(in: InputStream, out: OutputStream, close: Boolean, log: Logger): Option[String] =
 	{
 		Control.trapUnitAndFinally("Error during transfer: ", log)
 		{
@@ -101,10 +105,10 @@ object FileUtilities
 			}
 			read
 		}
-		{ closeNoException(in) }
+		{ if(close) in.close }
 	}
-	def closeNoException(c: Closeable) { Control.trap { c.close } }
 
+	def touch(path: Path, log: Logger): Option[String] = touch(path.asFile, log)
 	def touch(file: File, log: Logger): Option[String] =
 	{
 		Control.trapUnit("Could not create file " + printableFilename(file) + ": ", log)
@@ -115,6 +119,7 @@ object FileUtilities
 				createDirectory(file.getParentFile, log) orElse { file.createNewFile(); None }
 		}
 	}
+	def createDirectory(dir: Path, log: Logger): Option[String] = createDirectory(dir.asFile, log)
 	def createDirectory(dir: File, log: Logger): Option[String] =
 	{
 		Control.trapUnit("Could not create directory " + printableFilename(dir) + ": ", log)
@@ -133,6 +138,7 @@ object FileUtilities
 			}
 		}
 	}
+	def createDirectories(d: Seq[Path], log: Logger): Option[String] = createDirectories(d.toList.map(_.asFile), log)
 	def createDirectories(d: List[File], log: Logger): Option[String] =
 		d match
 		{
@@ -140,7 +146,7 @@ object FileUtilities
 			case head :: tail => createDirectory(head, log) orElse createDirectories(tail, log)
 		}
 	private val MaximumTries = 10
-	def createTemporaryDirectory(log: Logger) =
+	def createTemporaryDirectory(log: Logger): Either[String, File] =
 	{
 		def create(tries: Int): Either[String, File] =
 		{
@@ -279,6 +285,8 @@ object FileUtilities
 		
 		Control.trap("Error copying files: ", log) { copyAll(uniquelyNamedSources.toList).toLeft(targetSet.readOnly) }
 	}
+	def copyFile(sourceFile: Path, targetFile: Path, log: Logger): Option[String] =
+		copyFile(sourceFile.asFile, targetFile.asFile, log)
 	def copyFile(sourceFile: File, targetFile: File, log: Logger): Option[String] =
 	{
 		require(sourceFile.exists)
@@ -296,6 +304,8 @@ object FileUtilities
 		)
 	}
 	
+	def copyDirectory(source: Path, target: Path, log: Logger): Option[String] =
+		copyDirectory(source.asFile, target.asFile, log)
 	def copyDirectory(source: File, target: File, log: Logger): Option[String] =
 	{
 		require(source.isDirectory)
@@ -384,7 +394,7 @@ object FileUtilities
 			{
 				stream => Control.trapAndFinally("Error " + op + " file " + printableFilename(file) + ": ", log)
 					{ f(stream) }
-					{ closeNoException(stream) }
+					{ stream.close }
 			}
 	
 	def write(file: File, content: String, log: Logger): Option[String] = write(file, content, Charset.defaultCharset, log)

@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
@@ -13,7 +13,7 @@ object Control
 	def trapAndFinally[T](errorMessagePrefix: => String, log: Logger)(execute: => Either[String, T])(doFinally: => Unit): Either[String, T] =
 		try { execute }
 		catch { case e => log.trace(e); Left(errorMessagePrefix + e.toString) }
-		finally { doFinally }
+		finally { trapAndLog(log)(doFinally) }
 		
 	def trapUnit(errorMessagePrefix: => String, log: Logger)(execute: => Option[String]): Option[String] =
 		try { execute }
@@ -22,11 +22,16 @@ object Control
 	def trapUnitAndFinally(errorMessagePrefix: => String, log: Logger)(execute: => Option[String])(doFinally: => Unit): Option[String] =
 		try { execute }
 		catch { case e => log.trace(e); Some(errorMessagePrefix + e.toString) }
-		finally { doFinally }
+		finally { trapAndLog(log)(doFinally) }
 		
 	def trap(execute: => Unit)
 	{
 		try { execute }
 		catch { case e: Exception => () }
+	}
+	def trapAndLog(log: Logger)(execute: => Unit)
+	{
+		try { execute }
+		catch { case e => log.trace(e); log.error(e.toString) }
 	}
 }
