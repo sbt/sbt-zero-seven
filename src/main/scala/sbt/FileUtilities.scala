@@ -24,10 +24,27 @@ object FileUtilities
 	/** Splits a String around path separator characters. */
 	private[sbt] def pathSplit(s: String) = PathSeparatorPattern.split(s)
 	
+	/** Creates a jar file.
+	* @param sources The files to include in the jar file.  The path used for the jar is
+	* relative to the base directory for the source.  That is, the path in the jar for source
+	* <code>(basePath ##) / x / y</code> is <code>x / y</code>.
+	* @param outputJar The file to write the jar to.
+	* @param manifest The manifest for the jar.
+	* @param recursive If true, any directories in <code>sources</code> are recursively processed.  Otherwise,
+	* they are not
+	* @param log The Logger to use. */
 	def jar(sources: Iterable[Path], outputJar: Path, manifest: Manifest, recursive: Boolean, log: Logger) =
 		archive(sources, outputJar, Some(manifest), recursive, log)
 	@deprecated def pack(sources: Iterable[Path], outputJar: Path, manifest: Manifest, recursive: Boolean, log: Logger) =
 		jar(sources, outputJar, manifest, recursive, log)
+	/** Creates a zip file.
+	* @param sources The files to include in the jar file.  The path used for the jar is
+	* relative to the base directory for the source.  That is, the path in the jar for source
+	* <code>(basePath ##) / x / y</code> is <code>x / y</code>.
+	* @param outputZip The file to write the zip to.
+	* @param recursive If true, any directories in <code>sources</code> are recursively processed.  Otherwise,
+	* they are not
+	* @param log The Logger to use. */
 	def zip(sources: Iterable[Path], outputZip: Path, recursive: Boolean, log: Logger) =
 		archive(sources, outputZip, None, recursive, log)
 	
@@ -96,21 +113,33 @@ object FileUtilities
 		}
 	}
 	import scala.collection.Set
+	/** Unzips the contents of the zip file <code>from</code> to the <code>toDirectory</code> directory.*/
 	def unzip(from: Path, toDirectory: Path, log: Logger): Either[String, Set[Path]] =
 		unzip(from, toDirectory, AllPassFilter, log)
+	/** Unzips the contents of the zip file <code>from</code> to the <code>toDirectory</code> directory.*/
 	def unzip(from: File, toDirectory: Path, log: Logger): Either[String, Set[Path]] =
 		unzip(from, toDirectory, AllPassFilter, log)
+	/** Unzips the contents of the zip file <code>from</code> to the <code>toDirectory</code> directory.*/
 	def unzip(from: InputStream, toDirectory: Path, log: Logger): Either[String, Set[Path]] =
 		unzip(from, toDirectory, AllPassFilter, log)
+	/** Unzips the contents of the zip file <code>from</code> to the <code>toDirectory</code> directory.*/
 	def unzip(from: URL, toDirectory: Path, log: Logger): Either[String, Set[Path]] =
 		unzip(from, toDirectory, AllPassFilter, log)
 	
+	/** Unzips the contents of the zip file <code>from</code> to the <code>toDirectory</code> directory.
+	* Only the entries that match the given filter are extracted. */
 	def unzip(from: Path, toDirectory: Path, filter: NameFilter, log: Logger): Either[String, Set[Path]] =
 		unzip(from.asFile, toDirectory, filter, log)
+	/** Unzips the contents of the zip file <code>from</code> to the <code>toDirectory</code> directory.
+	* Only the entries that match the given filter are extracted. */
 	def unzip(from: File, toDirectory: Path, filter: NameFilter, log: Logger): Either[String, Set[Path]] =
 		readStreamValue(from, log)(in => unzip(in, toDirectory, filter, log))
+	/** Unzips the contents of the zip file <code>from</code> to the <code>toDirectory</code> directory.
+	* Only the entries that match the given filter are extracted. */
 	def unzip(from: URL, toDirectory: Path, filter: NameFilter, log: Logger): Either[String, Set[Path]] =
 		readStreamValue(from, log) { stream => unzip(stream, toDirectory, filter, log) }
+	/** Unzips the contents of the zip file <code>from</code> to the <code>toDirectory</code> directory.
+	* Only the entries that match the given filter are extracted. */
 	def unzip(from: InputStream, toDirectory: Path, filter: NameFilter, log: Logger): Either[String, Set[Path]] =
 	{
 		createDirectory(toDirectory, log) match
@@ -161,8 +190,12 @@ object FileUtilities
 		next().toLeft(set.readOnly)
 	}
 	
+	/** Copies all bytes from the given input stream to the given output stream.
+	* Neither stream is closed.*/
 	def transfer(in: InputStream, out: OutputStream, log: Logger): Option[String] =
 		transferImpl(in, out, false, log)
+	/** Copies all bytes from the given input stream to the given output stream.  The
+	* input stream is closed after the method completes.*/
 	def transferAndClose(in: InputStream, out: OutputStream, log: Logger): Option[String] =
 		transferImpl(in, out, true, log)
 	private def transferImpl(in: InputStream, out: OutputStream, close: Boolean, log: Logger): Option[String] =
@@ -186,7 +219,9 @@ object FileUtilities
 		{ if(close) in.close }
 	}
 
+	/** Creates a file at the given location.*/
 	def touch(path: Path, log: Logger): Option[String] = touch(path.asFile, log)
+	/** Creates a file at the given location.*/
 	def touch(file: File, log: Logger): Option[String] =
 	{
 		Control.trapUnit("Could not create file " + printableFilename(file) + ": ", log)
@@ -197,7 +232,9 @@ object FileUtilities
 				createDirectory(file.getParentFile, log) orElse { file.createNewFile(); None }
 		}
 	}
+	/** Creates a directory at the given location.*/
 	def createDirectory(dir: Path, log: Logger): Option[String] = createDirectory(dir.asFile, log)
+	/** Creates a directory at the given location.*/
 	def createDirectory(dir: File, log: Logger): Option[String] =
 	{
 		Control.trapUnit("Could not create directory " + printableFilename(dir) + ": ", log)
@@ -216,14 +253,18 @@ object FileUtilities
 			}
 		}
 	}
+	/** Creates directories at the given locations.*/
 	def createDirectories(d: Seq[Path], log: Logger): Option[String] = createDirectories(d.toList.map(_.asFile), log)
+	/** Creates directories at the given locations.*/
 	def createDirectories(d: List[File], log: Logger): Option[String] =
 		d match
 		{
 			case Nil => None
 			case head :: tail => createDirectory(head, log) orElse createDirectories(tail, log)
 		}
+	/** The maximum number of times a unique temporary filename is attempted to be created.*/
 	private val MaximumTries = 10
+	/** Creates a temporary directory and returns it.*/
 	def createTemporaryDirectory(log: Logger): Either[String, File] =
 	{
 		def create(tries: Int): Either[String, File] =
@@ -244,6 +285,8 @@ object FileUtilities
 		create(0)
 	}
 
+	/** Creates a temporary directory and provides its location to the given function.  The directory
+	* is deleted after the function returns.*/
 	def doInTemporaryDirectory[T](log: Logger)(action: File => Either[String, T]): Either[String, T] =
 	{
 		def doInDirectory(dir: File): Either[String, T] =
@@ -255,6 +298,9 @@ object FileUtilities
 		createTemporaryDirectory(log).right.flatMap(doInDirectory)
 	}
 	
+	/** Copies the files declared in <code>sources</code> to the <code>destinationDirectory</code>
+	* directory.  The source directory hierarchy is flattened so that all copies are immediate
+	* children of <code>destinationDirectory</code>.  Directories are not recursively entered.*/
 	def copyFlat(sources: Iterable[Path], destinationDirectory: Path, log: Logger) =
 	{
 		val targetSet = new scala.collection.mutable.HashSet[Path]
@@ -302,6 +348,12 @@ object FileUtilities
 		}
 		creationError orElse ( Control.trapUnit("", log) { copy(sources.toList) } )
 	}
+	/** Copies the files declared in <code>sources</code> to the <code>destinationDirectory</code>
+	* directory.  Directories are not recursively entered.  The destination hierarchy matches the
+	* source paths relative to any base directories.  For example:
+	*
+	* A source <code>(basePath ##) / x / y</code> is copied to <code>destinationDirectory / x / y</code>.
+	* */
 	def copy(sources: Iterable[Path], destinationDirectory: Path, log: Logger) =
 	{
 		val targetSet = new scala.collection.mutable.HashSet[Path]
@@ -329,6 +381,9 @@ object FileUtilities
 		}.toLeft(targetSet.readOnly)
 	}
 	
+	/** Copies the files declared in <code>sources</code> to the <code>targetDirectory</code>
+	* directory.  The source directory hierarchy is flattened so that all copies are immediate
+	* children of <code>targetDirectory</code>.  Directories are not recursively entered.*/
 	def copyFilesFlat(sources: Iterable[File], targetDirectory: Path, log: Logger) =
 	{
 		require(targetDirectory.asFile.isDirectory)
@@ -363,8 +418,12 @@ object FileUtilities
 		
 		Control.trap("Error copying files: ", log) { copyAll(uniquelyNamedSources.toList).toLeft(targetSet.readOnly) }
 	}
+	/** Copies <code>sourceFile</code> to <code>targetFile</code>.  If <code>targetFile</code>
+	* exists, it is overwritten.*/
 	def copyFile(sourceFile: Path, targetFile: Path, log: Logger): Option[String] =
 		copyFile(sourceFile.asFile, targetFile.asFile, log)
+	/** Copies <code>sourceFile</code> to <code>targetFile</code>.  If <code>targetFile</code>
+	* exists, it is overwritten.*/
 	def copyFile(sourceFile: File, targetFile: File, log: Logger): Option[String] =
 	{
 		require(sourceFile.exists)
@@ -382,8 +441,10 @@ object FileUtilities
 		)
 	}
 	
+	/** Copies the contents of the <code>source</code> directory to the <code>target</code> directory .*/
 	def copyDirectory(source: Path, target: Path, log: Logger): Option[String] =
 		copyDirectory(source.asFile, target.asFile, log)
+	/** Copies the contents of the <code>source</code> directory to the <code>target</code> directory .*/
 	def copyDirectory(source: File, target: File, log: Logger): Option[String] =
 	{
 		require(source.isDirectory)
@@ -406,6 +467,7 @@ object FileUtilities
 		copyDirectory(source, target)
 	}
 
+	/** Returns the full path for the given file.*/
 	def printableFilename(file: File) =
 	{
 		try
@@ -418,7 +480,11 @@ object FileUtilities
 		}
 	}
 	
+	/** Deletes the given files recursively.*/
 	def clean(files: Iterable[Path], log: Logger): Option[String] = clean(files, false, log)
+	/** Deletes the given files recursively.  <code>quiet</code> determines the logging level.
+	* If it is true, each file in <code>files</code> is logged at the <code>info</code> level.
+	* If it is false, the <code>debug</code> level is used.*/
 	def clean(files: Iterable[Path], quiet: Boolean, log: Logger): Option[String] =
 		deleteFiles(files.map(_.asFile), quiet, log)
 			
@@ -585,13 +651,17 @@ object FileUtilities
 		else
 			a
 			
+	/** Writes the given string to the writer followed by a newline.*/
 	def writeLine(writer: Writer, line: String)
 	{
 		writer.write(line)
 		writer.write(Newline)
 	}
 	
+	/** The directory in which temporary files are placed.*/
 	val temporaryDirectory = new File(System.getProperty("java.io.tmpdir"))
+	/** The location of the jar containing this class.*/
 	lazy val sbtJar: File = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
+	/** The producer of randomness for unique name generation.*/
 	private val random = new java.util.Random
 }

@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
@@ -7,8 +7,10 @@ import scala.tools.nsc.{interpreter, util, GenericRunnerCommand, InterpreterLoop
 import util.ClassPath
 import java.net.URL
 
+/** This module is an interface to starting the scala interpreter or runner.*/
 object Run
 {
+	/** Starts an interactive scala interpreter session with the given classpath.*/
 	def console(classpath: Iterable[Path], log: Logger) =
 		createSettings(log)
 		{
@@ -25,6 +27,7 @@ object Run
 				}
 			}
 		}
+	/** Executes the given function, trapping calls to System.exit. */
 	private def executeTrapExit(f: => Unit, log: Logger): Option[String] =
 	{
 		TrapExit(f, log) match
@@ -42,6 +45,7 @@ object Run
 			case _ => None
 		}
 	}
+	/** Runs the class 'mainClass' using the given classpath and options using the scala runner.*/
 	def run(mainClass: String, classpath: Iterable[Path], options: Seq[String], log: Logger) =
 	{
 		createSettings(log)
@@ -62,6 +66,9 @@ object Run
 			}
 		}
 	}
+	/** If mainClassOption is None, then the interactive scala interpreter is started with the given classpath.
+	* Otherwise, the class wrapped by Some is run using the scala runner with the given classpath and
+	* options. */
 	def apply(mainClassOption: Option[String], classpath: Iterable[Path], options: Seq[String], log: Logger) =
 	{
 		mainClassOption match
@@ -70,6 +77,7 @@ object Run
 			case None => console(classpath, log)
 		}
 	}
+	/** Create a settings object and execute the provided function if the settings are created ok.*/
 	private def createSettings(log: Logger)(f: Settings => Option[String]) =
 	{
 		val command = new GenericRunnerCommand(Nil, message => log.error(message))
