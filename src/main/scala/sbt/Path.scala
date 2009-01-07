@@ -8,8 +8,21 @@ import FileUtilities.wrapNull
 import java.io.{File, FileFilter}
 import scala.collection.mutable.{Set, HashSet}
 
+/** A Path represents a file in a project.
+* @see sbt.PathFinder*/
 sealed abstract class Path extends PathFinder with NotNull
 {
+	/** Creates a base directory for this path.  This is used by copy and zip functions
+	* to determine the relative path that should be used in the destination.  For example,
+	* if the following path is specified to be copied to directory 'd',
+	* 
+	* <code>((a / b) ##) / x / y</code>
+	*
+	* the copied path would be 
+	*
+	* <code>d / x / y</code>
+	*
+	* The <code>relativePath</code> method is used to return the relative path to the base directory. */
 	def ## : Path = new BaseDirectory(this)
 	private[sbt] def addTo(pathSet: Set[Path])
 	{
@@ -17,20 +30,29 @@ sealed abstract class Path extends PathFinder with NotNull
 			pathSet += this
 	}
 	override def / (component: String): Path = if(component == ".") this else new RelativePath(this, component)
+	/** True if and only if the file represented by this path exists.*/
 	def exists = asFile.exists
+	/** True if and only if the file represented by this path is a directory.*/
 	def isDirectory = asFile.isDirectory
+	/** The last modified time of the file represented by this path.*/
 	def lastModified = asFile.lastModified
+	/** The file represented by this path.*/
 	def asFile: File
+	/** The file represented by this path converted to a <code>URL</code>.*/
 	def asURL = asFile.toURI.toURL
+	/** The string representation of this path relative to the base directory.  The project directory is the
+	* default base directory if one is not specified explicitly using the <code>##</code> operator.*/
 	def relativePath: String
 	private[sbt] def prependTo(s: String): String
 	
+	/** Equality of Paths is defined in terms of the underlying <code>File</code>.*/
 	override final def equals(other: Any) =
 		other match
 		{
 			case op: Path => asFile == op.asFile
 			case _ => false
 		}
+	/** The hash code of a Path is that of the underlying <code>File</code>.*/
 	override final def hashCode = asFile.hashCode
 }
 
@@ -67,28 +89,39 @@ object Path
 	import java.io.File
 	import File.pathSeparator
 	
+	/** Constructs a String representation of <code>Path</code>s.  The absolute path String of each <code>Path</code> is
+	* separated by the platform's path separator.*/
 	def makeString(paths: Iterable[Path]): String = paths.map(_.asFile.getAbsolutePath).mkString(pathSeparator)
 	
+	/** Constructs a String representation of <code>Path</code>s.  The relative path String of each <code>Path</code> is
+	* separated by the platform's path separator.*/
 	def makeRelativeString(paths: Iterable[Path]): String = paths.map(_.relativePath).mkString(pathSeparator)
+	
 	def splitString(projectPath: Path, value: String): Iterable[Path] =
 	{
 		for(pathString <- FileUtilities.pathSplit(value) if pathString.length > 0) yield
 			Path.fromString(projectPath, pathString)
 	}
 	
+	/** A <code>PathFinder</code> that always produces the empty set of <code>Path</code>s.*/
 	def emptyPathFinder =
 		new PathFinder
 		{
 			private[sbt] def addTo(pathSet: Set[Path]) {}
 		}
+	/** A <code>PathFinder</code> that selects the paths provided by the <code>paths</code> argument, which is
+	* reevaluated on each call to the <code>PathFinder</code>'s <code>get</code> method.  */
 	def lazyPathFinder(paths: => Iterable[Path]): PathFinder =
 		new PathFinder
 		{
 			private[sbt] def addTo(pathSet: Set[Path]) = pathSet ++= paths
 		}
 		
+	/** The separator character of the platform.*/
 	val sep = java.io.File.separatorChar
 	
+	/** Checks the string to verify that it is a legal path component.  The string must be non-empty,
+	* not a slash, and not '.' or '..'.*/
 	def checkComponent(c: String): String =
 	{
 		require(c.length > 0, "Path component must not be empty")
@@ -98,14 +131,15 @@ object Path
 		require(c != ".", "Path component cannot be '.'")
 		c
 	}
-	def fromString(projectPath: Path, value: String): Path =
+	/** Converts a path string relative to the given base path to a <code>Path</code>. */
+	def fromString(basePath: Path, value: String): Path =
 	{
 		if(value.isEmpty)
-			projectPath
+			basePath
 		else
 		{
 			val components = value.split("""[/\\]""")
-			(projectPath /: components)( (path, component) => path / component )
+			(basePath /: components)( (path, component) => path / component )
 		}
 	}
 	def baseAncestor(path: Path): Option[Path] =
@@ -141,7 +175,7 @@ object Path
 			}
 		}
 	}
-	def basePathString(basePath: Path): Option[String] = baseFileString(basePath.asFile)
+	private[sbt] def basePathString(basePath: Path): Option[String] = baseFileString(basePath.asFile)
 	private def baseFileString(baseFile: File): Option[String] =
 	{
 		if(baseFile.isDirectory)
@@ -158,20 +192,37 @@ object Path
 	}
 }
 
+/** A path finder constructs a set of paths.  The set is evaluated by a call to the <code>get</code>
+* method.  The set will be different for different calls to <code>get</code> if the underlying filesystem
+* has changed.*/
 sealed abstract class PathFinder extends NotNull
 {
-	/** The union of the paths found by this with the paths found by 'paths'.*/
+	/** The union of the paths found by this <code>PathFinder</code> with the paths found by 'paths'.*/
 	def +++(paths: PathFinder): PathFinder = new Paths(this, paths)
+	/** Excludes all paths from <code>excludePaths</code> from the paths selected by this <code>PathFinder</code>.*/
 	def ---(excludePaths: PathFinder): PathFinder = new ExcludePaths(this, excludePaths)
+	/** Constructs a new finder that selects all paths with a name that matches <code>filter</code> and are
+	* descendents of paths selected by this finder.*/
 	def **(filter: NameFilter): PathFinder = new DescendentOrSelfPathFinder(this, filter)
+	/** Constructs a new finder that selects all paths with a name that matches <code>filter</code> and are
+	* immediate children of paths selected by this finder.*/
 	def *(filter: NameFilter): PathFinder = new ChildPathFinder(this, filter)
+	/** Constructs a new finder that selects all paths with name <code>literal</code> that are immediate children
+	* of paths selected by this finder.*/
 	def / (literal: String): PathFinder = new ChildPathFinder(this, new ExactFilter(literal))
+	/** Constructs a new finder that selects all paths with name <code>literal</code> that are immediate children
+	* of paths selected by this finder.*/
 	final def \ (literal: String): PathFinder = this / literal
 
+	/** Selects all descendent paths with a name that matches <code>include</code> and do not have an intermediate
+	* path with a name that matches <code>intermediateExclude</code>.  Typical usage is:
+	*
+	* <code>descendentsExcept("*.jar", ".svn")</code>*/
 	def descendentsExcept(include: NameFilter, intermediateExclude: NameFilter): PathFinder =
 		(this ** include) --- (this ** intermediateExclude ** include)
 	
-	/** Evaluates this finder.*/
+	/** Evaluates this finder.  The set returned by this method will reflect the underlying filesystem at the
+	* time of calling.  If the filesystem changes, two calls to this method might be different.*/
 	final def get: scala.collection.Set[Path] =
 	{
 		val pathSet = new HashSet[Path]

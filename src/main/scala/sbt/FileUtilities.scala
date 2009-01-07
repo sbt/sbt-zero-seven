@@ -544,11 +544,19 @@ object FileUtilities
 					{ stream.close }
 			}
 	
+	/** Appends the given <code>String content</code> to the provided <code>file</code> using the default encoding.
+	* A new file is created if it does not exist.*/
 	def append(file: File, content: String, log: Logger): Option[String] = append(file, content, Charset.defaultCharset, log)
+	/** Appends the given <code>String content</code> to the provided <code>file</code> using the given encoding.
+	* A new file is created if it does not exist.*/
 	def append(file: File, content: String, charset: Charset, log: Logger): Option[String] =
 		write(file, content, charset, true, log)
 	
+	/** Writes the given <code>String content</code> to the provided <code>file</code> using the default encoding.
+	* If the file exists, it is overwritten.*/
 	def write(file: File, content: String, log: Logger): Option[String] = write(file, content, Charset.defaultCharset, log)
+	/** Writes the given <code>String content</code> to the provided <code>file</code> using the given encoding.
+	* If the file already exists, it is overwritten.*/
 	def write(file: File, content: String, charset: Charset, log: Logger): Option[String] =
 		write(file, content, charset, false, log)
 	private def write(file: File, content: String, charset: Charset, append: Boolean, log: Logger): Option[String] =
@@ -559,20 +567,31 @@ object FileUtilities
 			Some("String cannot be encoded by default charset.")
 	}
 	
+	/** Opens a <code>Writer</code> on the given file using the default encoding,
+	* passes it to the provided function, and closes the <code>Writer</code>.*/
 	def write(file: File, log: Logger)(f: Writer => Option[String]): Option[String] =
 		write(file, Charset.defaultCharset, log)(f)
+	/** Opens a <code>Writer</code> on the given file using the given encoding,
+	* passes it to the provided function, and closes the <code>Writer</code>.*/
 	def write(file: File, charset: Charset, log: Logger)(f: Writer => Option[String]): Option[String] =
 		write(file, charset, false, log)(f)
 	private def write(file: File, charset: Charset, append: Boolean, log: Logger)(f: Writer => Option[String]): Option[String] =
 		ioOption(file, fileWriter(charset, append), f, "writing", log)
 		
+	/** Opens a <code>Reader</code> on the given file using the default encoding,
+	* passes it to the provided function, and closes the <code>Reader</code>.*/
 	def read(file: File, log: Logger)(f: Reader => Option[String]): Option[String] =
 		unwrapEither(readValue(file, Charset.defaultCharset, log)(wrapEither(f)))
+	/** Opens a <code>Reader</code> on the given file using the given encoding,
+	* passes it to the provided function, and closes the <code>Reader</code>.*/
 	def readValue[R](file: File, charset: Charset, log: Logger)(f: Reader => Either[String, R]): Either[String, R] =
 		io(file, fileReader(charset), f, "reading", log)
 		
-	// error is in Left, value is in Right
+	/** Reads the contents of the given file into a <code>String</code> using the default encoding.
+	*  The resulting <code>String</code> is wrapped in <code>Right</code>.*/
 	def readString(file: File, log: Logger): Either[String, String] = readString(file, Charset.defaultCharset, log)
+	/** Reads the contents of the given file into a <code>String</code> using the given encoding.
+	*  The resulting <code>String</code> is wrapped in <code>Right</code>.*/
 	def readString(file: File, charset: Charset, log: Logger): Either[String, String] =
 	{
 		readValue(file, charset, log) {
@@ -596,13 +615,16 @@ object FileUtilities
 			}
 		}
 	}
+	/** Appends the given bytes to the given file. */
 	def appendBytes(file: File, bytes: Array[Byte], log: Logger): Option[String] =
 		writeBytes(file, bytes, true, log)
+	/** Writes the given bytes to the given file. If the file already exists, it is overwritten.*/
 	def writeBytes(file: File, bytes: Array[Byte], log: Logger): Option[String] =
 		writeBytes(file, bytes, false, log)
 	private def writeBytes(file: File, bytes: Array[Byte], append: Boolean, log: Logger): Option[String] =
 		writeStream(file, append, log) { out => out.write(bytes); None }
 	
+	/** Reads the entire file into a byte array. */
 	def readBytes(file: File, log: Logger): Either[String, Array[Byte]] =
 		readStreamValue(file, log)
 		{ in =>
@@ -621,25 +643,43 @@ object FileUtilities
 			Right(out.toByteArray)
 		}
 		
+	/** Opens an <code>OutputStream</code> on the given file with append=true and passes the stream
+	* to the provided function.  The stream is closed before this function returns.*/
 	def appendStream(file: File, log: Logger)(f: OutputStream => Option[String]): Option[String] =
 		ioOption(file, fileOutputStream(true), f, "appending", log)
+	/** Opens an <code>OutputStream</code> on the given file and passes the stream
+	* to the provided function.  The stream is closed before this function returns.*/
 	def writeStream(file: File, log: Logger)(f: OutputStream => Option[String]): Option[String] =
 		ioOption(file, fileOutputStream(false), f, "writing", log)
 	private def writeStream(file: File, append: Boolean, log: Logger)(f: OutputStream => Option[String]): Option[String] =
 		if(append) appendStream(file, log)(f) else writeStream(file, log)(f)
+	/** Opens an <code>InputStream</code> on the given file and passes the stream
+	* to the provided function.  The stream is closed before this function returns.*/
 	def readStream(file: File, log: Logger)(f: InputStream => Option[String]): Option[String] =
 		unwrapEither(readStreamValue(file, log)(wrapEither(f)))
+	/** Opens an <code>InputStream</code> on the given file and passes the stream
+	* to the provided function.  The stream is closed before this function returns.*/
 	def readStreamValue[R](file: File, log: Logger)(f: InputStream => Either[String, R]): Either[String, R] =
 		io(file, fileInputStream, f, "reading", log)
+	/** Opens an <code>InputStream</code> on the given <code>URL</code> and passes the stream
+	* to the provided function.  The stream is closed before this function returns.*/
 	def readStream(url: URL, log: Logger)(f: InputStream => Option[String]): Option[String] =
 		unwrapEither(readStreamValue(url, log)(wrapEither(f)))
+	/** Opens an <code>InputStream</code> on the given <code>URL</code> and passes the stream
+	* to the provided function.  The stream is closed before this function returns.*/
 	def readStreamValue[R](url: URL, log: Logger)(f: InputStream => Either[String, R]): Either[String, R] =
 		io(url, urlInputStream, f, "reading", log)
 		
+	/** Opens a <code>FileChannel</code> on the given file for writing and passes the channel
+	* to the given function.  The channel is closed before this function returns.*/
 	def writeChannel(file: File, log: Logger)(f: FileChannel => Option[String]): Option[String] =
 		ioOption(file, fileOutputChannel, f, "writing", log)
+	/** Opens a <code>FileChannel</code> on the given file for reading and passes the channel
+	* to the given function.  The channel is closed before this function returns.*/
 	def readChannel(file: File, log: Logger)(f: FileChannel => Option[String]): Option[String] =
 		unwrapEither(readChannelValue(file, log)(wrapEither(f)))
+	/** Opens a <code>FileChannel</code> on the given file for reading and passes the channel
+	* to the given function.  The channel is closed before this function returns.*/
 	def readChannelValue[R](file: File, log: Logger)(f: FileChannel => Either[String, R]): Either[String, R] =
 		io(file, fileInputChannel, f, "reading", log)
 	
