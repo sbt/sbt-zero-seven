@@ -41,6 +41,36 @@ object Main
 			interactive(project)
 			printTime(project, startTime, "session")
 		}
+		else if(args.contains("compile-stats"))
+		{
+			def timeCompile(): Long =
+			{
+				val start = System.currentTimeMillis
+				project.act("compile")
+				System.currentTimeMillis - start
+			}
+			def freshCompile(label: String)
+			{
+				project.act("clean")
+				val time = timeCompile()
+				println(label + " full compile time: " + time)
+			}
+			project.log.setLevel(Level.Warn)
+			project match
+			{
+				case sp: BasicScalaProject =>
+				{
+					List("Initial", "Second", "Third").foreach(freshCompile)
+					for(source <- sp.mainSources.get)
+					{
+						FileUtilities.touch(source, sp.log)
+						val time = timeCompile()
+						println("Time to compile modified source " + source + ": " + time)
+					}
+				}
+				case _ => project.log.error("Compile statistics only available on BasicScalaProjects.")
+			}
+		}
 		else
 		{
 			((None: Option[String]) /: args)( (errorMessage, arg) => errorMessage orElse project.act(arg) ) match
