@@ -53,7 +53,7 @@ object Main
 			{
 				project.act("clean")
 				val time = timeCompile()
-				println(label + " full compile time: " + time)
+				println(label + " full compile time: " + time + " ms")
 			}
 			project.log.setLevel(Level.Warn)
 			project match
@@ -65,7 +65,7 @@ object Main
 					{
 						FileUtilities.touch(source, sp.log)
 						val time = timeCompile()
-						println("Time to compile modified source " + source + ": " + time)
+						println("Time to compile modified source " + source + ": " + time + " ms")
 					}
 				}
 				case _ => project.log.error("Compile statistics only available on BasicScalaProjects.")
