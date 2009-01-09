@@ -31,6 +31,7 @@ src/main/scala/sbt/DefaultProject.scala -text
 src/main/scala/sbt/DotGraph.scala -text
 src/main/scala/sbt/Environment.scala -text
 src/main/scala/sbt/FileUtilities.scala -text
+src/main/scala/sbt/IntegrationTesting.scala -text
 src/main/scala/sbt/LineReader.scala -text
 src/main/scala/sbt/Logger.scala -text
 src/main/scala/sbt/Main.scala -text
