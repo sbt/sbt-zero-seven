@@ -227,7 +227,11 @@ object FileUtilities
 		Control.trapUnit("Could not create file " + printableFilename(file) + ": ", log)
 		{
 			if(file.exists)
-				None
+			{
+				def updateFailBase = "Could not update last modified for file " + printableFilename(file)
+				Control.trapUnit(updateFailBase + ": ", log)
+					{ if(file.setLastModified(System.currentTimeMillis)) None else Some(updateFailBase) }
+			}
 			else
 				createDirectory(file.getParentFile, log) orElse { file.createNewFile(); None }
 		}
