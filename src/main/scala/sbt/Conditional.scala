@@ -146,11 +146,21 @@ trait Conditional[Source, Product, External] extends NotNull
 			{
 				val sourceModificationTime = sourceLastModified(source)
 				def isUpdated(p: Product) = !productExists(p) || productLastModified(p) < sourceModificationTime
-					
-				val modified = sourceProducts.find(isUpdated)
-				if(modified.isDefined)
-					log.debug("Modified " + productType + ": " + modified.get)
-				modified.isDefined
+				
+				sourceProducts.find(isUpdated) match
+				{
+					case Some(modifiedProduct) =>
+						log.debug("Outdated " + productType + ": " + modifiedProduct + " for source " + source)
+						true
+					case None =>
+						if(sourceProducts.isEmpty)
+						{
+							log.debug("Source " + source + " has no products, marking it modified.")
+							true
+						}
+						else
+							false
+				}
 			}
 		}
 	}

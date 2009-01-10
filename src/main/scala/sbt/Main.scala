@@ -5,6 +5,11 @@ package sbt
 
 import scala.collection.immutable.TreeSet
 
+private object RunCompleteAction extends Enumeration
+{
+	val Exit, Reload = Value
+}
+
 /** This class is the entry point for sbt.  If it is given any arguments, it interprets them
 * as actions, executes the corresponding actions, and exits.  If there were no arguments provided,
 * sbt enters interactive mode.*/
@@ -14,6 +19,10 @@ object Main
 	* and then the program terminates.  If no arguments are specified, the program enters interactive
 	* mode.*/
 	def main(args: Array[String])
+	{
+		run(args)
+	}
+	private def run(args: Array[String])
 	{
 		val startTime = System.currentTimeMillis
 		Project.loadProject match
@@ -25,21 +34,28 @@ object Main
 			}
 			case Right(project) =>
 			{
-				// in interactive mode, fill all undefined properties
-				if(args.length > 0 || fillUndefinedProjectProperties(project.topologicalSort.toList.reverse))
-					startProject(project, args, startTime)
+				val doNext =
+					// in interactive mode, fill all undefined properties
+					if(args.length > 0 || fillUndefinedProjectProperties(project.topologicalSort.toList.reverse))
+						startProject(project, args, startTime)
+					else
+						RunCompleteAction.Exit
 				runExitHooks(project.log)
+				if(doNext == RunCompleteAction.Reload)
+					run(args)
 			}
 		}
 	}
-	private def startProject(project: Project, args: Array[String], startTime: Long)
+	/** Returns true if the project should be reloaded, false if sbt should exit.*/
+	private def startProject(project: Project, args: Array[String], startTime: Long): RunCompleteAction.Value =
 	{
 		project.log.info("Building project " + project.name + " " + project.version.toString + " using " + project.getClass.getName)
 		if(args.length == 0)
 		{
 			project.log.info("No actions specified, interactive session started. Execute 'help' for more information.")
-			interactive(project)
+			val doNext = interactive(project)
 			printTime(project, startTime, "session")
+			doNext
 		}
 		else if(args.contains("compile-stats"))
 		{
@@ -70,6 +86,7 @@ object Main
 				}
 				case _ => project.log.error("Compile statistics only available on BasicScalaProjects.")
 			}
+			RunCompleteAction.Exit
 		}
 		else
 		{
@@ -79,6 +96,7 @@ object Main
 				case Some(errorMessage) => project.log.error("Error during build: " + errorMessage)
 			}
 			printTime(project, startTime, "build")
+			RunCompleteAction.Exit
 		}
 	}
 	
@@ -98,6 +116,8 @@ object Main
 	val GetAction = "get"
 	/** The name of the action that displays the help message. */
 	val HelpAction = "help"
+	/** The name of the action that reloads a project.  This is useful for when the project definition has changed. */
+	val ReloadAction = "reload"
 
 	/** The list of all available commands at the interactive prompt in addition to the tasks defined
 	* by a project.*/
@@ -105,22 +125,22 @@ object Main
 	/** The list of logging levels.*/
 	private def logLevels: Iterable[String] = TreeSet.empty[String] ++ Level.elements.map(_.toString)
 	/** The list of all interactive commands other than logging level.*/
-	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent)
+	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent, HelpAction, ReloadAction)
 	
 	/** Enters interactive mode for the given root project.  It uses JLine for tab completion and
-	* history.  It returns normally when the user terminates the interactive session.  That is,
+	* history.  It returns normally when the user terminates or reloads the interactive session.  That is,
 	* it does not call System.exit to quit.
 	**/
-	def interactive(baseProject: Project)
+	private def interactive(baseProject: Project): RunCompleteAction.Value =
 	{
 		val reader = new JLineReader(baseProject, ProjectAction, interactiveCommands)
 		
 		/** Prompts the user for the next command using 'currentProject' as context.
-		* If the command indicates that the user wishes to terminate the session,
-		*   the function returns.
+		* If the command indicates that the user wishes to terminate or reload the session,
+		*   the function returns the appropriate value.
 		* Otherwise, the command is handled and this function is called again
 		*   (tail recursively) to prompt for the next command. */
-		def loop(currentProject: Project)
+		def loop(currentProject: Project): RunCompleteAction.Value =
 		{
 			reader.readLine("> ") match
 			{
@@ -130,7 +150,9 @@ object Main
 					if(trimmed.isEmpty)
 						loop(currentProject)
 					else if(TerminateActions.elements.contains(trimmed.toLowerCase))
-						()
+						RunCompleteAction.Exit
+					else if(ReloadAction == trimmed)
+						RunCompleteAction.Reload
 					else if(trimmed.startsWith(ProjectAction + " "))
 					{
 						val projectName = trimmed.substring(ProjectAction.length + 1)
@@ -164,7 +186,7 @@ object Main
 						loop(currentProject)
 					}
 				}
-				case None => ()
+				case None => RunCompleteAction.Exit
 			}
 		}
 		
@@ -185,6 +207,7 @@ object Main
 		printCmd(ProjectAction + " <project name>", "Sets the currently active project.")
 		printCmd(ShowProjectsAction, "Shows all available projects.")
 		printCmd(TerminateActions.elements.mkString(", "), "Terminates the program.")
+		printCmd(ReloadAction, "Reloads sbt, recompiling modified project definitions if necessary.")
 		printCmd(SetAction + " <property> <value>", "Sets the value of the property given as its argument.")
 		printCmd(GetAction + " <property>", "Gets the value of the property given as its argument.")
 		printCmd(HelpAction, "Displays this help message.")
