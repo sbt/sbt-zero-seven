@@ -36,6 +36,12 @@ sealed abstract class Path extends PathFinder with NotNull
 	def isDirectory = asFile.isDirectory
 	/** The last modified time of the file represented by this path.*/
 	def lastModified = asFile.lastModified
+	/* True if and only if file that this path represents exists and the file represented by the path 'p'
+	* does not exist or was modified before the file for this path.*/
+	def newerThan(p: Path): Boolean = exists && (!p.exists || lastModified > p.lastModified)
+	/* True if and only if file that this path represents does not exist or the file represented by the path 'p'
+	* exists and was modified after the file for this path.*/
+	def olderThan(p: Path): Boolean = p newerThan this
 	/** The file represented by this path.*/
 	def asFile: File
 	/** The file represented by this path converted to a <code>URL</code>.*/

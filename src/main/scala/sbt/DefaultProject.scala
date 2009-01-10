@@ -10,7 +10,7 @@ class DefaultWebProject(val info: ProjectInfo) extends BasicWebScalaProject
 
 import BasicScalaProject._
 
-abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveManagedProject
+abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveManagedProject with FileTasks
 {
 	/** The class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
