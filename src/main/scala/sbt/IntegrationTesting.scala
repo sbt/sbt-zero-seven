@@ -17,44 +17,22 @@ trait ScalaIntegrationTesting extends IntegrationTesting
 
 	protected def integrationTestTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]) =
 		task{
-			val preresult = try { pretests } catch { case e => Some(e.getMessage) }
-			preresult match
+			import Control._
+			trapUnit("Setup failed: ", log)(pretests) match
 			{
-				case Some(msg) => Some("Setup failed:" + msg)
-				case None => try
-				{
-					executeIntegrationTests(frameworks, classpath, analysis, options)
-				}
-				finally
-				{
-					try
+				case Some(msg) => Some(msg)
+				case None => trapUnitAndFinally("Exception in framework", log)(executeIntegrationTests(frameworks, classpath, analysis, options))(
+					trapUnit("Cleanup failed: ", log)(posttests) match
 					{
-						posttests match
-						{
-							case Some(msg) => log.error("Cleanup failed:" + msg)
-							case None => {}
-						}
+						case Some(msg) => log.error(msg)
+						case None => {}
 					}
-					catch { case e => Some(e.getMessage) }
-				}
+				)
 			}
 		}
 
 	private def executeIntegrationTests(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]): Option[String] =
-	{
-		import scala.collection.mutable.HashSet
-
-		val excludeTests = for(ExcludeTests(exclude) <- options) yield exclude
-		val excludeTestsSet = HashSet.empty[String] ++ excludeTests.flatMap(x => x)
-		if(excludeTestsSet.size > 0 && log.atLevel(Level.Debug))
-		{
-			log.debug("Excluding tests: ")
-			excludeTestsSet.foreach(test => log.debug("\t" + test))
-		}
-		val tests = HashSet.empty[TestDefinition] ++ analysis.allTests.filter(test => !excludeTestsSet.contains(test.testClassName))
-
-		TestFramework.runTests(frameworks, classpath.get, tests, log)
-	}
+		doTests(frameworks, classpath, analysis, options)
 }
 
 /** A fully featured integration testing that may be mixed in with any subclass of <code>BasicScalaProject</code>.
@@ -63,13 +41,15 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 {
 	self: BasicScalaProject =>
 
+	import BasicScalaIntegrationTesting._
+	
 	lazy val integrationTestCompile = integrationTestCompileAction
 	lazy val integrationTest = integrationTestAction
 
 	val integrationTestCompileConditional = new CompileConditional(integrationTestCompileConfiguration)
 
-	protected def integrationTestAction = integrationTestTask(integrationTestFrameworks, integrationTestClasspath, integrationTestCompileConditional.analysis, integrationTestOptions) dependsOn integrationTestCompile
-	protected def integrationTestCompileAction = integrationTestCompileTask()
+	protected def integrationTestAction = integrationTestTask(integrationTestFrameworks, integrationTestClasspath, integrationTestCompileConditional.analysis, integrationTestOptions) dependsOn integrationTestCompile describedAs IntegrationTestCompileDescription
+	protected def integrationTestCompileAction = integrationTestCompileTask() describedAs IntegrationTestDescription
 
 	protected def integrationTestCompileTask() = task{ integrationTestCompileConditional.run }
 
@@ -92,6 +72,12 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 		def options = integrationTestCompileOptions.map(_.asString)
 		def testDefinitionClassNames = integrationTestFrameworks.map(_.testSuperClassName)
 	}
+}
+
+object BasicScalaIntegrationTesting
+{
+	val IntegrationTestCompileDescription = "Compiles integration test sources."
+	val IntegrationTestDescription = "Runs all integration tests detected during compilation."
 }
 
 trait IntegrationTestPaths extends BasicProjectPaths
