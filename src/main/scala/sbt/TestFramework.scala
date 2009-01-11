@@ -210,7 +210,10 @@ private class ScalaTestRunner(val log: Logger, testLoader: ClassLoader) extends 
 		val reporter = new ScalaTestReporter
 		val stopper = new Stopper { override def stopRequested = false }
 		test.execute(None, reporter, stopper, Set.empty, Set.empty, Map.empty, None)
-		Result.Passed
+		if(reporter.succeeded)
+			Result.Passed
+		else
+			Result.Failed
 	}
 	
 	/** An implementation of Reporter for ScalaTest. */
