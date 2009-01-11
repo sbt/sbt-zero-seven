@@ -31,6 +31,21 @@ object Main
 			{
 				println(errorMessage)
 				runExitHooks(Project.log)
+				// If this error is after reloading, prompt user to try again.
+				val line =
+					try { Some(readLine("\n Hit enter to retry or 'exit' to quit: ")).filter(_ != null) }
+					catch
+					{
+						case e =>
+							Project.log.trace(e)
+							Project.log.error(e.toString)
+							None
+					}
+				line match
+				{
+					case Some(l) => if(!isTerminateAction(l)) run(args)
+					case None => ()
+				}
 			}
 			case Right(project) =>
 			{
@@ -149,7 +164,7 @@ object Main
 					val trimmed = line.trim
 					if(trimmed.isEmpty)
 						loop(currentProject)
-					else if(TerminateActions.elements.contains(trimmed.toLowerCase))
+					else if(isTerminateAction(trimmed))
 						RunCompleteAction.Exit
 					else if(ReloadAction == trimmed)
 						RunCompleteAction.Reload
@@ -339,8 +354,7 @@ object Main
 					fillUndefinedProjectProperties(remaining)
 				else
 				{
-					project.log.error("Project in " + FileUtilities.printableFilename(project.info.projectDirectory) +
-						" has undefined properties.")
+					project.log.error("Project in " + project.info.projectDirectory.getAbsolutePath + " has undefined properties.")
 					val result = fillUndefinedProperties(project, uninitialized, true) && fillUndefinedProjectProperties(remaining)
 					project.saveEnvironment()
 					result
@@ -415,6 +429,7 @@ object Main
 		else
 			setArgumentError(project.log)
 	}
+	private def isTerminateAction(s: String) = TerminateActions.elements.contains(s.toLowerCase)
 	private def setArgumentError(log: Logger) { log.error("Invalid arguments for 'set': expected property name and new value.") }
 	private def getArgumentError(log: Logger) { log.error("Invalid arguments for 'get': expected property name.") }
 	private def setProjectError(log: Logger) { log.error("Invalid arguments for 'project': expected project name.") }

@@ -53,7 +53,7 @@ object FileUtilities
 		log.info("Packaging " + outputPath + " ...")
 		val outputFile = outputPath.asFile
 		if(outputFile.isDirectory)
-			Some("Specified output file " + printableFilename(outputFile) + " is a directory.")
+			Some("Specified output file " + outputFile + " is a directory.")
 		else
 		{
 			val outputDir = outputFile.getParentFile
@@ -224,11 +224,11 @@ object FileUtilities
 	/** Creates a file at the given location.*/
 	def touch(file: File, log: Logger): Option[String] =
 	{
-		Control.trapUnit("Could not create file " + printableFilename(file) + ": ", log)
+		Control.trapUnit("Could not create file " + file + ": ", log)
 		{
 			if(file.exists)
 			{
-				def updateFailBase = "Could not update last modified for file " + printableFilename(file)
+				def updateFailBase = "Could not update last modified for file " + file
 				Control.trapUnit(updateFailBase + ": ", log)
 					{ if(file.setLastModified(System.currentTimeMillis)) None else Some(updateFailBase) }
 			}
@@ -241,18 +241,19 @@ object FileUtilities
 	/** Creates a directory at the given location.*/
 	def createDirectory(dir: File, log: Logger): Option[String] =
 	{
-		Control.trapUnit("Could not create directory " + printableFilename(dir) + ": ", log)
+		Control.trapUnit("Could not create directory " + dir + ": ", log)
 		{
 			if(dir.exists)
 			{
 				if(dir.isDirectory)
 					None
 				else
-					Some(printableFilename(dir) + " exists and is not a directory.")
+					Some(dir + " exists and is not a directory.")
 			}
 			else
 			{
 				dir.mkdirs()
+				log.debug("Created directory " + dir)
 				None
 			}
 		}
@@ -403,7 +404,13 @@ object FileUtilities
 			{
 				val targetPath = targetDirectory / source.getName
 				targetSet += targetPath
-				copyFile(source, targetPath.asFile, log)
+				if(!targetPath.exists || source.lastModified > targetPath.lastModified)
+				{
+					log.debug("Copying " + source + " to " + targetPath)
+					copyFile(source, targetPath.asFile, log)
+				}
+				else
+					None
 			}
 			else
 				None
@@ -471,18 +478,6 @@ object FileUtilities
 		copyDirectory(source, target)
 	}
 
-	/** Returns the full path for the given file.*/
-	def printableFilename(file: File) =
-	{
-		try
-		{
-			file.getCanonicalPath
-		}
-		catch
-		{
-			case e: Exception => file.getAbsolutePath
-		}
-	}
 	
 	/** Deletes the given files recursively.*/
 	def clean(files: Iterable[Path], log: Logger): Option[String] = clean(files, false, log)
@@ -500,17 +495,17 @@ object FileUtilities
 		{
 			log.log(if(quiet) Level.Debug else Level.Info, message)
 		}
-		Control.trapUnit("Error deleting file " + printableFilename(file) + ": ", log)
+		Control.trapUnit("Error deleting file " + file + ": ", log)
 		{
 			if(file.isDirectory)
 			{
-				logMessage("Deleting directory " + printableFilename(file))
+				logMessage("Deleting directory " + file)
 				deleteFiles(wrapNull(file.listFiles), true, log)
 				file.delete
 			}
 			else if(file.exists)
 			{
-				logMessage("Deleting file " + printableFilename(file))
+				logMessage("Deleting file " + file)
 				file.delete
 			}
 			None
@@ -522,7 +517,7 @@ object FileUtilities
 		val parent = file.getParentFile
 		if(parent != null)
 			createDirectory(parent, log)
-		Control.trap("Error opening " + printableFilename(file) + ": ", log) { Right(constructor(file)) }
+		Control.trap("Error opening " + file + ": ", log) { Right(constructor(file)) }
 	}
 	private def urlInputStream(url: URL, log: Logger) =
 		Control.trap("Error opening " + url + ": ", log) { Right(url.openStream) }

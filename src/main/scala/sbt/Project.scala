@@ -365,7 +365,7 @@ object Project
 			{
 				val s =
 					for((path, projectsSharingPath) <- shared) yield
-						projectsSharingPath.map(_.name).mkString(", ") + " share " + FileUtilities.printableFilename(path.asFile)
+						projectsSharingPath.map(_.name).mkString(", ") + " share " + path
 				s.mkString("\n\t")
 			}
 			Some("The same directory is used for output for multiple projects:\n\t" + sharedString +

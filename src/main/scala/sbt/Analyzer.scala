@@ -3,8 +3,6 @@
  */
 package sbt
 
-import FileUtilities.printableFilename
-
 import scala.tools.nsc.{io, plugins, Global, Phase}
 import io.{AbstractFile, PlainFile, ZipArchive}
 import plugins.{Plugin, PluginComponent}
@@ -68,7 +66,7 @@ class Analyzer(val global: Global) extends Plugin
 			val outputDir = new File(global.settings.outdir.value)
 			val outputPathOption = relativize(outputDir)
 			if(outputPathOption.isEmpty)
-				error("Output directory " + printableFilename(outputDir) + " must be in the project directory.")
+				error("Output directory " + outputDir.getAbsolutePath + " must be in the project directory.")
 			val outputPath = outputPathOption.get
 			
 			val superclassNames = callback.superclassNames.map(newTermName)
@@ -86,7 +84,7 @@ class Analyzer(val global: Global) extends Plugin
 				val sourceFile = unit.source.file.file
 				val sourcePathOption = relativize(sourceFile)
 				if(sourcePathOption.isEmpty)
-					error("Source file " + printableFilename(sourceFile) + " must be in the project directory.")
+					error("Source file " + sourceFile.getAbsolutePath + " must be in the project directory.")
 				val sourcePath = sourcePathOption.get
 				callback.beginSource(sourcePath)
 				for(on <- unit.depends)

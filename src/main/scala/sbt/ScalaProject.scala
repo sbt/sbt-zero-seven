@@ -7,7 +7,7 @@ import FileUtilities._
 import java.io.File
 import java.util.jar.{Attributes, Manifest}
 
-trait ScalaProject extends Project
+trait ScalaProject extends Project with FileTasks
 {
 	import ScalaProject._
 	
@@ -87,7 +87,8 @@ trait ScalaProject extends Project
 	def cleanTask(paths: PathFinder, options: CleanOption*): Task =
 		cleanTask(paths, options)
 	def cleanTask(paths: PathFinder, options: => Seq[CleanOption]): Task =
-		task {
+		task
+		{
 			val pathClean = FileUtilities.clean(paths.get, log)
 			for(ClearAnalysis(analysis) <- options)
 			{
@@ -118,7 +119,7 @@ trait ScalaProject extends Project
 	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: PackageOption*): Task =
 		packageTask(sources, outputDirectory, jarName, options)
 	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: => Seq[PackageOption]): Task =
-		task
+		fileTask((outputDirectory / jarName) from sources)
 		{
 			import scala.collection.jcl.Map
 			/** Copies the mappings in a2 to a1, mutating a1. */
@@ -267,7 +268,7 @@ trait WebScalaProject extends ScalaProject
 					toRemove --= copiedClasses
 					toRemove --= copiedLibs
 					toRemove --= copiedExtraLibs
-					val (directories, files) = toRemove.toList.partition(_.asFile.isDirectory)
+					val (directories, files) = toRemove.toList.partition(_.isDirectory)
 					//TODO: prune directories
 					if(log.atLevel(Level.Debug))
 						files.foreach(r => log.debug("Pruning " + r))

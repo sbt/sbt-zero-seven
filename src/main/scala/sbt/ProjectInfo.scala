@@ -29,7 +29,7 @@ object ProjectInfo
 			if(builderDirectory.isDirectory)
 				AlreadySetup
 			else
-				SetupError("'" + printableFilename(builderDirectory) + "' is not a directory.")
+				SetupError("'" + builderDirectory.getAbsolutePath + "' is not a directory.")
 		}
 		else
 			setupProject(info.projectDirectory, log).getOrElse(SetupError("No project found."))

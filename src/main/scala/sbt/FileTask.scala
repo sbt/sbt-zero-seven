@@ -5,106 +5,72 @@ package sbt
 
 import scala.collection.{mutable, Map, Set}
 
-/** A class that indicates which sources are new or modified and which products are out of date. */
-final class FileTaskAnalysis(val sources: Set[Path], val products: Set[Path]) extends NotNull
-
-private object FileTasks
+sealed trait ProductsSources extends NotNull
 {
-	private def wrapThunk[T](f: => Option[String]): (T => Option[String]) = (t: T) => f
+	def products: Iterable[Path]
+	def sources: Iterable[Path]
+}
+sealed trait ProductsWrapper extends NotNull
+{
+	def from(sources: => Iterable[Path]): ProductsSources = from(Path.lazyPathFinder(sources))
+	def from(sources: PathFinder): ProductsSources
 }
 /** Provides methods to define tasks with basic conditional execution based on the sources
 * and products of the task. */
 trait FileTasks extends Project
 {
-	import FileTasks._
-	
-	/** Creates a task that, when invoked, executes <code>action</code> if any of the paths given
-	* by <code>products</code> do not exist.*/
-	protected def taskProduceSimple(products: Path*)(action: => Option[String]): Task =
-		taskProduce(products: _*)(wrapThunk(action))
-	/** Creates a task that, when invoked, executes <code>action</code> if any of the paths given by
-	* <code>products</code> do not exist. The <code>action</code> function is passed an object indicating
-	* which products did not exist.*/
-	protected def taskProduce(products: Path*)(action: FileTaskAnalysis => Option[String]): Task =
-	{
-		import scala.collection.mutable
-		val map = new mutable.HashMap[Path, Iterable[Path]]
-		for( product <- products )
-			map(product) = Nil
-		fileTask(map.readOnly)(action)
-	}
-	
-	/** Creates a task that conditionally executes <code>action</code> when invoked.  The argument
-	* <code>productToSource</code> is a list of mappings (<code>Pair</code>s) from a product (a file that
-	* the task generates) to the source used to generate it.  A product or a source may occur more than once.
-	* A product is marked out of date if it does not exist or if it is older than any sources it depends on.
-	* <code>action</code> is executed when the task is invoked only if any products are out of date.
-	* Out of date products are deleted before <code>action</code> is called.
-	*/
-	protected def fileTaskSimple(productToSource: (Path, Path)*)(action: => Option[String]): Task =
-		fileTask(productToSource: _*)(wrapThunk(action))
-	
-	/** Creates a task that conditionally executes <code>action</code> when invoked.  The argument
-	* <code>productToSource</code> is a sequence of mappings from a product (a file that
-	* the task generates) to the source used to generate it.  A product or a source may occur more than once.
-	* A product is marked out of date if it does not exist or if it is older than any sources it depends on.
-	
-	* When the task is invoked, if any products are out of date, <code>action</code> is called.  It is passed
-	* an object representing the out of date products and the sources that were newer or correspond to a product
-	* that does not exist.  Out of date products are deleted before <code>action</code> is called.
-	*/
-	protected def fileTask(productToSource: (Path, Path)*)(action: FileTaskAnalysis => Option[String]): Task =
-	{
-		import scala.collection.mutable
-		val map = new mutable.HashMap[Path, mutable.Set[Path]]
-		for( (product, source) <- productToSource )
-			map.getOrElseUpdate( product, new mutable.HashSet[Path] ) += source
-		fileTask(map.readOnly)(action)
-	}
-	
-	/** Creates a task that conditionally executes <code>action</code> when invoked.  The argument
-	* <code>productToSources</code> is a mapping from a product (a file that the task generates)
-	* to the source used to generate it.  A source may be a dependency of more than one product.  A product
-	* is marked out of date if it does not exist or if it is older than any of the sources it depends on.
-	*
-	* <code>action</code> is executed when the task is invoked only if any products are out of date.
-	* Out of date products are deleted before <code>action</code> is called.
-	*/
-	protected def fileTaskSimple(productToSources: Map[Path, Iterable[Path]])(action: => Option[String]): Task =
-		fileTask(productToSources)(wrapThunk(action))
-		
-	/** Creates a task that conditionally executes <code>action</code> when invoked.  The argument
-	* <code>productToSources</code> maps from a product (a file that the task generates) to the source
-	* used to generate it.  A source may be a dependency of more than one product. A product is marked
-	* out of date if it does not exist or if it is older than any of the sources it depends on.
-	*
-	* When the task is invoked, if any products are out of date, <code>action</code> is called.  It is passed
-	* an object representing the out of date products and the sources that were newer or correspond to a product
-	* that does not exist.  Out of date products are deleted before <code>action</code> is called.
-	*/
-	protected def fileTask(productToSources: Map[Path, Iterable[Path]])(action: FileTaskAnalysis => Option[String]): Task =
+	implicit def wrapProduct(product: => Path): ProductsWrapper = wrapProducts(product :: Nil)
+	implicit def wrapProducts(productsList: => Iterable[Path]): ProductsWrapper =
+		new ProductsWrapper
+		{
+			def from(sourceFinder: PathFinder) =
+				new ProductsSources
+				{
+					lazy val products = productsList
+					lazy val sources = sourceFinder.get
+				}
+		}
+	def fileTask(files: ProductsSources)(action: => Option[String]): Task =
 		task
 		{
-			val newerSources = new scala.collection.mutable.HashSet[Path]
-			val outdatedProducts = new scala.collection.mutable.HashSet[Path]
-			for( (product, sources) <- productToSources)
+			val products = files.products
+			existenceCheck(products)(action)
 			{
-				if(product.exists)
+				val sources = files.sources
+				val oldestProductModifiedTime = mapLastModified(products).reduceLeft(_ min _)
+				val newestSourceModifiedTime = mapLastModified(sources).reduceLeft(_ max _)
+				if(oldestProductModifiedTime < newestSourceModifiedTime)
 				{
-					val newerThanProduct = sources.filter(_ newerThan product)
-					if(!newerThanProduct.isEmpty)
+					if(log.atLevel(Level.Debug))
 					{
-						newerSources ++= newerThanProduct
-						outdatedProducts += product
+						log.debug("Task execution required because the following sources are newer than at least one product: ")
+						logDebugIndented(sources.filter(_.lastModified > oldestProductModifiedTime))
+						log.debug(" The following products are older than at least one source: ")
+						logDebugIndented(products.filter(_.lastModified < newestSourceModifiedTime))
 					}
+					action
 				}
 				else
-				{
-					newerSources ++= sources
-					outdatedProducts += product
-				}
+					None
 			}
-			FileUtilities.clean(outdatedProducts, log)
-			action(new FileTaskAnalysis(newerSources.readOnly, outdatedProducts.readOnly))
 		}
+	def fileTask(products: => Iterable[Path])(action: => Option[String]): Task =
+		task { existenceCheck(products)(action)(None) }
+	private def existenceCheck(products: Iterable[Path])(action: => Option[String])(ifAllExist: => Option[String]) =
+	{
+			val nonexisting = products.filter(!_.exists)
+			if(nonexisting.isEmpty)
+				ifAllExist
+			else
+			{
+				if(log.atLevel(Level.Debug))
+				{
+					log.debug("Task execution required because at least one product does not exist:")
+					logDebugIndented(nonexisting)
+				}
+				action
+			}
+	}
+	private def logDebugIndented[T](it: Iterable[T]) { it.foreach(x => log.debug("\t" + x)) }
+	private def mapLastModified(paths: Iterable[Path]): Iterable[Long] = paths.map(_.lastModified)
 }
