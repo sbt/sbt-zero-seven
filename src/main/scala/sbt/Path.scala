@@ -23,7 +23,7 @@ sealed abstract class Path extends PathFinder with NotNull
 	* <code>d / x / y</code>
 	*
 	* The <code>relativePath</code> method is used to return the relative path to the base directory. */
-	def ## : Path = new BaseDirectory(this)
+	override def ## : Path = new BaseDirectory(this)
 	private[sbt] def addTo(pathSet: Set[Path])
 	{
 		if(asFile.exists)
@@ -220,6 +220,11 @@ sealed abstract class PathFinder extends NotNull
 	* of paths selected by this finder.*/
 	final def \ (literal: String): PathFinder = this / literal
 
+	/** Makes the paths selected by this finder into base directories.
+	* @see Path.##
+	*/
+	def ## : PathFinder = new BasePathFinder(this)
+
 	/** Selects all descendent paths with a name that matches <code>include</code> and do not have an intermediate
 	* path with a name that matches <code>intermediateExclude</code>.  Typical usage is:
 	*
@@ -236,6 +241,14 @@ sealed abstract class PathFinder extends NotNull
 		pathSet.readOnly
 	}
 	private[sbt] def addTo(pathSet: Set[Path])
+}
+private class BasePathFinder(base: PathFinder) extends PathFinder
+{
+	private[sbt] def addTo(pathSet: Set[Path])
+	{
+		for(path <- base.get)
+			pathSet += (path ##)
+	}
 }
 private abstract class FilterPath extends PathFinder with FileFilter
 {

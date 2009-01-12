@@ -240,8 +240,8 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	
 	lazy val prepareWebapp = prepareWebappAction
 	protected def prepareWebappAction =
-		prepareWebappTask(descendents(webappPath ##, "*"), temporaryWarPath, runClasspath, extraWebappJars) dependsOn(compile)
-	
+		prepareWebappTask(descendents(webappPath ##, "*") +++ extraWebappFiles, temporaryWarPath, runClasspath, extraWebappJars) dependsOn(compile)
+	protected def extraWebappFiles: PathFinder = Path.emptyPathFinder
 	private def extraWebappJars: Iterable[java.io.File] =
 	{
 		val externalJars = mainCompileConditional.analysis.allExternals.filter(ClasspathUtilities.isArchive)
