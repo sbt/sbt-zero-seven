@@ -615,10 +615,10 @@ object FileUtilities
 		}
 	}
 	/** Appends the given bytes to the given file. */
-	def appendBytes(file: File, bytes: Array[Byte], log: Logger): Option[String] =
+	def append(file: File, bytes: Array[Byte], log: Logger): Option[String] =
 		writeBytes(file, bytes, true, log)
 	/** Writes the given bytes to the given file. If the file already exists, it is overwritten.*/
-	def writeBytes(file: File, bytes: Array[Byte], log: Logger): Option[String] =
+	def write(file: File, bytes: Array[Byte], log: Logger): Option[String] =
 		writeBytes(file, bytes, false, log)
 	private def writeBytes(file: File, bytes: Array[Byte], append: Boolean, log: Logger): Option[String] =
 		writeStream(file, append, log) { out => out.write(bytes); None }
@@ -691,7 +691,7 @@ object FileUtilities
 			a
 			
 	/** Writes the given string to the writer followed by a newline.*/
-	def writeLine(writer: Writer, line: String)
+	private[sbt] def writeLine(writer: Writer, line: String)
 	{
 		writer.write(line)
 		writer.write(Newline)
