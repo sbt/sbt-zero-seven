@@ -452,6 +452,21 @@ object FileUtilities
 		)
 	}
 	
+	/** Synchronizes the contents of the <code>sourceDirectory</code> directory to the
+	* <code>targetDirectory</code> directory .*/
+	def sync(sourceDirectory: Path, targetDirectory: Path, log: Logger): Option[String] =
+	{
+		copy(((sourceDirectory ##) ** AllPassFilter).get, targetDirectory, log).right.flatMap { copiedTo =>
+		{
+			val existing = ((targetDirectory ##) ** AllPassFilter).get
+			val toRemove = scala.collection.mutable.HashSet(existing.toSeq: _*)
+			toRemove --= copiedTo
+			if(log.atLevel(Level.Debug))
+				toRemove.foreach(r => log.debug("Pruning " + r))
+			clean(toRemove, true, log).toLeft(())
+		}}.left.toOption
+	}
+	
 	/** Copies the contents of the <code>source</code> directory to the <code>target</code> directory .*/
 	def copyDirectory(source: Path, target: Path, log: Logger): Option[String] =
 		copyDirectory(source.asFile, target.asFile, log)

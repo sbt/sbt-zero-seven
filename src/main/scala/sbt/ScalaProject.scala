@@ -98,6 +98,8 @@ trait ScalaProject extends Project with FileTasks
 			pathClean
 		}
 		
+	def syncTask(sourceDirectory: Path, destinationDirectory: Path): Task =
+		task { FileUtilities.sync(sourceDirectory, destinationDirectory, log) }
 	def copyTask(sources: PathFinder, destinationDirectory: Path): Task =
 		task { FileUtilities.copy(sources.get, destinationDirectory, log).left.toOption }
 
