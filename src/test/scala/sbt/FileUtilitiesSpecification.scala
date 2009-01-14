@@ -30,7 +30,7 @@ object WriteContentSpecification extends Properties("Write content")
 		val result =
 			doInTemporaryDirectory(log) { dir =>
 				val file = new java.io.File(dir, "out")
-				writeBytes(file, b, log).toLeft(()).right.flatMap { x => readBytes(file, log) }
+				write(file, b, log).toLeft(()).right.flatMap { x => readBytes(file, log) }
 			}
 		handleResult[Array[Byte]](result, _ deepEquals b)
 	}

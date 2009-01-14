@@ -101,10 +101,10 @@ trait ScalaProject extends Project with FileTasks
 	def copyTask(sources: PathFinder, destinationDirectory: Path): Task =
 		task { FileUtilities.copy(sources.get, destinationDirectory, log).left.toOption }
 
-	def testTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: TestOption*): Task =
-		testTask(frameworks, classpath, analysis, options)
-	def testTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]): Task =
-		task{ doTests(frameworks, classpath, analysis, options) }
+	def testTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, reporters: Seq[TestReporter], options: TestOption*): Task =
+		testTask(frameworks, classpath, analysis, reporters, options)
+	def testTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, reporters: Seq[TestReporter], options: => Seq[TestOption]): Task =
+		task{ doTests(frameworks, classpath, analysis, reporters, options) }
 
 	def graphTask(outputDirectory: Path, analysis: CompileAnalysis): Task = task { DotGraph(analysis, outputDirectory, log) }
 	def scaladocTask(label: String, sources: PathFinder, outputDirectory: Path, classpath: PathFinder, options: ScaladocOption*): Task =
@@ -173,7 +173,7 @@ trait ScalaProject extends Project with FileTasks
 		}
 	}
 	protected def incrementImpl(v: BasicVersion): Version = v.incrementMicro
-	protected def doTests(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]): Option[String] = {
+	protected def doTests(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, reporters: Seq[TestReporter], options: => Seq[TestOption]): Option[String] = {
 		import scala.collection.mutable.HashSet
 
 			val excludeTests = for(ExcludeTests(exclude) <- options) yield exclude
@@ -185,7 +185,7 @@ trait ScalaProject extends Project with FileTasks
 			}
 			val tests = HashSet.empty[TestDefinition] ++ analysis.allTests.filter(test => !excludeTestsSet.contains(test.testClassName))
 
-			TestFramework.runTests(frameworks, classpath.get, tests, log)
+			TestFramework.runTests(frameworks, classpath.get, tests, log, reporters)
 	}
 }
 trait ManagedScalaProject extends ScalaProject

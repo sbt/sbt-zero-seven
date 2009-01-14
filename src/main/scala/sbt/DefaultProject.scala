@@ -79,7 +79,9 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		ClearAnalysis(mainCompileConditional.analysis) ::
 		ClearAnalysis(testCompileConditional.analysis) ::
 		Nil
-	
+
+	def testReporters = new LogTestReporter(log) :: Nil
+
 	private def directoriesToCreate: List[Path] =
 		dependencyPath ::
 		mainScalaSourcePath ::
@@ -184,7 +186,7 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	protected def consoleAction = consoleTask(consoleClasspath).dependsOn(testCompile) describedAs ConsoleDescription
 	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
 	protected def docTestAction = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions).dependsOn(testCompile) describedAs TestDocDescription
-	protected def testAction = testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
+	protected def testAction = testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testReporters, testOptions).dependsOn(testCompile) describedAs TestDescription
 	protected def packageAction = packageTask(mainClasses +++ mainResources, outputPath, defaultJarName, mainClass.map(MainClassOption(_)).toList).dependsOn(compile) describedAs PackageDescription
 	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription
 	protected def packageDocsAction = packageTask(mainDocPath ##, outputPath, defaultJarBaseName + "-docs.jar", Recursive).dependsOn(doc) describedAs DocPackageDescription
