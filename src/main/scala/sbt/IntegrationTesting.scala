@@ -15,13 +15,13 @@ trait ScalaIntegrationTesting extends IntegrationTesting
 {
 	self: ScalaProject =>
 
-	protected def integrationTestTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, reporters: Seq[TestReporter], options: => Seq[TestOption]) =
+	protected def integrationTestTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]) =
 		task{
 			import Control._
 			trapUnit("Setup failed: ", log)(pretests) match
 			{
 				case Some(msg) => Some(msg)
-				case None => trapUnitAndFinally("Exception in framework", log)(executeIntegrationTests(frameworks, classpath, analysis, reporters, options))(
+				case None => trapUnitAndFinally("Exception in framework", log)(executeIntegrationTests(frameworks, classpath, analysis, options))(
 					trapUnit("Cleanup failed: ", log)(posttests) match
 					{
 						case Some(msg) => log.error(msg)
@@ -31,8 +31,8 @@ trait ScalaIntegrationTesting extends IntegrationTesting
 			}
 		}
 
-	private def executeIntegrationTests(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, reporters: Seq[TestReporter], options: => Seq[TestOption]): Option[String] =
-		doTests(frameworks, classpath, analysis, reporters, options)
+	private def executeIntegrationTests(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]): Option[String] =
+		doTests(frameworks, classpath, analysis, options)
 }
 
 /** A fully featured integration testing that may be mixed in with any subclass of <code>BasicScalaProject</code>.
@@ -48,12 +48,11 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 
 	val integrationTestCompileConditional = new CompileConditional(integrationTestCompileConfiguration)
 
-	protected def integrationTestAction = integrationTestTask(integrationTestFrameworks, integrationTestClasspath, integrationTestCompileConditional.analysis, integrationTestReporters, integrationTestOptions) dependsOn integrationTestCompile describedAs IntegrationTestCompileDescription
+	protected def integrationTestAction = integrationTestTask(integrationTestFrameworks, integrationTestClasspath, integrationTestCompileConditional.analysis, integrationTestOptions) dependsOn integrationTestCompile describedAs IntegrationTestCompileDescription
 	protected def integrationTestCompileAction = integrationTestCompileTask() describedAs IntegrationTestDescription
 
 	protected def integrationTestCompileTask() = task{ integrationTestCompileConditional.run }
 
-	def integrationTestReporters = testReporters
 	def integrationTestOptions: Seq[TestOption] = Nil
 	def integrationTestCompileOptions = testCompileOptions
 	def integrationTestClasspath = integrationTestCompilePath +++ fullClasspath(Configurations.Test, false)

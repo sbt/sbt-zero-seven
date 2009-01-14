@@ -3,12 +3,6 @@
  */
 package sbt
 
-import org.scalacheck.{Pretty, Properties, Test}
-import org.scalatest.Report
-import org.specs.Specification
-import org.specs.specification.{Example, Sus}
-import org.specs.runner.TextFormatter
-
 object Result extends Enumeration
 {
 	val Error, Passed, Failed = Value
@@ -23,38 +17,179 @@ trait TestFramework extends NotNull
 	def name: String
 	def testSuperClassName: String
 	def testSubClassType: ClassType.Value
-
-	def testRunner(classLoader: ClassLoader, log: Logger, reporters: Seq[TestReporter]): TestRunner
+	
+	def testRunner(classLoader: ClassLoader, log: Logger): TestRunner
 }
 trait TestRunner extends NotNull
 {
 	def run(testClassName: String): Result.Value
 }
-
-trait TestReporter extends NotNull
+abstract class BasicTestRunner extends TestRunner
 {
-	def doInit: Unit
-	def doComplete: Unit
+	protected def log: Logger
+	final def run(testClass: String): Result.Value =
+	{
+		log.info("")
+		log.info("Testing " + testClass + " ...")
+		try
+		{
+			runTest(testClass)
+		}
+		catch
+		{
+			case e =>
+			{
+				log.error("Could not run test " + testClass + ": " + e.toString)
+				log.trace(e)
+				Result.Error
+			}
+		}
+	}
+	def runTest(testClass: String): Result.Value
 }
 
-trait ScalaCheckTestReporter extends TestReporter
+object TestFramework
 {
-	def propReport(pName: String, s: Int, d: Int)
-	def testReport(pName: String, res: Test.Result)
+	import scala.collection.{Map, Set}
+	def runTests(frameworks: Iterable[TestFramework], classpath: Iterable[Path], tests: Iterable[TestDefinition], log: Logger): Option[String] =
+	{
+		val mappedTests = testMap(frameworks, tests)
+		if(mappedTests.isEmpty)
+		{
+			log.info("No tests to run.")
+			None
+		}
+		else
+			Control.trapUnit("", log) { doRunTests(classpath, mappedTests, log) }
+	}
+	private def testMap(frameworks: Iterable[TestFramework], tests: Iterable[TestDefinition]): Map[TestFramework, Set[String]] =
+	{
+		import scala.collection.mutable.{HashMap, HashSet, Set}
+		val map = new HashMap[TestFramework, Set[String]]
+		if(!frameworks.isEmpty)
+		{
+			for(test <- tests)
+			{
+				def isTestForFramework(framework: TestFramework) =
+					(framework.testSubClassType == ClassType.Module) == test.isModule &&
+					framework.testSuperClassName == test.superClassName
+				
+				for(framework <- frameworks.find(isTestForFramework))
+					map.getOrElseUpdate(framework, new HashSet[String]) += test.testClassName
+			}
+		}
+		map.readOnly
+	}
+	private def doRunTests(classpath: Iterable[Path], tests: Map[TestFramework, Set[String]], log: Logger): Option[String] =
+	{
+		val loader: ClassLoader = new IntermediateLoader(classpath.map(_.asURL).toSeq.toArray, getClass.getClassLoader)
+		
+		import Result._
+		var result: Value = Passed
+		for((framework, testClassNames) <- tests)
+		{
+			if(testClassNames.isEmpty)
+				log.debug("No tests to run for framework " + framework.name + ".")
+			else
+			{
+				log.info(" ")
+				log.info("Running " + framework.name + " tests...")
+				val runner = framework.testRunner(loader, log)
+				for(testClassName <- testClassNames)
+				{
+					runner.run(testClassName) match
+					{
+						case Error => result = Error
+						case Failed => if(result != Error) result = Failed
+						case _ => ()
+					}
+				}
+			}
+		}
+		
+		result match
+		{
+			case Error => Some("ERROR occurred during testing.")
+			case Failed => Some("One or more tests FAILED.")
+			case Passed =>
+			{
+				log.info(" ")
+				log.info("All tests PASSED.")
+				None
+			}
+		}
+	}
 }
-trait ScalaTestTestReporter extends TestReporter
+sealed abstract class LazyTestFramework extends TestFramework
 {
-	val scalaTestReporter: org.scalatest.Reporter
+	/** The class name of the the test runner that executes
+	* tests for this framework.*/
+	protected def testRunnerClassName: String
+	
+	/** Creates an instance of the runner given by 'testRunnerClassName'.*/
+	final def testRunner(projectLoader: ClassLoader, log: Logger): TestRunner =
+	{
+		val runnerClassName = testRunnerClassName
+		val lazyLoader = new LazyFrameworkLoader(runnerClassName, Array(FileUtilities.sbtJar.toURI.toURL), projectLoader, getClass.getClassLoader)
+		val runnerClass = Class.forName(runnerClassName, true, lazyLoader).asSubclass(classOf[TestRunner])
+		runnerClass.getConstructor(classOf[Logger], classOf[ClassLoader]).newInstance(log, projectLoader)
+	}
 }
-trait SpecsTestReporter extends TestReporter
+/** The test framework definition for ScalaTest.*/
+object ScalaTestFramework extends LazyTestFramework
 {
-	def reportSpecification(specification: Specification, padding: String)
+	val name = "ScalaTest"
+	val SuiteClassName = "org.scalatest.Suite"
+	
+	def testSuperClassName = SuiteClassName
+	def testSubClassType = ClassType.Class
+	
+	def testRunnerClassName = "sbt.ScalaTestRunner"
 }
+/** The test framework definition for ScalaCheck.*/
+object ScalaCheckFramework extends LazyTestFramework
+{
+	val name = "ScalaCheck"
+	val PropertiesClassName = "org.scalacheck.Properties"
+	
+	def testSuperClassName = PropertiesClassName
+	def testSubClassType = ClassType.Module
+	
+	def testRunnerClassName = "sbt.ScalaCheckRunner"
+}
+/** The test framework definition for specs.*/
+object SpecsFramework extends LazyTestFramework
+{
+	val name = "specs"
+	val SpecificationClassName = "org.specs.Specification"
+	
+	def testSuperClassName = SpecificationClassName
+	def testSubClassType = ClassType.Module
+	
+	def testRunnerClassName = "sbt.SpecsRunner"
+}
+/* The following classes run tests for their associated test framework.
+* NOTE #1: DO NOT actively use these classes.  Only specify their names to LazyTestFramework
+*  for reflective loading.  This allows using the test libraries provided on the
+*  project classpath instead of requiring global versions.
+* NOTE #2: Keep all active uses of these test frameworks inside these classes so that sbt
+*  runs without error when a framework is not available at runtime and no tests for that
+*  framework are defined.*/
 
-class LogTestReporter(val log: Logger) extends ScalaCheckTestReporter with ScalaTestTestReporter with SpecsTestReporter {
-	val Indent = "  "
-	def propReport(pName: String, s: Int, d: Int) {}
-	def testReport(pName: String, res: Test.Result) =
+/** The test runner for ScalaCheck tests. */
+private class ScalaCheckRunner(val log: Logger, testLoader: ClassLoader) extends BasicTestRunner
+{
+	import org.scalacheck.{Pretty, Properties, Test}
+	def runTest(testClassName: String): Result.Value =
+	{
+		val test = ModuleUtilities.getObject(testClassName, testLoader).asInstanceOf[Properties]
+		if(Test.checkProperties(test, Test.defaultParams, propReport, testReport).find(!_._2.passed).isEmpty)
+			Result.Passed
+		else
+			Result.Failed
+	}
+	private def propReport(pName: String, s: Int, d: Int) {}
+	private def testReport(pName: String, res: Test.Result) =
 	{
 		import Pretty._
 		val s = (if(res.passed) "+ " else "! ") + pName + ": " + pretty(res)
@@ -63,28 +198,56 @@ class LogTestReporter(val log: Logger) extends ScalaCheckTestReporter with Scala
 		else
 			log.error(s)
 	}
-
-
-//	def error(report: Report, event: String) { logReport(report, event, Level.Error) }
-//	def info(report: Report, event: String) { logReport(report, event, Level.Info) }
-	val scalaTestReporter = new org.scalatest.Reporter()
+}
+/** The test runner for ScalaTest suites. */
+private class ScalaTestRunner(val log: Logger, testLoader: ClassLoader) extends BasicTestRunner
+{
+	def runTest(testClassName: String): Result.Value =
 	{
+		import org.scalatest.{Stopper, Suite}
+		val testClass = Class.forName(testClassName, true, testLoader).asSubclass(classOf[Suite])
+		val test = testClass.newInstance
+		val reporter = new ScalaTestReporter
+		val stopper = new Stopper { override def stopRequested = false }
+		test.execute(None, reporter, stopper, Set.empty, Set.empty, Map.empty, None)
+		if(reporter.succeeded)
+			Result.Passed
+		else
+			Result.Failed
+	}
+	
+	/** An implementation of Reporter for ScalaTest. */
+	private class ScalaTestReporter extends org.scalatest.Reporter with NotNull
+	{
+		import org.scalatest.Report
 		override def testIgnored(report: Report) { info(report, "Test ignored") }
 		override def testStarting(report: Report) { info(report, "Test starting") }
 		override def testSucceeded(report: Report) { info(report, "Test succeeded") }
-		override def testFailed(report: Report) { error(report, "Test failed") }
-
+		override def testFailed(report: Report)
+		{
+			succeeded = false
+			error(report, "Test failed")
+		}
+		
 		override def infoProvided(report : Report) { info(report, "") }
-
+		
 		override def suiteStarting(report: Report) { info(report, "Suite starting") }
 		override def suiteCompleted(report: Report) { info(report, "Suite completed") }
 		override def suiteAborted(report: Report) { error(report, "Suite aborted") }
-
+		
 		override def runStarting(testCount: Int) { log.info("Run starting") }
-		override def runStopped() { log.error("Run stopped.") }
-		override def runAborted(report: Report) { error(report, "Run aborted") }
+		override def runStopped()
+		{
+			succeeded = false
+			log.error("Run stopped.")
+		}
+		override def runAborted(report: Report)
+		{
+			succeeded = false
+			error(report, "Run aborted")
+		}
 		override def runCompleted() { log.info("Run completed.") }
-
+		
 		private def error(report: Report, event: String) { logReport(report, event, Level.Error) }
 		private def info(report: Report, event: String) { logReport(report, event, Level.Info) }
 		private def logReport(report: Report, event: String, level: Level.Value)
@@ -93,20 +256,33 @@ class LogTestReporter(val log: Logger) extends ScalaCheckTestReporter with Scala
 			val message = if(trimmed.isEmpty) "" else ": " + trimmed
 			log.log(level, event + " - " + report.name + message)
 		}
+		
+		var succeeded = true
 	}
-
-	private def logReport(report: Report, event: String, level: Level.Value)
+}
+/** The test runner for specs tests. */
+private class SpecsRunner(val log: Logger, testLoader: ClassLoader) extends BasicTestRunner
+{
+	import org.specs.Specification
+	import org.specs.runner.TextFormatter
+	import org.specs.specification.{Example, Sus}
+	
+	val Indent = "  "
+	def runTest(testClassName: String): Result.Value =
 	{
-		val trimmed = report.message.trim
-		val message = if(trimmed.isEmpty) "" else ": " + trimmed
-		log.log(level, event + " - " + report.name + message)
+		val test = ModuleUtilities.getObject(testClassName, testLoader).asInstanceOf[Specification]
+		reportSpecification(test, "")
+		if(test.isFailing)
+			Result.Failed
+		else
+			Result.Passed
 	}
-
+	
 	/* The following is closely based on org.specs.runner.OutputReporter,
 	* part of specs, which is Copyright 2007-2008 Eric Torreborre.
 	* */
-
-	def reportSpecification(specification: Specification, padding: String)
+	
+	private def reportSpecification(specification: Specification, padding: String)
 	{
 		val newIndent = padding + Indent
 		reportSpecifications(specification.subSpecifications, newIndent)
@@ -160,245 +336,6 @@ class LogTestReporter(val log: Logger) extends ScalaCheckTestReporter with Scala
 			log.trace(e)
 			log.error(padding + e.toString)
 		}
-	}
-
-	def doInit = {}
-	def doComplete = {}
-}
-
-abstract class BasicTestRunner[TR <: TestReporter](testReporters: Seq[TestReporter]) extends TestRunner
-{
-	protected val reporters = testReporters.map(tr => tr.asInstanceOf[TR])
-	protected def log: Logger
-	final def run(testClass: String): Result.Value =
-	{
-		log.info("")
-		log.info("Testing " + testClass + " ...")
-		try
-		{
-			runTest(testClass)
-		}
-		catch
-		{
-			case e =>
-			{
-				log.error("Could not run test " + testClass + ": " + e.toString)
-				log.trace(e)
-				Result.Error
-			}
-		}
-	}
-	def runTest(testClass: String): Result.Value
-}
-
-object TestFramework
-{
-	import scala.collection.{Map, Set}
-	def runTests(frameworks: Iterable[TestFramework], classpath: Iterable[Path], tests: Iterable[TestDefinition], log: Logger, reporters: Seq[TestReporter]): Option[String] =
-	{
-		val mappedTests = testMap(frameworks, tests)
-		val reporters = Seq(new LogTestReporter(log))
-		if(mappedTests.isEmpty)
-		{
-			log.info("No tests to run.")
-			None
-		}
-		else
-			Control.trapUnit("", log) { doRunTests(classpath, mappedTests, log, reporters) }
-	}
-	private def testMap(frameworks: Iterable[TestFramework], tests: Iterable[TestDefinition]): Map[TestFramework, Set[String]] =
-	{
-		import scala.collection.mutable.{HashMap, HashSet, Set}
-		val map = new HashMap[TestFramework, Set[String]]
-		if(!frameworks.isEmpty)
-		{
-			for(test <- tests)
-			{
-				def isTestForFramework(framework: TestFramework) =
-					(framework.testSubClassType == ClassType.Module) == test.isModule &&
-					framework.testSuperClassName == test.superClassName
-
-				for(framework <- frameworks.find(isTestForFramework))
-					map.getOrElseUpdate(framework, new HashSet[String]) += test.testClassName
-			}
-		}
-		map.readOnly
-	}
-	private def doRunTests(classpath: Iterable[Path], tests: Map[TestFramework, Set[String]], log: Logger, reporters: Seq[TestReporter]): Option[String] =
-	{
-		val loader: ClassLoader = new IntermediateLoader(classpath.map(_.asURL).toSeq.toArray, getClass.getClassLoader)
-
-		import Result._
-		var result: Value = Passed
-		for((framework, testClassNames) <- tests)
-		{
-			if(testClassNames.isEmpty)
-				log.debug("No tests to run for framework " + framework.name + ".")
-			else
-			{
-				log.info(" ")
-				log.info("Running " + framework.name + " tests...")
-				val runner = framework.testRunner(loader, log, reporters)
-				reporters.foreach(r => r.doInit)
-				for(testClassName <- testClassNames)
-				{
-					runner.run(testClassName) match
-					{
-						case Error => result = Error
-						case Failed => if(result != Error) result = Failed
-						case _ => ()
-					}
-				}
-				reporters.foreach(r => r.doComplete)
-			}
-		}
-
-		result match
-		{
-			case Error => Some("ERROR occurred during testing.")
-			case Failed => Some("One or more tests FAILED.")
-			case Passed =>
-			{
-				log.info(" ")
-				log.info("All tests PASSED.")
-				None
-			}
-		}
-	}
-}
-sealed abstract class LazyTestFramework extends TestFramework
-{
-	/** The class name of the the test runner that executes
-	* tests for this framework.*/
-	protected def testRunnerClassName: String
-
-	/** Creates an instance of the runner given by 'testRunnerClassName'.*/
-	final def testRunner(projectLoader: ClassLoader, log: Logger, reporters: Seq[TestReporter]): TestRunner =
-	{
-		val runnerClassName = testRunnerClassName
-		val lazyLoader = new LazyFrameworkLoader(runnerClassName, Array(FileUtilities.sbtJar.toURI.toURL), projectLoader, getClass.getClassLoader)
-		val runnerClass = Class.forName(runnerClassName, true, lazyLoader).asSubclass(classOf[TestRunner])
-		runnerClass.getConstructor(classOf[Logger], classOf[Seq[TestReporter]], classOf[ClassLoader]).newInstance(log, reporters, projectLoader)
-	}
-}
-/** The test framework definition for ScalaTest.*/
-object ScalaTestFramework extends LazyTestFramework
-{
-	val name = "ScalaTest"
-	val SuiteClassName = "org.scalatest.Suite"
-
-	def testSuperClassName = SuiteClassName
-	def testSubClassType = ClassType.Class
-
-	def testRunnerClassName = "sbt.ScalaTestRunner"
-}
-/** The test framework definition for ScalaCheck.*/
-object ScalaCheckFramework extends LazyTestFramework
-{
-	val name = "ScalaCheck"
-	val PropertiesClassName = "org.scalacheck.Properties"
-
-	def testSuperClassName = PropertiesClassName
-	def testSubClassType = ClassType.Module
-
-	def testRunnerClassName = "sbt.ScalaCheckRunner"
-}
-/** The test framework definition for specs.*/
-object SpecsFramework extends LazyTestFramework
-{
-	val name = "specs"
-	val SpecificationClassName = "org.specs.Specification"
-
-	def testSuperClassName = SpecificationClassName
-	def testSubClassType = ClassType.Module
-
-	def testRunnerClassName = "sbt.SpecsRunner"
-}
-/* The following classes run tests for their associated test framework.
-* NOTE #1: DO NOT actively use these classes.  Only specify their names to LazyTestFramework
-*  for reflective loading.  This allows using the test libraries provided on the
-*  project classpath instead of requiring global versions.
-* NOTE #2: Keep all active uses of these test frameworks inside these classes so that sbt
-*  runs without error when a framework is not available at runtime and no tests for that
-*  framework are defined.*/
-
-/** The test runner for ScalaCheck tests. */
-private class ScalaCheckRunner(val log: Logger, testReporters: Seq[TestReporter], testLoader: ClassLoader) extends BasicTestRunner[ScalaCheckTestReporter](testReporters)
-{
-	def runTest(testClassName: String): Result.Value =
-	{
-		val test = ModuleUtilities.getObject(testClassName, testLoader).asInstanceOf[Properties]
-		if(Test.checkProperties(test, Test.defaultParams, propReport, testReport).find(!_._2.passed).isEmpty)
-			Result.Passed
-		else
-			Result.Failed
-	}
-	private def propReport(pName: String, s: Int, d: Int) = reporters.foreach(r => r.propReport(pName, s, d))
-	private def testReport(pName: String, res: Test.Result) = reporters.foreach(r => r.testReport(pName, res))
-}
-/** The test runner for ScalaTest suites. */
-private class ScalaTestRunner(val log: Logger, testReporters: Seq[TestReporter], testLoader: ClassLoader) extends BasicTestRunner[ScalaTestTestReporter](testReporters)
-{
-	def runTest(testClassName: String): Result.Value =
-	{
-		import org.scalatest.{Stopper, Suite}
-		val testClass = Class.forName(testClassName, true, testLoader).asSubclass(classOf[Suite])
-		val test = testClass.newInstance
-		val reporter = new ScalaTestReporter(reporters.map(r => r.scalaTestReporter))
-		val stopper = new Stopper { override def stopRequested = false }
-		test.execute(None, reporter, stopper, Set.empty, Set.empty, Map.empty, None)
-		if(reporter.succeeded)
-			Result.Passed
-		else
-			Result.Failed
-	}
-
-	/** An implementation of Reporter for ScalaTest.*/
-	private class ScalaTestReporter(reporters: Seq[org.scalatest.Reporter]) extends org.scalatest.Reporter with NotNull
-	{
-		override def testIgnored(report: Report) = reporters.foreach(r => r.testIgnored(report))
-		override def testStarting(report: Report) = reporters.foreach(r => r.testStarting(report))
-		override def testSucceeded(report: Report) = reporters.foreach(r => r.testSucceeded(report))
-		override def testFailed(report: Report)
-		{
-			succeeded = false
-			reporters.foreach(r => r.testFailed(report))
-		}
-
-		override def infoProvided(report : Report) = reporters.foreach(r => r.infoProvided(report))
-
-		override def suiteStarting(report: Report) = reporters.foreach(r => r.suiteStarting(report))
-		override def suiteCompleted(report: Report) = reporters.foreach(r => r.suiteCompleted(report))
-		override def suiteAborted(report: Report) = reporters.foreach(r => r.suiteAborted(report))
-
-		override def runStarting(testCount: Int) = reporters.foreach(r => r.runStarting(testCount))
-		override def runStopped()
-		{
-			succeeded = false
-			reporters.foreach(r => r.runStopped())
-		}
-		override def runAborted(report: Report)
-		{
-			succeeded = false
-			reporters.foreach(r => r.runAborted(report))
-		}
-		override def runCompleted() = reporters.foreach(r => r.runCompleted())
-
-		var succeeded = true
-	}
-}
-/** The test runner for specs tests. */
-private class SpecsRunner(val log: Logger, testReporters: Seq[TestReporter], testLoader: ClassLoader) extends BasicTestRunner[SpecsTestReporter](testReporters)
-{
-	val Indent = "  "
-	def runTest(testClassName: String): Result.Value =
-	{
-		val test = ModuleUtilities.getObject(testClassName, testLoader).asInstanceOf[Specification]
-		reporters.foreach(r => r.reportSpecification(test, ""))
-		if(test.isFailing)
-			Result.Failed
-		else
-			Result.Passed
 	}
 }
 
