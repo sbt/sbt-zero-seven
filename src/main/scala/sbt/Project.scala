@@ -158,8 +158,14 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	
 	final def envBackingPath = info.builderPath / Project.DefaultEnvBackingName
 	
-	private def getProject(e: Either[String,Project], path: Path): Project =
-		e.fold(m => Predef.error("Error getting project " + path + " : " + m), x => x)
+	private def getProject(result: LoadResult, path: Path): Project =
+		result match
+		{
+			case LoadSetupDeclined => Predef.error("No project exists at path " + path)
+			case LoadSetupError(m) => Predef.error("Error setting up new project at path " + Path + " : " + m)
+			case LoadError(m) => Predef.error("Error loading project at path " + path + " : " + m)
+			case LoadSuccess(p) => p
+		}
 		
 	final val projectVersion = property[Version]
 	final val projectName = propertyLocalF[String](NonEmptyStringFormat)
@@ -219,6 +225,12 @@ class ParentProject(val info: ProjectInfo) extends ReflectiveProject
 {
 	def dependencies = info.dependencies ++ subProjects.values.toList
 }
+private[sbt] sealed trait LoadResult extends NotNull
+private[sbt] final case class LoadSuccess(p: Project) extends LoadResult
+private[sbt] final case class LoadError(message: String) extends LoadResult
+private[sbt] final case object LoadSetupDeclined extends LoadResult
+private[sbt] final case class LoadSetupError(message: String) extends LoadResult
+
 object Project
 {
 	val DefaultEnvBackingName = "build.properties"
@@ -235,27 +247,30 @@ object Project
 	val ProjectClassName = classOf[Project].getName
 	
 	/** Loads the project in the current working directory.*/
-	def loadProject: Either[String, Project] = loadProject(new File("."), Nil, None).right.flatMap(checkOutputDirectories)
+	private[sbt] def loadProject: LoadResult = checkOutputDirectories(loadProject(new File("."), Nil, None))
 	/** Loads the project in the directory given by 'path' and with the given dependencies.*/
-	def loadProject(path: Path, deps: Iterable[Project], parent: Option[Project]): Either[String, Project] =
+	private[sbt] def loadProject(path: Path, deps: Iterable[Project], parent: Option[Project]): LoadResult =
 		loadProject(path.asFile, deps, parent)
 	/** Loads the project in the directory given by 'projectDirectory' and with the given dependencies.*/
-	private[sbt] def loadProject(projectDirectory: File, deps: Iterable[Project], parent: Option[Project]): Either[String, Project] =
+	private[sbt] def loadProject(projectDirectory: File, deps: Iterable[Project], parent: Option[Project]): LoadResult =
 	{
 		val info = ProjectInfo(projectDirectory, deps, parent)
 		ProjectInfo.setup(info, log) match
 		{
-			case SetupError(message) => Left(message)
+			case SetupError(message) => LoadSetupError(message)
+			case SetupDeclined => LoadSetupDeclined
 			case AlreadySetup => loadProject(info, None)
 			case setup: SetupInfo => loadProject(info, Some(setup))
 		}
 	}
-	private def loadProject(info: ProjectInfo, setupInfo: Option[SetupInfo]): Either[String, Project] =
+	private def loadProject(info: ProjectInfo, setupInfo: Option[SetupInfo]): LoadResult =
 	{
 		try
 		{
-			for(builderClass <- getProjectDefinition(info).right) yield
-				initialize(constructProject(info, builderClass), setupInfo)
+			val result =
+				for(builderClass <- getProjectDefinition(info).right) yield
+					initialize(constructProject(info, builderClass), setupInfo)
+			result.fold(LoadError(_), LoadSuccess(_))
 		}
 		catch
 		{
@@ -266,7 +281,7 @@ object Project
 					else ite.getCause
 				errorLoadingProject(cause)
 			}
-			case nme: NoSuchMethodException => Left("Constructor with one argument of type sbt.ProjectInfo required for project definition.")
+			case nme: NoSuchMethodException => LoadError("Constructor with one argument of type sbt.ProjectInfo required for project definition.")
 			case e: Exception => errorLoadingProject(e)
 		}
 	}
@@ -274,7 +289,7 @@ object Project
 	private def errorLoadingProject(e: Throwable) =
 	{
 		log.trace(e)
-		Left("Error loading project: " + e.toString)
+		LoadError("Error loading project: " + e.toString)
 	}
 	/** Loads the project for the given `info` and represented by an instance of 'builderClass'.*/
 	private def constructProject[P <: Project](info: ProjectInfo, builderClass: Class[P]): P =
@@ -339,17 +354,20 @@ object Project
 	* all different.  No verification is done if the project overrides
 	* 'shouldCheckOutputDirectories' to be false. The 'Project.outputDirectories' method is
 	* used to determine a project's output directories. */
-	private def checkOutputDirectories(project: Project): Either[String, Project] =
-	{
-		if(project.shouldCheckOutputDirectories)
-			checkOutputDirectoriesImpl(project).toLeft(project)
-		else
-			Right(project)
-	}
+	private def checkOutputDirectories(result: LoadResult): LoadResult =
+		result match
+		{
+			case LoadSuccess(project) =>
+				if(project.shouldCheckOutputDirectories)
+					checkOutputDirectoriesImpl(project)
+				else
+					LoadSuccess(project)
+			case x => x
+		}
 	/** Verifies that output directories of the given project and all of its dependencies are
 	* all different.  The 'Project.outputDirectories' method is used to determine a project's
 	* output directories. */
-	private def checkOutputDirectoriesImpl(project: Project): Option[String] =
+	private def checkOutputDirectoriesImpl(project: Project): LoadResult =
 	{
 		val projects = project.topologicalSort
 		import scala.collection.mutable.{HashMap, HashSet, Set}
@@ -358,7 +376,7 @@ object Project
 			outputDirectories.getOrElseUpdate(path, new HashSet[Project]) += p
 		val shared = outputDirectories.filter(_._2.size > 1)
 		if(shared.isEmpty)
-			None
+			LoadSuccess(project)
 		else
 		{
 			val sharedString =
@@ -368,7 +386,7 @@ object Project
 						projectsSharingPath.map(_.name).mkString(", ") + " share " + path
 				s.mkString("\n\t")
 			}
-			Some("The same directory is used for output for multiple projects:\n\t" + sharedString +
+			LoadError("The same directory is used for output for multiple projects:\n\t" + sharedString +
 			"\n  (If this is intentional, use 'override def shouldCheckOutputDirectories = false' in your project definition.)")
 		}
 	}

@@ -27,11 +27,16 @@ object Main
 		val startTime = System.currentTimeMillis
 		Project.loadProject match
 		{
-			case Left(errorMessage) =>
+			case LoadSetupError(message) =>
+				println("\n" + message)
+				runExitHooks(Project.log)
+			case LoadSetupDeclined =>
+				runExitHooks(Project.log)
+			case LoadError(errorMessage) =>
 			{
 				println(errorMessage)
 				runExitHooks(Project.log)
-				// If this error is after reloading, prompt user to try again.
+				// Because this is an error that can probably be corrected, prompt user to try again.
 				val line =
 					try { Some(readLine("\n Hit enter to retry or 'exit' to quit: ")).filter(_ != null) }
 					catch
@@ -47,7 +52,7 @@ object Main
 					case None => ()
 				}
 			}
-			case Right(project) =>
+			case LoadSuccess(project) =>
 			{
 				val doNext =
 					// in interactive mode, fill all undefined properties

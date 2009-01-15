@@ -260,10 +260,11 @@ trait WebScalaProject extends ScalaProject
 			val webInfPath = warPath / "WEB-INF"
 			val webLibDirectory = webInfPath / "lib"
 			
-			(FileUtilities.copy(webappContents.get, warPath, log).right flatMap { copiedWebapp =>
-			FileUtilities.copy(classes.get, webInfPath / "classes", log).right flatMap { copiedClasses =>
-			FileUtilities.copyFlat(libs, webLibDirectory, log).right flatMap { copiedLibs =>
-			FileUtilities.copyFilesFlat(extraJars, webLibDirectory, log).right flatMap { copiedExtraLibs =>
+			import FileUtilities.{copy, copyFlat, copyFilesFlat, clean}
+			(copy(webappContents.get, warPath, log).right flatMap { copiedWebapp =>
+			copy(classes.get, webInfPath / "classes", log).right flatMap { copiedClasses =>
+			copyFlat(libs, webLibDirectory, log).right flatMap { copiedLibs =>
+			copyFilesFlat(extraJars, webLibDirectory, log).right flatMap { copiedExtraLibs =>
 				{
 					val toRemove = scala.collection.mutable.HashSet((warPath ** "*").get.toSeq : _*)
 					toRemove --= copiedWebapp
@@ -271,10 +272,17 @@ trait WebScalaProject extends ScalaProject
 					toRemove --= copiedLibs
 					toRemove --= copiedExtraLibs
 					val (directories, files) = toRemove.toList.partition(_.isDirectory)
-					//TODO: prune directories
 					if(log.atLevel(Level.Debug))
-						files.foreach(r => log.debug("Pruning " + r))
-					FileUtilities.clean(files, true, log).toLeft(())
+						files.foreach(r => log.debug("Pruning file " + r))
+					val result =
+						clean(files, true, log) orElse
+						{
+							val emptyDirectories = directories.filter(directory => directory.asFile.listFiles.isEmpty)
+							if(log.atLevel(Level.Debug))
+								emptyDirectories.foreach(r => log.debug("Pruning directory " + r))
+							clean(emptyDirectories, true, log)
+						}
+					result.toLeft(())
 				}
 			}}}}).left.toOption
 		}

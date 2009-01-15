@@ -280,10 +280,10 @@ trait BasicEnvironment extends Environment
 }
 private object Environment
 {
-	def convertException[T](t: => T): Either[Throwable, T] =
+	def convertException[T](t: => T): Either[Exception, T] =
 	{
 		try { Right(t) }
-		catch { case e => Left(e) }
+		catch { case e: Exception => Left(e) }
 	}
 	def reflectiveMappings[T](obj: AnyRef, clazz: Class[T]): Map[String, T] =
 	{

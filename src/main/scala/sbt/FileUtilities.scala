@@ -453,7 +453,7 @@ object FileUtilities
 	}
 	
 	/** Synchronizes the contents of the <code>sourceDirectory</code> directory to the
-	* <code>targetDirectory</code> directory .*/
+	* <code>targetDirectory</code> directory.*/
 	def sync(sourceDirectory: Path, targetDirectory: Path, log: Logger): Option[String] =
 	{
 		copy(((sourceDirectory ##) ** AllPassFilter).get, targetDirectory, log).right.flatMap { copiedTo =>
