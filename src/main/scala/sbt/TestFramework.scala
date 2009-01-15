@@ -3,6 +3,8 @@
  */
 package sbt
 
+import scala.xml.Elem
+
 object Result extends Enumeration
 {
 	val Error, Passed, Failed = Value
@@ -24,28 +26,72 @@ trait TestRunner extends NotNull
 {
 	def run(testClassName: String): Result.Value
 }
+
+trait TestReportListener
+{
+	/** called once, at beginning. */
+  def doInit
+	/** called once, at end. */
+  def doComplete
+	/** called for each class or equivalent grouping */
+  def startGroup(name: String)
+	/** called for each test method or equivalent */
+  def testEvent(result: Elem)
+	/** called if there was an error during test */
+  def endGroup(name: String, t: Throwable)
+	/** called if test completed */
+  def endGroup(name: String, result: Result.Value)
+}
+
 abstract class BasicTestRunner extends TestRunner
 {
 	protected def log: Logger
+	protected val listeners:Seq[TestReportListener] = Seq(new LogTestReportListener())
 	final def run(testClass: String): Result.Value =
 	{
-		log.info("")
-		log.info("Testing " + testClass + " ...")
+		listeners.foreach(_.startGroup(testClass))
 		try
 		{
-			runTest(testClass)
+			val result = runTest(testClass)
+			listeners.foreach(_.endGroup(testClass, result))
+			result
 		}
 		catch
 		{
 			case e =>
 			{
-				log.error("Could not run test " + testClass + ": " + e.toString)
-				log.trace(e)
+				listeners.foreach(_.endGroup(testClass, e))
 				Result.Error
 			}
 		}
 	}
 	def runTest(testClass: String): Result.Value
+
+	private class LogTestReportListener() extends TestReportListener
+	{
+		def doInit = { log.debug("in doInit") }
+		def doComplete = { log.debug("in doComplete") }
+		def startGroup(name: String)
+		{
+			log.info("")
+			log.info("Testing " + name + " ...")
+		}
+		def testEvent(result: scala.xml.Elem) =
+		{
+			log.debug("in testEvent:" + result)
+			result match {
+				case <event><passed/><name>{name}</name><message>{msg}</message></event> => log.info("+ " + name.text + ": " + msg.text)
+				case <event><failed/><name>{name}</name><message>{msg}</message></event> => log.error("! " + name.text + ": " + msg.text)
+				case n => log.warn("unrecognized message:" + n)
+			}
+		}
+		def endGroup(name: String, t: Throwable)
+		{
+			log.error("Could not run test " + name + ": " + t.toString)
+			log.trace(t)
+		}
+		def endGroup(name: String, result: Result.Value) = { log.debug("in endGroup:" + result) }
+	}
 }
 
 object TestFramework
@@ -191,12 +237,10 @@ private class ScalaCheckRunner(val log: Logger, testLoader: ClassLoader) extends
 	private def propReport(pName: String, s: Int, d: Int) {}
 	private def testReport(pName: String, res: Test.Result) =
 	{
-		import Pretty._
-		val s = (if(res.passed) "+ " else "! ") + pName + ": " + pretty(res)
 		if(res.passed)
-			log.info(s)
+			listeners.foreach(_.testEvent(<event><passed/><name>{pName}</name><message>{Pretty.pretty(res)}</message></event>))
 		else
-			log.error(s)
+			listeners.foreach(_.testEvent(<event><failed/><name>{pName}</name><message>{Pretty.pretty(res)}</message></event>))
 	}
 }
 /** The test runner for ScalaTest suites. */
