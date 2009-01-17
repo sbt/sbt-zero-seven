@@ -26,8 +26,8 @@ trait FileTasks extends Project
 			def from(sourceFinder: PathFinder) =
 				new ProductsSources
 				{
-					lazy val products = productsList
-					lazy val sources = sourceFinder.get
+					def products = productsList
+					def sources = sourceFinder.get
 				}
 		}
 	def fileTask(files: ProductsSources)(action: => Option[String]): Task =
