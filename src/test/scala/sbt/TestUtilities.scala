@@ -40,7 +40,16 @@ object TestUtilities
 	
 	def withProject[T](group: String, name: String)(f: Project => Either[String, T]): Either[String, T] =
 		readWriteResourceDirectory(group, name, Project.log)
-			{ dir => Project.loadProject(dir, Nil, None).right.flatMap(f) }
+			{ dir => resultToEither(Project.loadProject(dir, Nil, None)).right.flatMap(f) }
 
+	def resultToEither(result: LoadResult): Either[String, Project] =
+		result match
+		{
+			case LoadSuccess(project) => Right(project)
+			case LoadError(message) => Left(message)
+			case LoadSetupError(message) => Left(message)
+			case LoadSetupDeclined => Left("Setup declined")
+		}
+	
 	val testResourcesDirectory = new File(System.getProperty("sbt.test.resources"))
 }
