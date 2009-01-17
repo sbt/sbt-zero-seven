@@ -51,6 +51,7 @@ object ManageDependencies
 			Control.trap("Could not read dependencies: ", log)
 			{
 				val parser = new CustomXmlParser.CustomParser(ivy.getSettings)
+				parser.setDefaultConf("default")
 				val resource = new ByteResource(xml.getBytes)
 				parser.setInput(resource.openStream)
 				parser.setResource(resource)
@@ -281,6 +282,7 @@ object ManageDependencies
 				val resolver = new IBiblioResolver
 				resolver.setName(name)
 				resolver.setM2compatible(true)
+				resolver.setChangingPattern("*-SNAPSHOT")
 				resolver.setRoot(root)
 				resolver
 			}
@@ -303,6 +305,7 @@ object ManageDependencies
 		{
 			override def parseDepsConfs(confs: String, dd: DefaultDependencyDescriptor) = super.parseDepsConfs(confs, dd)
 			override def getDefaultConf = super.getDefaultConf
+			override def setDefaultConf(conf: String) = super.setDefaultConf(conf)
 		}
 	}
 }
