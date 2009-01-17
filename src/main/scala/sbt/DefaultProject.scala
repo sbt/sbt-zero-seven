@@ -231,6 +231,11 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		nonEmpty(name, "Repository name")
 		RepositoryName(name)
 	}
+	implicit def moduleIDConfigurable(m: ModuleID): ModuleIDConfigurable =
+	{
+		require(m.configurations.isEmpty, "Configurations already specified for module " + m)
+		ModuleIDConfigurable(m)
+	}
 }
 abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProject
 {
@@ -384,7 +389,7 @@ object StringUtilities
 {
 	def nonEmpty(s: String, label: String)
 	{
-		require(s.length > 0, label + " cannot be empty.")
+		require(s.trim.length > 0, label + " cannot be empty.")
 	}
 }
 import StringUtilities.nonEmpty
@@ -401,7 +406,16 @@ final case class GroupArtifactID(groupID: String, artifactID: String) extends No
 	def % (revision: String): ModuleID =
 	{
 		nonEmpty(revision, "Revision")
-		ModuleID(groupID, artifactID, revision)
+		ModuleID(groupID, artifactID, revision, None)
+	}
+}
+final case class ModuleIDConfigurable(moduleID: ModuleID) extends NotNull
+{
+	def % (configurations: String): ModuleID =
+	{
+		nonEmpty(configurations, "Configurations")
+		import moduleID._
+		ModuleID(organization, name, revision, Some(configurations))
 	}
 }
 final case class RepositoryName(name: String) extends NotNull

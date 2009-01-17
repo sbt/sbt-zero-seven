@@ -44,15 +44,15 @@ object ManageDependencies
 		def readPom(pomFile: File) = readDependencyFile(pomFile, PomModuleDescriptorParser.getInstance)
 		def readIvyFile(ivyFile: File) = readDependencyFile(ivyFile, XmlModuleDescriptorParser.getInstance)
 		def parseXMLDependencies(xml: scala.xml.NodeSeq) = parseDependencies(xml.toString)
-		def parseDependencies(xml: String): Either[String, ModuleDescriptor] =
+		def parseDependencies(xml: String): Either[String, (ModuleDescriptor, CustomXmlParser.CustomParser)] =
 			Control.trap("Could not read dependencies: ", log)
 			{
-				val parser = new XmlModuleDescriptorParser.Parser(XmlModuleDescriptorParser.getInstance, ivy.getSettings)
+				val parser = new CustomXmlParser.CustomParser(ivy.getSettings)
 				val resource = new ByteResource(xml.getBytes)
 				parser.setInput(resource.openStream)
 				parser.setResource(resource)
 				parser.parse()
-				Right(parser.getModuleDescriptor)
+				Right((parser.getModuleDescriptor, parser))
 			}
 		def configure(configFile: Option[Path])
 		{
@@ -73,15 +73,36 @@ object ManageDependencies
 			}
 			settings.setBaseDir(projectDirectory.asFile)
 		}
-		def addDependencies(moduleID: DefaultModuleDescriptor, dependencies: Iterable[ModuleID])
+		def addDependencies(moduleID: DefaultModuleDescriptor, dependencies: Iterable[ModuleID],
+			parser: Option[CustomXmlParser.CustomParser])
 		{
 			for(dependency <- dependencies)
 			{
 				val dependencyDescriptor = new DefaultDependencyDescriptor(moduleID, toID(dependency), false, false, true)
-				dependencyDescriptor.addDependencyConfiguration("default", "default")
+				dependency.configurations match
+				{
+					case None =>
+					{
+						parser match
+						{
+							case Some(p) => p.parseDepsConfs(p.getDefaultConf, dependencyDescriptor)
+							case None => dependencyDescriptor.addDependencyConfiguration("default", "default")
+						}
+					}
+					case Some(confs) =>
+						parser match
+						{
+							case Some(p) => p.parseDepsConfs(confs, dependencyDescriptor)
+							case None =>
+							{
+								val p = new CustomXmlParser.CustomParser(ivy.getSettings)
+								p.parseDepsConfs(confs, dependencyDescriptor)
+							}
+						}
+				}
 				moduleID.addDependency(dependencyDescriptor)
 			}
-				
+			
 			val artifact = DefaultArtifact.newIvyArtifact(moduleID.getResolvedModuleRevisionId, moduleID.getPublicationDate)
 			moduleID.setModuleArtifact(artifact)
 			moduleID.check()
@@ -111,8 +132,8 @@ object ManageDependencies
 				else
 				{
 					log.warn("No readable dependency configuration found.")
-					val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(ModuleID("", "", "")))
-					addDependencies(moduleID, Nil)
+					val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(ModuleID("", "", "", None)))
+					addDependencies(moduleID, Nil, None)
 					Right(moduleID)
 				}
 			}
@@ -157,19 +178,20 @@ object ManageDependencies
 						if(dependenciesXML.isEmpty)
 						{
 							log.debug("Using inline dependencies specified in Scala.")
-							addDependencies(moduleID, dependencies)
+							addDependencies(moduleID, dependencies, None)
 							Right(moduleID)
 						}
 						else
 						{
-							for(xmlModuleID <- parseXMLDependencies(wrapped(module, dependenciesXML)).right) yield
+							for(idAndParser <- parseXMLDependencies(wrapped(module, dependenciesXML)).right) yield
 							{
+								val (xmlModuleID, parser) = idAndParser
 								log.debug("Using inline dependencies specified in Scala and XML.")
 								xmlModuleID.getConfigurations.foreach(moduleID.addConfiguration)
 								xmlModuleID.getDependencies.foreach(moduleID.addDependency)
 								for(artifact <- xmlModuleID.getAllArtifacts; conf <- artifact.getConfigurations)
 									moduleID.addArtifact(conf, artifact)
-								addDependencies(moduleID, dependencies)
+								addDependencies(moduleID, dependencies, Some(parser))
 								moduleID
 							}
 						}
@@ -270,6 +292,16 @@ object ManageDependencies
 	{
 		override def openStream = new java.io.ByteArrayInputStream(bytes)
 	}
+	
+	private object CustomXmlParser extends XmlModuleDescriptorParser with NotNull
+	{
+		import XmlModuleDescriptorParser.Parser
+		class CustomParser(settings: IvySettings) extends Parser(CustomXmlParser, settings) with NotNull
+		{
+			override def parseDepsConfs(confs: String, dd: DefaultDependencyDescriptor) = super.parseDepsConfs(confs, dd)
+			override def getDefaultConf = super.getDefaultConf
+		}
+	}
 }
 
 sealed abstract class Manager extends NotNull
@@ -287,8 +319,9 @@ trait SbtManager extends Manager
 case class SimpleManager(dependenciesXML: scala.xml.NodeSeq, autodetectUnspecified: Boolean,
 	module: ModuleID, resolvers: Iterable[Resolver], dependencies: ModuleID*) extends SbtManager
 
-final case class ModuleID(organization: String, name: String, revision: String) extends NotNull
+final case class ModuleID(organization: String, name: String, revision: String, configurations: Option[String]) extends NotNull
 {
+	def this(organization: String, name: String, revision: String) = this(organization, name, revision, None)
 	override def toString = organization + ":" + name + ":" + revision
 }
 sealed trait Resolver extends NotNull
