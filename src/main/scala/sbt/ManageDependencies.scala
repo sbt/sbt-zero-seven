@@ -282,7 +282,7 @@ object ManageDependencies
 				val resolver = new IBiblioResolver
 				resolver.setName(name)
 				resolver.setM2compatible(true)
-				resolver.setChangingPattern("*-SNAPSHOT")
+				resolver.setChangingPattern(""".*\-SNAPSHOT""")
 				resolver.setRoot(root)
 				resolver
 			}
