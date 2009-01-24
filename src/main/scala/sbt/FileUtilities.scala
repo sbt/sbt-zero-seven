@@ -19,7 +19,7 @@ object FileUtilities
 	private val BufferSize = 8192
 	private val Newline = System.getProperty("line.separator")
 	/** A pattern used to split a String by path separator characters.*/
-	private val PathSeparatorPattern = java.util.regex.Pattern.compile("""[;:]""")
+	private val PathSeparatorPattern = java.util.regex.Pattern.compile(File.pathSeparator)
 
 	/** Splits a String around path separator characters. */
 	private[sbt] def pathSplit(s: String) = PathSeparatorPattern.split(s)
