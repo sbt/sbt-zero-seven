@@ -4,7 +4,7 @@
 /build -text
 /clean -text
 lib/ScalaCheck-1.5.jar -text
-lib/ivy-2.0.0-rc2.jar -text
+lib/ivy-2.0.0.jar -text
 lib/jetty-6.1.14.jar -text
 lib/jetty-util-6.1.14.jar -text
 lib/scalatest-0.9.3.jar -text
