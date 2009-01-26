@@ -273,10 +273,6 @@ private class DescendentOrSelfPathFinder(val parent: PathFinder, val filter: Nam
 			handlePathDescendent(path, pathSet)
 		}
 	}
-	protected object DirectoryFilter extends FileFilter
-	{
-		def accept(file: File) = file.isDirectory
-	}
 	private def handlePathDescendent(path: Path, pathSet: Set[Path])
 	{
 		handlePath(path, pathSet)

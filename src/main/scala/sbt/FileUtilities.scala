@@ -3,7 +3,7 @@
  */
 package sbt
 
-import java.io.{Closeable, File, FileInputStream, FileOutputStream, InputStream, OutputStream}
+import java.io.{Closeable, File, FileFilter, FileInputStream, FileOutputStream, InputStream, OutputStream}
 import java.io.{ByteArrayOutputStream, InputStreamReader, OutputStreamWriter}
 import java.io.{BufferedReader, BufferedWriter, FileReader, FileWriter, Reader, Writer}
 import java.net.URL
@@ -175,7 +175,7 @@ object FileUtilities
 								createDirectory(target, log)
 							else
 								writeStream(target.asFile, log) { out => FileUtilities.transfer(from, out, log) }
-						target.asFile.setLastModified(entry.getTime)
+						//target.asFile.setLastModified(entry.getTime)
 						result
 					}
 					else
@@ -595,7 +595,15 @@ object FileUtilities
 	/** Opens a <code>Reader</code> on the given file using the default encoding,
 	* passes it to the provided function, and closes the <code>Reader</code>.*/
 	def read(file: File, log: Logger)(f: Reader => Option[String]): Option[String] =
-		unwrapEither(readValue(file, Charset.defaultCharset, log)(wrapEither(f)))
+		read(file, Charset.defaultCharset, log)(f)
+	/** Opens a <code>Reader</code> on the given file using the default encoding,
+	* passes it to the provided function, and closes the <code>Reader</code>.*/
+	def read(file: File, charset: Charset, log: Logger)(f: Reader => Option[String]): Option[String] =
+		unwrapEither(readValue(file, charset, log)(wrapEither(f)))
+	/** Opens a <code>Reader</code> on the given file using the default encoding,
+	* passes it to the provided function, and closes the <code>Reader</code>.*/
+	def readValue[R](file: File, log: Logger)(f: Reader => Either[String, R]): Either[String, R] =
+		readValue(file, Charset.defaultCharset, log)(f)
 	/** Opens a <code>Reader</code> on the given file using the given encoding,
 	* passes it to the provided function, and closes the <code>Reader</code>.*/
 	def readValue[R](file: File, charset: Charset, log: Logger)(f: Reader => Either[String, R]): Either[String, R] =
@@ -718,4 +726,9 @@ object FileUtilities
 	lazy val sbtJar: File = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
 	/** The producer of randomness for unique name generation.*/
 	private val random = new java.util.Random
+}
+
+object DirectoryFilter extends FileFilter
+{
+	def accept(file: File) = file.isDirectory
 }
