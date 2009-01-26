@@ -351,18 +351,20 @@ object Resolver
 	val ScalaToolsSnapshotsRoot = "http://scala-tools.org/repo-snapshots"
 }
 
+final class Configuration(override val toString: String) extends NotNull
 object Configurations
 {
-	val Compile = "compile"
-	val Test = "test"
-	val Provided = "provided"
-	val Javadoc = "javadoc"
-	val Runtime = "runtime"
-	val Sources = "sources"
-	val System = "system"
-	val Master = "master"
-	val Default = "default"
-	val Optional = "optional"
+	val Compile = new Configuration("compile")
+	val Test = new Configuration("test")
+	val IntegrationTest = new Configuration("it")
+	val Provided = new Configuration("provided")
+	val Javadoc = new Configuration("javadoc")
+	val Runtime = new Configuration("runtime")
+	val Sources = new Configuration("sources")
+	val System = new Configuration("system")
+	val Master = new Configuration("master")
+	val Default = new Configuration("default")
+	val Optional = new Configuration("optional")
 }
 
 private class IvyLogger(log: Logger) extends MessageLogger

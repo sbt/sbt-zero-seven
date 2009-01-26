@@ -3,6 +3,7 @@
  */
 package sbt
 
+/** The project definition used to build project definitions. */
 final class BuilderProject(val info: ProjectInfo) extends ScalaProject
 {
 	override protected def logImpl = new ConsoleLogger
@@ -16,8 +17,7 @@ final class BuilderProject(val info: ProjectInfo) extends ScalaProject
 	def mainResourcesPath = path(DefaultResourcesDirectoryName)
 	def dependencyPath = path(DefaultDependencyDirectoryName)
 	
-	def defaultExcludes = ".svn" | ".cvs"
-	def libraries = dependencyPath.descendentsExcept("*.jar", defaultExcludes)
+	def libraries = descendents(dependencyPath, "*.jar")
 	
 	def compileOptions = Deprecation :: Unchecked :: Nil
 	override def tasks = Map.empty

@@ -14,6 +14,8 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	final val log: Logger = logImpl
 	protected def logImpl: Logger = new BufferedLogger(new ConsoleLogger)
 	
+	trait ActionOption extends NotNull
+	
 	/** Basic project information. */
 	def info: ProjectInfo
 	/** The project name. */
@@ -156,6 +158,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	* projects have not been defined with the same output directories. */
 	def outputDirectories: Iterable[Path] = Nil
 	
+	/** The path to the file that provides persistence for properties.*/
 	final def envBackingPath = info.builderPath / Project.DefaultEnvBackingName
 	
 	private def getProject(result: LoadResult, path: Path): Project =
@@ -166,8 +169,10 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 			case LoadError(m) => Predef.error("Error loading project at path " + path + " : " + m)
 			case LoadSuccess(p) => p
 		}
-		
+	
+	/** The property for the project's version. */
 	final val projectVersion = property[Version]
+	/** The property for the project's name. */
 	final val projectName = propertyLocalF[String](NonEmptyStringFormat)
 	protected final override def parentEnvironment = info.parent
 	
@@ -189,41 +194,12 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 			}
 		}
 	}
+	def defaultExcludes = ".svn" | ".cvs"
+	/** Short for parent.descendentsExcept(include, defaultExcludes)*/
+	def descendents(parent: PathFinder, include: NameFilter) = parent.descendentsExcept(include, defaultExcludes)
 	override def toString = "Project " + projectName.get.getOrElse("at " + environmentLabel)
-}
-object Reflective
-{
-	def reflectiveMappings[T](obj: AnyRef)(implicit m: scala.reflect.Manifest[T]): Map[String, T] =
-	{
-		val mappings = new mutable.OpenHashMap[String, T]
-		for ((name, value) <- ReflectUtilities.allVals[T](obj))
-			mappings(ReflectUtilities.transformCamelCase(name, '-')) = value
-		mappings
-	}
-}
-/** A Project that determines its tasks by reflectively finding all vals with a type
-* that conforms to Task.*/
-trait ReflectiveTasks extends Project
-{
-	def tasks: Map[String, Task] = reflectiveTaskMappings
-	def reflectiveTaskMappings : Map[String, Task] = Reflective.reflectiveMappings[Task](this)
-}
-/** A Project that determines its dependencies on other projects by reflectively
-* finding all vals with a type that conforms to Project.*/
-trait ReflectiveModules extends Project
-{
-	override def subProjects: Map[String, Project] = reflectiveModuleMappings
-	def reflectiveModuleMappings : Map[String, Project] = Reflective.reflectiveMappings[Project](this)
-}
-/** A Project that determines its dependencies on other projects by reflectively
-* finding all vals with a type that conforms to Project and determines its tasks
-* by reflectively finding all vals with a type that conforms to Task.*/
-trait ReflectiveProject extends ReflectiveModules with ReflectiveTasks
-
-/** This Project subclass is used to contain other projects as dependencies.*/
-class ParentProject(val info: ProjectInfo) extends ReflectiveProject
-{
-	def dependencies = info.dependencies ++ subProjects.values.toList
+	
+	def normalizedName = name.toLowerCase.replaceAll("""\s+""", "-")
 }
 private[sbt] sealed trait LoadResult extends NotNull
 private[sbt] final case class LoadSuccess(p: Project) extends LoadResult

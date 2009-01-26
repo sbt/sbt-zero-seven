@@ -13,8 +13,6 @@ trait ScalaProject extends Project with FileTasks
 	
 	def errorTask(message: String) = task{ Some(message) }
 	
-	trait ActionOption extends NotNull
-	
 	case class CompileOption(val asString: String) extends ActionOption
 	trait PackageOption extends ActionOption
 	trait TestOption extends ActionOption
@@ -22,6 +20,7 @@ trait ScalaProject extends Project with FileTasks
 	case class ClearAnalysis(analysis: TaskAnalysis[_, _, _]) extends CleanOption
 	
 	case class ExcludeTests(tests: Iterable[String]) extends TestOption
+	case class TestResources(resources: PathFinder) extends TestOption
 	
 	case class ManifestOption(m: Manifest) extends PackageOption
 	{
@@ -185,69 +184,11 @@ trait ScalaProject extends Project with FileTasks
 				log.debug("Excluding tests: ")
 				excludeTestsSet.foreach(test => log.debug("\t" + test))
 			}
+			val resourcesAndClasspath = (for(TestResources(res) <- options) yield res).foldLeft(classpath)(_ +++ _)
 			val tests = HashSet.empty[TestDefinition] ++ analysis.allTests.filter(test => !excludeTestsSet.contains(test.testClassName))
-
-			TestFramework.runTests(frameworks, classpath.get, tests, log)
+			
+			TestFramework.runTests(frameworks, resourcesAndClasspath.get, tests, log)
 	}
-}
-trait ManagedScalaProject extends ScalaProject
-{
-	trait ManagedOption extends ActionOption
-	final class ManagedFlagOption extends ManagedOption
-	final val Synchronize = new ManagedFlagOption
-	final val Validate = new ManagedFlagOption
-	final val QuietUpdate = new ManagedFlagOption
-	final val AddScalaToolsReleases = new ManagedFlagOption
-	final val ErrorIfNoConfiguration = new ManagedFlagOption
-	final case class LibraryManager(m: Manager) extends ManagedOption
-	
-	private def withConfigurations(outputPattern: String, managedDependencyPath: Path, options: Seq[ManagedOption])
-		(doWith: (IvyConfiguration, UpdateConfiguration) => Option[String]) =
-	{
-		var synchronize = false
-		var validate = false
-		var quiet = false
-		var addScalaTools = false
-		var errorIfNoConfiguration = false
-		var manager: Manager = AutoDetectManager
-		for(option <- options)
-		{
-			option match
-			{
-				case Synchronize => synchronize = true
-				case Validate => validate = true
-				case LibraryManager(m) => manager = m
-				case QuietUpdate => quiet = true
-				case AddScalaToolsReleases => addScalaTools = true
-				case ErrorIfNoConfiguration => errorIfNoConfiguration = true
-				case _ => log.warn("Ignored unknown managed option " + option)
-			}
-		}
-		val ivyConfiguration = IvyConfiguration(info.projectPath, managedDependencyPath, manager, validate,
-			addScalaTools, errorIfNoConfiguration, log)
-		val updateConfiguration = UpdateConfiguration(outputPattern, synchronize, quiet)
-		doWith(ivyConfiguration, updateConfiguration)
-	}
-	private def withIvyTask(doTask: => Option[String]) =
-		task
-		{
-			try { doTask }
-			catch
-			{
-				case e: NoClassDefFoundError =>
-					log.trace(e)
-					Some("Apache Ivy is required for dependency management (" + e.toString + ")")
-			}
-		}
-	def updateTask(outputPattern: String, managedDependencyPath: Path, options: ManagedOption*): Task =
-		updateTask(outputPattern, managedDependencyPath, options)
-	def updateTask(outputPattern: String, managedDependencyPath: Path, options: => Seq[ManagedOption]) =
-		withIvyTask(withConfigurations(outputPattern, managedDependencyPath, options)(ManageDependencies.update))
-		
-	def cleanCacheTask(managedDependencyPath: Path, options: => Seq[ManagedOption]) =
-		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) => ManageDependencies.cleanCache(ivyConf) })
-		
-	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, log) }
 }
 trait WebScalaProject extends ScalaProject
 {
@@ -294,23 +235,5 @@ object ScalaProject
 {
 	val AnalysisDirectoryName = "analysis"
 	val MainClassKey = "Main-Class"
+	val TestResourcesProperty = "sbt.test.resources"
 }
-
-/** A Project that determines its library dependencies by reflectively finding all vals with a type
-* that conforms to ModuleID.*/
-trait ReflectiveLibraryDependencies extends Project
-{
-	def excludeIDs: Iterable[ModuleID]
-	def libraryDependencies: Set[ModuleID] = reflectiveLibraryDependencies
-	def reflectiveLibraryDependencies : Set[ModuleID] = Set(Reflective.reflectiveMappings[ModuleID](this).values.toList: _*) -- excludeIDs
-}
-
-/** A Project that determines its library dependencies by reflectively finding all vals with a type
-* that conforms to ModuleID.*/
-trait ReflectiveRepositories extends Project
-{
-	def repositories: Set[Resolver] = reflectiveRepositories
-	def reflectiveRepositories: Set[Resolver] = Set(Reflective.reflectiveMappings[Resolver](this).values.toList: _*)
-}
-
-trait ReflectiveManagedProject extends ReflectiveProject with ReflectiveRepositories with ReflectiveLibraryDependencies

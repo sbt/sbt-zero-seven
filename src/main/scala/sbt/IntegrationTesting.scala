@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2009  Steven Blundy
+ * Copyright 2009  Steven Blundy, Mark Harrah
  */
 package sbt
 
@@ -53,9 +53,12 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 
 	protected def integrationTestCompileTask() = task{ integrationTestCompileConditional.run }
 
-	def integrationTestOptions: Seq[TestOption] = Nil
+	def integrationTestOptions: Seq[TestOption] = TestResources(integrationTestResourcesPath) :: Nil
 	def integrationTestCompileOptions = testCompileOptions
-	def integrationTestClasspath = integrationTestCompilePath +++ fullClasspath(Configurations.Test, false)
+	
+	def integrationTestClasspath = projectPathConcatenate[BasicScalaIntegrationTesting](_.integrationTestCompilePath) +++
+		fullClasspath(Configurations.Test) +++ optionalClasspath
+	
 	def integrationTestSources = descendents(integrationTestScalaSourcePath, "*.scala")
 	def integrationTestLabel = "integration-test"
 	def integrationTestCompileConfiguration = new IntegrationTestCompileConfig
@@ -90,6 +93,7 @@ trait IntegrationTestPaths extends BasicProjectPaths
 
 	def integrationTestSourcePath = sourcePath / integrationTestDirectoryName
 	def integrationTestScalaSourcePath = integrationTestSourcePath / scalaDirectoryName
+	def integrationTestResourcesPath = integrationTestSourcePath / resourcesDirectoryName
 
 	def integrationTestCompilePath = outputPath / integrationTestCompileDirectoryName
 	def integrationTestAnalysisPath = outputPath / integrationTestAnalysisDirectoryName

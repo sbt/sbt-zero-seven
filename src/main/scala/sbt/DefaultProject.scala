@@ -10,7 +10,10 @@ class DefaultWebProject(val info: ProjectInfo) extends BasicWebScalaProject
 
 import BasicScalaProject._
 
-abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPaths with ReflectiveManagedProject
+/** This class defines concrete instances of actions from ScalaProject using overridable paths,
+* options, and configuration. */
+abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathProject with ManagedProject
+	with BasicProjectPaths with ReflectiveManagedProject
 {
 	/** The class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
@@ -20,38 +23,44 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	val mainCompileConditional = new CompileConditional(mainCompileConfiguration)
 	val testCompileConditional = new CompileConditional(testCompileConfiguration)
 
-	def defaultExcludes = ".svn" | ".cvs"
-	
+	/** Declares all sources to be packaged by the package-src action.*/
 	def allSources =
 	{
 		val sourceDirs = (mainScalaSourcePath +++ mainResourcesPath +++ testScalaSourcePath +++ testResourcesPath)
 		descendents(sourceDirs, "*")
 	}
-	/** Short for parent.descendentsExcept(include, defaultExcludes)*/
-	def descendents(parent: PathFinder, include: NameFilter) = parent.descendentsExcept(include, defaultExcludes)
-	
+	/** A PathFinder that selects all main sources.  It excludes paths that match 'defaultExcludes'.*/
 	def mainSources = descendents(mainScalaSourcePath, "*.scala")
+	/** A PathFinder that selects all test sources.  It excludes paths that match 'defaultExcludes'.*/
 	def testSources = descendents(testScalaSourcePath, "*.scala")
+	/** A PathFinder that selects all main resources.  It excludes paths that match 'defaultExcludes'.*/
 	def mainResources = descendents(mainResourcesPath ##, "*")
+	/** A PathFinder that selects all test resources.  It excludes paths that match 'defaultExcludes'.*/
 	def testResources = descendents(testResourcesPath ##, "*")
 	
+	/** A PathFinder that selects all the classes compiled from the main sources.*/
 	def mainClasses = (mainCompilePath ##) ** "*.class"
+	/** A PathFinder that selects all the classes compiled from the test sources.*/
 	def testClasses = (testCompilePath ##) ** "*.class"
 	
 	import Project._
 	
-	def normalizedName = name.toLowerCase.replaceAll("""\s+""", "-")
-	def projectID: ModuleID =
-	{
-		normalizedName % normalizedName % version.toString
-	}
-	def excludeIDs = projectID :: Nil
+	/** The dependency manager that represents inline declarations.  The default manager packages the information
+	* from 'ivyXML', 'projectID', 'repositories', and 'libraryDependencies' and does not typically need to be
+	* be overridden. */
 	def manager = SimpleManager(ivyXML, true, projectID, repositories, libraryDependencies.toList: _*)
 	
+	/** The pattern for Ivy to use when retrieving dependencies into the local project.  Classpath management
+	* depends on the first directory being [conf] and the extension being [ext].*/
 	def outputPattern = "[conf]/[artifact](-[revision]).[ext]"
+	/** Override this to specify the publications, configurations, and/or dependencies sections of an Ivy file.
+	* See http://code.google.com/p/simple-build-tool/wiki/LibraryManagement for details.*/
 	def ivyXML: scala.xml.NodeSeq = scala.xml.NodeSeq.Empty
+	/** The base options passed to the 'update' action. */
 	def baseUpdateOptions = Validate :: Synchronize :: QuietUpdate :: AddScalaToolsReleases :: Nil
-	/** The options provided to the 'update' action.*/
+	/** The options provided to the 'update' action.  This is by default the options in 'baseUpdateOptions'.
+	* If 'manager' has any dependencies, resolvers, or inline Ivy XML (which by default happens when inline
+	* dependency management is used), it is passed as the dependency manager.*/
 	def updateOptions: Seq[ManagedOption] =
 	{
 		val m = manager
@@ -65,7 +74,8 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	/** The options provided to the 'test-compile' action, defaulting to those for the 'compile' action.*/
 	def testCompileOptions: Seq[CompileOption] = compileOptions
 	
-	/** The options provided to the 'run' action.*/
+	/** The options provided to the 'run' action.  These actions are passed as arguments to the main method
+	* of the class specified in 'mainClass'.*/
 	def runOptions: Seq[String] = Nil
 	/** The options provided to the 'doc' and 'docTest' actions.*/
 	def documentOptions: Seq[ScaladocOption] =
@@ -73,13 +83,15 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		documentTitle(name + " " + version + " API") ::
 		windowTitle(name + " " + version + " API") ::
 		Nil
-	/** The options provided to the 'test' action.*/
-	def testOptions: Seq[TestOption] = Nil
+	/** The options provided to the 'test' action.  You can specify tests to exclude here.*/
+	def testOptions: Seq[TestOption] = TestResources(testResourcesPath) :: Nil
+	/** The options provided to the clean action.  You can add files to be removed here.*/
 	def cleanOptions: Seq[CleanOption] =
 		ClearAnalysis(mainCompileConditional.analysis) ::
 		ClearAnalysis(testCompileConditional.analysis) ::
 		Nil
 	
+	/** These are the directories that are created when a user makes a new project from sbt.*/
 	private def directoriesToCreate: List[Path] =
 		dependencyPath ::
 		mainScalaSourcePath ::
@@ -88,6 +100,8 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 		testResourcesPath ::
 		Nil
 	
+	/** This is called to create the initial directories when a user makes a new project from
+	* sbt.*/
 	override final def initializeDirectories()
 	{
 		FileUtilities.createDirectories(directoriesToCreate.map(_.asFile), log) match
@@ -96,55 +110,35 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 			case None => log.success("Successfully initialized directory structure.")
 		}
 	}
-	def consoleConfiguration = Configurations.Test
+	import Configurations._
+	/** The managed configuration to use when determining the classpath for a Scala interpreter session.*/
+	def consoleConfiguration = Test
 	
-	def docClasspath = fullClasspath(Configurations.Compile)
-	def compileClasspath = fullClasspath(Configurations.Compile) +++ fullClasspath(Configurations.Provided)
-	def testClasspath = fullClasspath(Configurations.Test, true)
-	def runClasspath = fullClasspath(Configurations.Runtime)
-	def consoleClasspath = fullClasspath(consoleConfiguration)
+	/** A PathFinder that provides the classpath to pass to scaladoc.  It is the same as the compile classpath
+	* by default. */
+	def docClasspath = compileClasspath
+	/** A PathFinder that provides the classpath to pass to the compiler.*/
+	def compileClasspath = fullClasspath(Compile) +++ projectPathConcatenate[ManagedProject](_.managedClasspath(Provided, false)) +++ optionalClasspath
+	/** A PathFinder that provides the classpath to use when unit testing.*/
+	def testClasspath = projectPathConcatenate[BasicScalaProject](_.testCompilePath) +++ fullClasspath(Test) +++ optionalClasspath
+	/** A PathFinder that provides the classpath to use when running the class specified in 'mainClass'.*/
+	def runClasspath = fullClasspath(Runtime) +++ optionalClasspath
+	/** A PathFinder that provides the classpath to use for a Scala interpreter session.*/
+	def consoleClasspath = fullClasspath(consoleConfiguration) +++ optionalClasspath
+	/** A PathFinder that corresponds to Maven's optional scope.  It includes any managed libraries in the
+	* 'optional' configuration.*/
+	def optionalClasspath = managedClasspath(Optional, false)
+
+	/** This returns the classpath for this project only for the given configuration.  It by default includes
+	* the main compiled classes for this project and the libraries in this project's unmanaged library directory
+	* (lib) and the managed directory for the specified configuration.*/
+	def projectClasspath(config: Configuration) = mainCompilePath +++ unmanagedClasspath +++ managedClasspath(config)
 	
-	def managedClasspath(config: String): PathFinder =
-	{
-		val configDirectory = managedDependencyPath / config
-		val useDirectory =
-			if(configDirectory.asFile.exists)
-				configDirectory
-			else
-				managedDependencyPath / Configurations.Default
-		descendents(useDirectory, "*.jar")
-	}
-	def unmanagedClasspath: PathFinder = descendents(dependencyPath, "*.jar")
-	def projectClasspath(config: String, includeTestCompilePath: Boolean) =
-	{
-		val base = mainCompilePath +++ unmanagedClasspath +++ managedClasspath(config)
-		if(includeTestCompilePath)
-			testCompilePath +++ base
-		else
-			base
-	}
-	
-	// includes classpaths of dependencies
-	def fullClasspath(config: String): PathFinder = fullClasspath(config, false)
-	def fullClasspath(config: String, includeTestCompilePath: Boolean): PathFinder =
-		Path.lazyPathFinder
-		{
-			val set = new scala.collection.jcl.LinkedHashSet[Path]
-			for(project <- topologicalSort)
-			{
-				project match
-				{
-					case sp: BasicScalaProject => set ++= sp.projectClasspath(config, includeTestCompilePath).get
-					case _ => ()
-				}
-			}
-			set.toList
-		}
 		
 	/** The list of test frameworks to use for testing.  Note that adding frameworks to this list
 	* for an active project currently requires an explicit 'clean'. */
 	def testFrameworks: Iterable[TestFramework] = ScalaCheckFramework :: SpecsFramework :: ScalaTestFramework :: Nil
-		
+	
 	def mainLabel = "main"
 	def testLabel = "test"
 		
@@ -220,28 +214,14 @@ abstract class BasicScalaProject extends ManagedScalaProject with BasicProjectPa
 	lazy val incrementVersion = incrementVersionAction
 	lazy val release = releaseAction
 	
-	import StringUtilities.nonEmpty
-	implicit def toGroupID(groupID: String): GroupID =
-	{
-		nonEmpty(groupID, "Group ID")
-		GroupID(groupID)
-	}
-	implicit def toRepositoryName(name: String): RepositoryName =
-	{
-		nonEmpty(name, "Repository name")
-		RepositoryName(name)
-	}
-	implicit def moduleIDConfigurable(m: ModuleID): ModuleIDConfigurable =
-	{
-		require(m.configurations.isEmpty, "Configurations already specified for module " + m)
-		ModuleIDConfigurable(m)
-	}
+	
+	/** The directories to which a project writes are listed here and is used
+	* to check a project and its dependencies for collisions.*/
+	override def outputDirectories = outputPath :: managedDependencyPath :: Nil
 }
-abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProject
+abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProject with WebProjectPaths
 {
-	def temporaryWarPath = outputDirectoryName / "webapp"
-	def webappPath = mainSourcePath / "webapp"
-	def jettyContextPath = "/"
+	import BasicWebScalaProject._
 	
 	lazy val prepareWebapp = prepareWebappAction
 	protected def prepareWebappAction =
@@ -287,8 +267,6 @@ object BasicScalaProject
 		"Starts the Scala interpreter with the project classes on the classpath without running compile first."
 	val PackageDescription =
 		"Creates a jar file containing main classes and resources."
-	val PackageWarDescription =
-		"Creates a war file."
 	val TestPackageDescription =
 		"Creates a jar file containing test classes and resources."
 	val DocPackageDescription =
@@ -309,12 +287,25 @@ object BasicScalaProject
 		"Increments the micro part of the version (the third number) by one. (This is only valid for versions of the form #.#.#-*)"
 	val ReleaseDescription =
 		"Compiles, tests, generates documentation, packages, and increments the version."
+}
+object BasicWebScalaProject
+{
+	val PackageWarDescription =
+		"Creates a war file."
 	val JettyStopDescription =
 		"Stops the Jetty server that was started with the jetty-run action."
 	val JettyRunDescription =
 		"Starts the Jetty server and serves this project as a web application."
 }
-trait BasicProjectPaths extends Project
+trait BasicDependencyPaths extends Project
+{
+	import BasicProjectPaths._
+	def dependencyDirectoryName = DefaultDependencyDirectoryName
+	def managedDirectoryName = DefaultManagedDirectoryName
+	def dependencyPath = path(dependencyDirectoryName)
+	def managedDependencyPath = path(managedDirectoryName)
+}
+trait BasicProjectPaths extends BasicDependencyPaths
 {
 	import BasicProjectPaths._
 	
@@ -332,16 +323,12 @@ trait BasicProjectPaths extends Project
 	def testDirectoryName = DefaultTestDirectoryName
 	def mainCompileDirectoryName = DefaultMainCompileDirectoryName
 	def testCompileDirectoryName = DefaultTestCompileDirectoryName
-	def dependencyDirectoryName = DefaultDependencyDirectoryName
 	def docDirectoryName = DefaultDocDirectoryName
 	def apiDirectoryName = DefaultAPIDirectoryName
 	def graphDirectoryName = DefaultGraphDirectoryName
-	def managedDirectoryName = DefaultManagedDirectoryName
 	def mainAnalysisDirectoryName = DefaultMainAnalysisDirectoryName
 	def testAnalysisDirectoryName = DefaultTestAnalysisDirectoryName
 	
-	def dependencyPath = path(dependencyDirectoryName)
-	def managedDependencyPath = path(managedDirectoryName)
 	def outputPath = path(outputDirectoryName)
 	def sourcePath = path(sourceDirectoryName)
 	
@@ -361,10 +348,6 @@ trait BasicProjectPaths extends Project
 	
 	def docPath = outputPath / docDirectoryName
 	def graphPath = outputPath / graphDirectoryName
-	
-	/** The directories to which a project writes are listed here and is used
-	* to check a project and its dependencies for collisions.*/
-	override def outputDirectories = outputPath :: managedDependencyPath :: Nil
 }
 object BasicProjectPaths
 {
@@ -385,44 +368,16 @@ object BasicProjectPaths
 	val DefaultTestDirectoryName = "test"
 	val DefaultDependencyDirectoryName = "lib"
 }
-object StringUtilities
+trait WebProjectPaths extends BasicProjectPaths
 {
-	def nonEmpty(s: String, label: String)
-	{
-		require(s.trim.length > 0, label + " cannot be empty.")
-	}
+	import WebProjectPaths._
+	def temporaryWarPath = outputDirectoryName / webappDirectoryName
+	def webappPath = mainSourcePath / webappDirectoryName
+	def webappDirectoryName = DefaultWebappDirectoryName
+	def jettyContextPath = DefaultJettyContextPath
 }
-import StringUtilities.nonEmpty
-final case class GroupID(groupID: String) extends NotNull
+object WebProjectPaths
 {
-	def % (artifactID: String) =
-	{
-		nonEmpty(artifactID, "Artifact ID")
-		GroupArtifactID(groupID, artifactID)
-	}
-}
-final case class GroupArtifactID(groupID: String, artifactID: String) extends NotNull
-{
-	def % (revision: String): ModuleID =
-	{
-		nonEmpty(revision, "Revision")
-		ModuleID(groupID, artifactID, revision, None)
-	}
-}
-final case class ModuleIDConfigurable(moduleID: ModuleID) extends NotNull
-{
-	def % (configurations: String): ModuleID =
-	{
-		nonEmpty(configurations, "Configurations")
-		import moduleID._
-		ModuleID(organization, name, revision, Some(configurations))
-	}
-}
-final case class RepositoryName(name: String) extends NotNull
-{
-	def at (location: String) =
-	{
-		nonEmpty(location, "Repository location")
-		MavenRepository(name, location)
-	}
+	val DefaultWebappDirectoryName = "webapp"
+	val DefaultJettyContextPath = "/"
 }
