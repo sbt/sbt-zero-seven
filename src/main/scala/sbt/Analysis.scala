@@ -23,7 +23,7 @@ trait TaskAnalysis[Source, Product, External] extends NotNull
 	def addSourceDependency(dependsOn: Source, source: Source): Unit
 	def addProduct(source: Source, product: Product): Unit
 	
-	def removeSource(source: Source, removed: Boolean): Unit
+	def removeSource(source: Source): Unit
 	def removeDependent(source: Source): Unit
 	def removeDependencies(source: Source): Option[Set[Source]]
 	def removeExternalDependency(external: External): Unit
@@ -46,7 +46,6 @@ sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) e
 	final type AnyMap = Map[K, V] forSome { type K; type V }
 	
 	protected def mapsToClear = List[AnyMap](sourceDependencyMap, productMap, externalDependencyMap)
-	protected def mapsToRemoveSourceRemovedOnly = List[AnySourceMap]()
 	protected def mapsToRemoveSource = List[AnySourceMap](sourceDependencyMap, productMap)
 	protected def mapsToRemoveDependent = List[AnyMapToSource](sourceDependencyMap, externalDependencyMap)
 	protected def mapsToMark = List[AnySourceSetMap](sourceDependencyMap, productMap)
@@ -56,17 +55,12 @@ sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) e
 		for(map <- mapsToClear)
 			map.clear()
 	}
-	def removeSource(source: Path, removed: Boolean)
+	def removeSource(source: Path)
 	{
 		for(sourceProducts <- productMap.get(source))
 			FileUtilities.clean(sourceProducts, true, log)
 		for(map <- mapsToRemoveSource)
 			map -= source
-		if(removed)
-		{
-			for(map <- mapsToRemoveSourceRemovedOnly)
-				map -= source
-		}
 	}
 	def removeSelfDependency(source: Path)
 	{
@@ -169,8 +163,7 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 	private val hashesMap = new HashMap[Path, Array[Byte]]
 	
 	override protected def mapsToClear = hashesMap :: testMap :: projectDefinitionMap :: super.mapsToClear
-	override protected def mapsToRemoveSource = testMap :: projectDefinitionMap :: super.mapsToRemoveSource
-	override protected def mapsToRemoveSourceRemovedOnly = hashesMap :: super.mapsToRemoveSourceRemovedOnly
+	override protected def mapsToRemoveSource = hashesMap :: testMap :: projectDefinitionMap :: super.mapsToRemoveSource
 	
 	def allTests = all(testMap)
 	def allProjects = all(projectDefinitionMap)
@@ -178,6 +171,7 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 	def addTest(source: Path, test: TestDefinition) = add(source, test, testMap)
 	def addProjectDefinition(source: Path, className: String) = add(source, className, projectDefinitionMap)
 	def setHash(source: Path, hash: Array[Byte]) { hashesMap(source) = hash }
+	def clearHash(source: Path) { hashesMap.removeKey(source) }
 	def hash(source: Path) = hashesMap.get(source)
 	def clearHashes() { hashesMap.clear() }
 	
