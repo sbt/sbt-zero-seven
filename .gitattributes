@@ -44,6 +44,7 @@ src/main/scala/sbt/Path.scala -text
 src/main/scala/sbt/Project.scala -text
 src/main/scala/sbt/ProjectInfo.scala -text
 src/main/scala/sbt/ReflectUtilities.scala -text
+src/main/scala/sbt/Resources.scala -text
 src/main/scala/sbt/Run.scala -text
 src/main/scala/sbt/ScalaProject.scala -text
 src/main/scala/sbt/TaskManager.scala -text
@@ -67,5 +68,4 @@ src/test/scala/sbt/FileUtilitiesSpecification.scala -text
 src/test/scala/sbt/NameFilterSpecification.scala -text
 src/test/scala/sbt/PathSpecification.scala -text
 src/test/scala/sbt/ReflectSpecification.scala -text
-src/test/scala/sbt/TestUtilities.scala -text
 src/test/scala/sbt/VersionSpecification.scala -text
