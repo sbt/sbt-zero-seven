@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
@@ -114,8 +114,10 @@ trait Conditional[Source, Product, External] extends NotNull
 		markModified(modified.toList)
 		removedSources.foreach(markDependenciesModified)
 		
-		for(changed <- removedSources ++ modified)
-			analysis.removeSource(changed)
+		for(changed <- removedSources)
+			analysis.removeSource(changed, true)
+		for(changed <- modified)
+			analysis.removeSource(changed, false)
 		
 		new ConditionalAnalysis
 		{
@@ -133,7 +135,8 @@ trait Conditional[Source, Product, External] extends NotNull
 		}
 	}
 	
-	private def isSourceModified(source: Source) =
+	protected def checkLastModified = true
+	protected def isSourceModified(source: Source) =
 	{
 		analysis.products(source) match
 		{
@@ -145,9 +148,10 @@ trait Conditional[Source, Product, External] extends NotNull
 			case Some(sourceProducts) =>
 			{
 				val sourceModificationTime = sourceLastModified(source)
-				def isUpdated(p: Product) = !productExists(p) || productLastModified(p) < sourceModificationTime
+				def isOutofdate(p: Product) =
+					!productExists(p) || (checkLastModified && productLastModified(p) < sourceModificationTime)
 				
-				sourceProducts.find(isUpdated) match
+				sourceProducts.find(isOutofdate) match
 				{
 					case Some(modifiedProduct) =>
 						log.debug("Outdated " + productType + ": " + modifiedProduct + " for source " + source)
@@ -225,9 +229,54 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 		}
 	}
 	
+	import ChangeDetection._
+	protected def changeDetectionMethod: ChangeDetection.Value = HashAndProductsExist
+	override protected def checkLastModified = changeDetectionMethod != HashAndProductsExist
+	override protected def isSourceModified(source: Path) =
+		changeDetectionMethod match
+		{
+			case LastModifiedAndHash | HashAndProductsExist =>
+				// behavior will differ because of checkLastModified
+				super.isSourceModified(source) || hashModified(source)
+			case HashOnly => hashModified(source)
+			case LastModifiedOnly => super.isSourceModified(source)
+		}
+	private def warnHashError(source: Path, message: String)
+		{ log.warn("Error computing hash for source " + source + ": " + message) }
+	
+	protected def hashModified(source: Path) =
+	{
+		analysis.hash(source) match
+		{
+			case None =>
+				log.debug("Source " + source + " had no hash, marking modified.")
+				Hash(source, log).fold(err => warnHashError(source, err), newHash => analysis.setHash(source, newHash))
+				true
+			case Some(oldHash) =>
+			{
+				Hash(source, log) match
+				{
+					case Left(err) =>
+						warnHashError(source, err)
+						log.debug("Assuming source is modified because of error.")
+						true
+					case Right(newHash) =>
+						analysis.setHash(source, newHash)
+						val different = !(oldHash deepEquals newHash)
+						if(different)
+							log.debug("Hash for source " + source + " changed (was " + Hash.toHex(oldHash) +
+							", is now " + Hash.toHex(newHash) + "), marking modified.")
+						different
+				}
+			}
+		}
+	}
+	
 	protected def execute(executeAnalysis: ConditionalAnalysis) =
 	{
 		log.info(executeAnalysis.toString)
+		if(changeDetectionMethod == LastModifiedOnly)
+			analysis.clearHashes()
 		import executeAnalysis.dirtySources
 		val cp = classpath.get
 		if(!dirtySources.isEmpty)
@@ -279,4 +328,11 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 				analysis.addTest(sourcePath, TestDefinition(isModule, subclassName, superclassName))
 			}
 		}
+}
+object ChangeDetection extends Enumeration
+{
+	val LastModifiedOnly = Value("Last modified only")
+	val HashOnly = Value("Hash only")
+	val LastModifiedAndHash = Value("Hash and last modified")
+	val HashAndProductsExist = Value("Hash and basic checks")
 }

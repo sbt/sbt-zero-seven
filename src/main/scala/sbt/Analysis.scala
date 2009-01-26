@@ -23,7 +23,7 @@ trait TaskAnalysis[Source, Product, External] extends NotNull
 	def addSourceDependency(dependsOn: Source, source: Source): Unit
 	def addProduct(source: Source, product: Product): Unit
 	
-	def removeSource(source: Source): Unit
+	def removeSource(source: Source, removed: Boolean): Unit
 	def removeDependent(source: Source): Unit
 	def removeDependencies(source: Source): Option[Set[Source]]
 	def removeExternalDependency(external: External): Unit
@@ -41,25 +41,32 @@ sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) e
 	private val externalDependencyMap: Map[File, Set[Path]] = new HashMap
 	
 	final type AnyMapToSource = Map[K, Set[Path]] forSome {type K}
-	final type AnySourceMap = Map[Path, Set[T]] forSome {type T}
-	final type AnyMap = Map[K, Set[V]] forSome { type K; type V }
+	final type AnySourceMap = Map[Path, T] forSome {type T}
+	final type AnySourceSetMap = Map[Path, Set[T]] forSome {type T}
+	final type AnyMap = Map[K, V] forSome { type K; type V }
 	
 	protected def mapsToClear = List[AnyMap](sourceDependencyMap, productMap, externalDependencyMap)
+	protected def mapsToRemoveSourceRemovedOnly = List[AnySourceMap]()
 	protected def mapsToRemoveSource = List[AnySourceMap](sourceDependencyMap, productMap)
 	protected def mapsToRemoveDependent = List[AnyMapToSource](sourceDependencyMap, externalDependencyMap)
-	protected def mapsToMark = List[AnySourceMap](sourceDependencyMap, productMap)
+	protected def mapsToMark = List[AnySourceSetMap](sourceDependencyMap, productMap)
 	
 	def clear()
 	{
 		for(map <- mapsToClear)
 			map.clear()
 	}
-	def removeSource(source: Path)
+	def removeSource(source: Path, removed: Boolean)
 	{
 		for(sourceProducts <- productMap.get(source))
 			FileUtilities.clean(sourceProducts, true, log)
 		for(map <- mapsToRemoveSource)
 			map -= source
+		if(removed)
+		{
+			for(map <- mapsToRemoveSourceRemovedOnly)
+				map -= source
+		}
 	}
 	def removeSelfDependency(source: Path)
 	{
@@ -139,9 +146,11 @@ object BasicAnalysis
 }
 object CompileAnalysis
 {
+	val HashesFileName = "hashes"
 	val TestsFileName = "tests"
 	val ProjectDefinitionsName = "projects"
 	
+	val HashesLabel = "Source Hashes"
 	val TestsLabel = "Tests"
 	val ProjectDefinitionsLabel = "Project Definitions"
 	
@@ -157,15 +166,20 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 	import CompileAnalysis._
 	private val testMap = new HashMap[Path, Set[TestDefinition]]
 	private val projectDefinitionMap = new HashMap[Path, Set[String]]
+	private val hashesMap = new HashMap[Path, Array[Byte]]
 	
-	override protected def mapsToClear = testMap :: projectDefinitionMap :: super.mapsToClear
+	override protected def mapsToClear = hashesMap :: testMap :: projectDefinitionMap :: super.mapsToClear
 	override protected def mapsToRemoveSource = testMap :: projectDefinitionMap :: super.mapsToRemoveSource
+	override protected def mapsToRemoveSourceRemovedOnly = hashesMap :: super.mapsToRemoveSourceRemovedOnly
 	
 	def allTests = all(testMap)
 	def allProjects = all(projectDefinitionMap)
 	
 	def addTest(source: Path, test: TestDefinition) = add(source, test, testMap)
 	def addProjectDefinition(source: Path, className: String) = add(source, className, projectDefinitionMap)
+	def setHash(source: Path, hash: Array[Byte]) { hashesMap(source) = hash }
+	def hash(source: Path) = hashesMap.get(source)
+	def clearHashes() { hashesMap.clear() }
 	
 	def getClasses(sources: PathFinder, outputDirectory: Path): PathFinder =
 		Path.lazyPathFinder
@@ -177,11 +191,13 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 		
 	override protected def loadExtra() =
 	{
+		loadHashes(hashesMap, analysisPath / HashesFileName, projectPath, log) orElse
 		loadTestDefinitions(testMap, analysisPath / TestsFileName, projectPath, log) orElse
 		loadStrings(projectDefinitionMap, analysisPath / ProjectDefinitionsName, projectPath, log)
 	}
 	override protected def saveExtra() =
 	{
+		writeHashes(hashesMap, HashesLabel, analysisPath / HashesFileName, log) orElse
 		writeTestDefinitions(testMap, TestsLabel, analysisPath / TestsFileName, log) orElse
 		writeStrings(projectDefinitionMap, ProjectDefinitionsLabel, analysisPath / ProjectDefinitionsName, log)
 	}
@@ -228,6 +244,14 @@ object MapUtilities
 		map.getOrElseUpdate(key, new HashSet[Value]) + value
 	}
 	
+	def writeHashes(map: Map[Path, Array[Byte]], label: String, to: Path, log: Logger) =
+	{
+		val properties = new Properties
+		for( (path, hash) <- map)
+			properties.setProperty(path.relativePath, Hash.toHex(hash))
+		PropertiesUtilities.write(properties, label, to, log)
+	}
+	
 	def writeTestDefinitions(map: Map[Path, Set[TestDefinition]], label: String, to: Path, log: Logger) =
 		write(map, label, (i: Iterable[TestDefinition]) => i.map(_.toString).mkString(File.pathSeparator), to, log)
 	def writeStrings(map: Map[Path, Set[String]], label: String, to: Path, log: Logger) =
@@ -255,6 +279,8 @@ object MapUtilities
 	private def stringToSet[T](f: String => T)(s: String): Set[T] =
 		(new HashSet[T]) ++ FileUtilities.pathSplit(s).map(_.trim).filter(_.length > 0).map(f)
 	
+	def loadHashes(map: Map[Path, Array[Byte]], from: Path, projectPath: Path, log: Logger) =
+		load(map, Hash.fromHex, from, projectPath, log)
 	def loadTestDefinitions(map: Map[Path, Set[TestDefinition]], from: Path, projectPath: Path, log: Logger) =
 		loadStrings(map, t => TestParser.parse(t).fold(error, x => x), from, projectPath, log)
 	def loadStrings(map: Map[Path, Set[String]], from: Path, projectPath: Path, log: Logger): Option[String] =
@@ -264,15 +290,14 @@ object MapUtilities
 	def loadPaths(map: Map[Path, Set[Path]], from: Path, projectPath: Path, log: Logger) =
 		load(map, pathSetFromString(projectPath)(_), from, projectPath, log)
 		
-	private def load[Value](map: Map[Path, Set[Value]], stringToSet: String => Set[Value],
-		from: Path, projectPath: Path, log: Logger): Option[String] =
+	private def load[Value](map: Map[Path, Value], stringToValue: String => Value, from: Path, projectPath: Path, log: Logger): Option[String] =
 	{
 		map.clear
 		val properties = new Properties
 		PropertiesUtilities.load(properties, from, log) orElse
 		{
 			for(name <- PropertiesUtilities.propertyNames(properties))
-				map.put(Path.fromString(projectPath, name), stringToSet(properties.getProperty(name)))
+				map.put(Path.fromString(projectPath, name), stringToValue(properties.getProperty(name)))
 			None
 		}
 	}
