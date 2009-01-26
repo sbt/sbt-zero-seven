@@ -4,6 +4,7 @@
 package sbt
 
 trait TaskManager{
+	/** Creates a task that executes the given action when invoked.*/
 	def task(action : => Option[String]) = 
 		new Task(None, Nil, false, action);
 	/** An interactive task is one that is not executed across all dependent projects when
@@ -16,12 +17,14 @@ trait TaskManager{
 	{
 		checkTaskDependencies(dependencies)
 		
+		/** Creates a new task, identical to this task, except with the additional dependencies specified.*/
 		def dependsOn(tasks : Task*) =
 		{
 			val dependencyList = tasks.toList
 			checkTaskDependencies(dependencyList)
 			new Task(description, dependencies ::: dependencyList, interactive, action)
 		}
+		/** Creates a new task, identical to this task, except with the given description.*/
 		def describedAs(description : String) = new Task(Some(description), dependencies, interactive, action);
 		private def invoke = action;
 
