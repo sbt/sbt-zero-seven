@@ -51,6 +51,17 @@ src/main/scala/sbt/TestFramework.scala -text
 src/main/scala/sbt/TrapExit.scala -text
 src/main/scala/sbt/Version.scala -text
 src/main/scala/sbt/WebApp.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/remove-test-a/changes/1.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/remove-test-a/project/build.properties -text
+src/test/resources/sbt-test-resources/source-dependencies/remove-test-a/test -text
+src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/changes/A2.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/changes/B3.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/changes/B4.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/changes/B5.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/project/build.properties -text
+src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/src/main/scala/A.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/src/main/scala/B.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/test -text
 src/test/scala/sbt/DagSpecification.scala -text
 src/test/scala/sbt/FileUtilitiesSpecification.scala -text
 src/test/scala/sbt/NameFilterSpecification.scala -text
