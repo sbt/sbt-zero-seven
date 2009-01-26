@@ -39,7 +39,7 @@ src/main/scala/sbt/Main.scala -text
 src/main/scala/sbt/ManageDependencies.scala -text
 src/main/scala/sbt/ModuleUtilities.scala -text
 src/main/scala/sbt/NameFilter.scala -text
-src/main/scala/sbt/Parallel.scala -text
+src/main/scala/sbt/ParallelRunner.scala -text
 src/main/scala/sbt/Path.scala -text
 src/main/scala/sbt/Project.scala -text
 src/main/scala/sbt/ProjectInfo.scala -text
