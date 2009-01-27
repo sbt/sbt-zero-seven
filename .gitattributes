@@ -66,6 +66,12 @@ src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/project/
 src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/src/main/scala/A.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/src/main/scala/B.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/test -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-a/changes/A2.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-a/project/build.properties -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-a/src/main/scala/A.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-a/src/main/scala/B.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-a/src/main/scala/C.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-a/test -text
 src/test/scala/sbt/DagSpecification.scala -text
 src/test/scala/sbt/FileUtilitiesSpecification.scala -text
 src/test/scala/sbt/NameFilterSpecification.scala -text
