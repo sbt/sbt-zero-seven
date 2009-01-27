@@ -3,7 +3,7 @@
  */
 package sbt
 
-import scala.xml.Elem
+import scala.xml.{Elem, Group}
 
 object Result extends Enumeration
 {
@@ -36,15 +36,131 @@ trait TestReportListener
 	/** called for each class or equivalent grouping */
   def startGroup(name: String)
 	/** called for each test method or equivalent */
-  def testEvent(result: Elem)
+  def testEvent(event: TestEvent)
 	/** called if there was an error during test */
   def endGroup(name: String, t: Throwable)
 	/** called if test completed */
   def endGroup(name: String, result: Result.Value)
 }
 
+abstract class TestEvent
+
+sealed abstract class ScalaCheckEvent extends TestEvent
+final case class PassedEvent(name: String, msg: Elem) extends ScalaCheckEvent
+final case class FailedEvent(name: String, msg: Elem) extends ScalaCheckEvent
+
+sealed abstract class ScalaTestEvent extends TestEvent
+final case class TypedEvent(name: String, `type`: String, msg: Option[Elem]) extends ScalaTestEvent
+final case class TypedErrorEvent(name: String, `type`: String, msg: Option[Elem]) extends ScalaTestEvent
+final case class MessageEvent(msg: Elem) extends ScalaTestEvent
+final case class ErrorEvent(msg: Elem) extends ScalaTestEvent
+
+sealed abstract class SpecsEvent extends TestEvent
+final case class SpecificationReportEvent(systems: Seq[SystemReportEvent], subSpecs: Seq[SpecificationReportEvent]) extends SpecsEvent
+final case class SystemReportEvent(description: String, verb: String, skippedSus:Option[Throwable], literateDescription: Option[Group], examples: Seq[ExampleReportEvent]) extends SpecsEvent
+final case class ExampleReportEvent(description: String, errors: Seq[Throwable], failures: Seq[RuntimeException], skipped: Seq[RuntimeException], subExamples: Seq[ExampleReportEvent]) extends SpecsEvent
+
+trait EventOutput[E <: TestEvent] {
+	def output(e: E): Unit
+}
+
+sealed abstract class LazyEventOutput[E <: TestEvent](val log: Logger) extends EventOutput[E]
+
+final class ScalaCheckOutput(log: Logger) extends LazyEventOutput[ScalaCheckEvent](log)
+{
+	def output(event: ScalaCheckEvent) = event match {
+			case PassedEvent(name, msg) => log.info("+ " + name + ": " + msg.text)
+			case FailedEvent(name, msg) => log.error("! " + name + ": " + msg.text)
+		}
+}
+
+final class ScalaTestOutput(log: Logger) extends LazyEventOutput[ScalaTestEvent](log)
+{
+	def output(event: ScalaTestEvent) = event match
+		{
+			case TypedEvent(name, event, Some(msg)) => log.info(event + " - " + name + ": " + msg.text)
+			case TypedEvent(name, event, None) => log.info(event + " - " + name)
+			case TypedErrorEvent(name, event, Some(msg)) => log.error(event + " - " + name + ": " + msg.text)
+			case TypedErrorEvent(name, event, None) => log.error(event + " - " + name)
+			case MessageEvent(msg) => log.info(msg.text)
+			case ErrorEvent(msg) => log.error(msg.text)
+		}
+}
+
+final class SpecsOutput(log: Logger) extends LazyEventOutput[SpecsEvent](log)
+{
+		private val Indent = "  "
+
+	def output(event: SpecsEvent) = event match
+		{
+			case sre: SpecificationReportEvent => reportSpecification(sre, "")
+			case sre: SystemReportEvent => reportSystem(sre, "")
+			case ere: ExampleReportEvent => reportExample(ere, "")
+		}
+
+	/* The following is closely based on org.specs.runner.OutputReporter,
+	* part of specs, which is Copyright 2007-2008 Eric Torreborre.
+	* */
+
+	private def reportSpecification(specification: SpecificationReportEvent, padding: String)
+	{
+		val newIndent = padding + Indent
+		reportSpecifications(specification.subSpecs, newIndent)
+		reportSystems(specification.systems, newIndent)
+	}
+	private def reportSpecifications(specifications: Iterable[SpecificationReportEvent], padding: String)
+	{
+		for(specification <- specifications)
+			reportSpecification(specification, padding)
+	}
+	private def reportSystems(systems: Iterable[SystemReportEvent], padding: String)
+	{
+		for(system <- systems)
+			reportSystem(system, padding)
+	}
+	private def reportSystem(sus: SystemReportEvent, padding: String)
+	{
+		log.info(padding + sus.description + " " + sus.verb + sus.skippedSus.map(" (skipped: " + _.getMessage + ")").getOrElse(""))
+		for(description <- sus.literateDescription)
+			log.info(padding + description.text)
+		reportExamples(sus.examples, padding)
+		log.info(" ")
+	}
+	private def reportExamples(examples: Iterable[ExampleReportEvent], padding: String)
+	{
+		for(example <- examples)
+		{
+			reportExample(example, padding)
+			reportExamples(example.subExamples, padding + Indent)
+		}
+	}
+	private def status(example: ExampleReportEvent) =
+	{
+		if (example.errors.size + example.failures.size > 0)
+			"x "
+		else if (example.skipped.size > 0)
+			"o "
+		else
+			"+ "
+	}
+	private def reportExample(example: ExampleReportEvent, padding: String)
+	{
+		log.info(padding + status(example) + example.description)
+		for(skip <- example.skipped)
+		{
+			log.trace(skip)
+			log.warn(padding + skip.toString)
+		}
+		for(e <- example.failures ++ example.errors)
+		{
+			log.trace(e)
+			log.error(padding + e.toString)
+		}
+	}
+}
 abstract class BasicTestRunner extends TestRunner
 {
+	protected def testLoader:ClassLoader
 	protected def log: Logger
 	protected val listeners:Seq[TestReportListener] = Seq(new LogTestReportListener())
 	final def run(testClass: String): Result.Value =
@@ -67,8 +183,15 @@ abstract class BasicTestRunner extends TestRunner
 	}
 	def runTest(testClass: String): Result.Value
 
+	protected def fire(event: TestEvent) = listeners.foreach(_.testEvent(event))
+
 	private class LogTestReportListener() extends TestReportListener
 	{
+		//TODO: find a better home for these
+		private lazy val scalaCheckOutput: EventOutput[ScalaCheckEvent] = load("sbt.ScalaCheckOutput")
+		private lazy val scalaTestOutput: EventOutput[ScalaTestEvent] = load("sbt.ScalaTestOutput")
+		private lazy val specsOutput: EventOutput[SpecsEvent] = load("sbt.SpecsOutput")
+
 		def doInit = { log.debug("in doInit") }
 		def doComplete = { log.debug("in doComplete") }
 		def startGroup(name: String)
@@ -76,13 +199,15 @@ abstract class BasicTestRunner extends TestRunner
 			log.info("")
 			log.info("Testing " + name + " ...")
 		}
-		def testEvent(result: scala.xml.Elem) =
+		def testEvent(event: TestEvent) =
 		{
-			log.debug("in testEvent:" + result)
-			result match {
-				case <event><passed/><name>{name}</name><message>{msg}</message></event> => log.info("+ " + name.text + ": " + msg.text)
-				case <event><failed/><name>{name}</name><message>{msg}</message></event> => log.error("! " + name.text + ": " + msg.text)
-				case n => log.warn("unrecognized message:" + n)
+			log.debug("in testEvent:" + event)
+			event match
+			{
+				case sce: ScalaCheckEvent => scalaCheckOutput.output(sce)
+				case ste: ScalaTestEvent => scalaTestOutput.output(ste)
+				case se: SpecsEvent => specsOutput.output(se)
+				case e => log.error("Event not supported: " + e)
 			}
 		}
 		def endGroup(name: String, t: Throwable)
@@ -91,6 +216,13 @@ abstract class BasicTestRunner extends TestRunner
 			log.trace(t)
 		}
 		def endGroup(name: String, result: Result.Value) = { log.debug("in endGroup:" + result) }
+
+		private def load[E <: TestEvent](className: String): LazyEventOutput[E] =
+		{
+			val lazyLoader = new LazyFrameworkLoader(className, Array(FileUtilities.sbtJar.toURI.toURL), testLoader, getClass.getClassLoader)
+			val formatterClass = Class.forName(className, true, lazyLoader).asSubclass(classOf[LazyEventOutput[E]])
+			formatterClass.getConstructor(classOf[Logger]).newInstance(log)
+		}
 	}
 }
 
@@ -223,7 +355,7 @@ object SpecsFramework extends LazyTestFramework
 *  framework are defined.*/
 
 /** The test runner for ScalaCheck tests. */
-private class ScalaCheckRunner(val log: Logger, testLoader: ClassLoader) extends BasicTestRunner
+private class ScalaCheckRunner(val log: Logger, val testLoader: ClassLoader) extends BasicTestRunner
 {
 	import org.scalacheck.{Pretty, Properties, Test}
 	def runTest(testClassName: String): Result.Value =
@@ -238,13 +370,13 @@ private class ScalaCheckRunner(val log: Logger, testLoader: ClassLoader) extends
 	private def testReport(pName: String, res: Test.Result) =
 	{
 		if(res.passed)
-			listeners.foreach(_.testEvent(<event><passed/><name>{pName}</name><message>{Pretty.pretty(res)}</message></event>))
+			fire(PassedEvent(pName, <message>{Pretty.pretty(res)}</message>))
 		else
-			listeners.foreach(_.testEvent(<event><failed/><name>{pName}</name><message>{Pretty.pretty(res)}</message></event>))
+			fire(FailedEvent(pName, <message>{Pretty.pretty(res)}</message>))
 	}
 }
 /** The test runner for ScalaTest suites. */
-private class ScalaTestRunner(val log: Logger, testLoader: ClassLoader) extends BasicTestRunner
+private class ScalaTestRunner(val log: Logger, val testLoader: ClassLoader) extends BasicTestRunner
 {
 	def runTest(testClassName: String): Result.Value =
 	{
@@ -279,11 +411,11 @@ private class ScalaTestRunner(val log: Logger, testLoader: ClassLoader) extends 
 		override def suiteCompleted(report: Report) { info(report, "Suite completed") }
 		override def suiteAborted(report: Report) { error(report, "Suite aborted") }
 		
-		override def runStarting(testCount: Int) { log.info("Run starting") }
+		override def runStarting(testCount: Int) { fire(MessageEvent(<message>Run starting</message>)) }
 		override def runStopped()
 		{
 			succeeded = false
-			log.error("Run stopped.")
+			fire(ErrorEvent(<message>Run stopped</message>))
 		}
 		override def runAborted(report: Report)
 		{
@@ -296,26 +428,37 @@ private class ScalaTestRunner(val log: Logger, testLoader: ClassLoader) extends 
 		private def info(report: Report, event: String) { logReport(report, event, Level.Info) }
 		private def logReport(report: Report, event: String, level: Level.Value)
 		{
-			val trimmed = report.message.trim
-			val message = if(trimmed.isEmpty) "" else ": " + trimmed
-			log.log(level, event + " - " + report.name + message)
+			level match
+			{
+				case Level.Error =>
+					if(report.message.trim.isEmpty)
+						fire(TypedErrorEvent(report.name, event, None))
+					else
+						fire(TypedErrorEvent(report.name, event, Some(<message>{report.message.trim}</message>)))
+				case Level.Info =>
+					if(report.message.trim.isEmpty)
+						fire(TypedEvent(report.name, event, None))
+					else
+						fire(TypedEvent(report.name, event, Some(<message>{report.message.trim}</message>)))
+				case l => log.warn("Level not prepared for:" + l)
+			}
 		}
 		
 		var succeeded = true
 	}
 }
 /** The test runner for specs tests. */
-private class SpecsRunner(val log: Logger, testLoader: ClassLoader) extends BasicTestRunner
+private class SpecsRunner(val log: Logger, val testLoader: ClassLoader) extends BasicTestRunner
 {
 	import org.specs.Specification
 	import org.specs.runner.TextFormatter
 	import org.specs.specification.{Example, Sus}
-	
-	val Indent = "  "
+
 	def runTest(testClassName: String): Result.Value =
 	{
 		val test = ModuleUtilities.getObject(testClassName, testLoader).asInstanceOf[Specification]
-		reportSpecification(test, "")
+		val event = reportSpecification(test)
+		fire(event)
 		if(test.isFailing)
 			Result.Failed
 		else
@@ -326,60 +469,38 @@ private class SpecsRunner(val log: Logger, testLoader: ClassLoader) extends Basi
 	* part of specs, which is Copyright 2007-2008 Eric Torreborre.
 	* */
 	
-	private def reportSpecification(specification: Specification, padding: String)
+	private def reportSpecification(specification: Specification): SpecificationReportEvent =
 	{
-		val newIndent = padding + Indent
-		reportSpecifications(specification.subSpecifications, newIndent)
-		reportSystems(specification.systems, newIndent)
+		return SpecificationReportEvent(reportSystems(specification.systems), reportSpecifications(specification.subSpecifications))
 	}
-	private def reportSpecifications(specifications: Iterable[Specification], padding: String)
+	private def reportSpecifications(specifications: Seq[Specification]): Seq[SpecificationReportEvent] =
 	{
-		for(specification <- specifications)
-			reportSpecification(specification, padding)
+		for(specification <- specifications) yield
+			reportSpecification(specification)
 	}
-	private def reportSystems(systems: Iterable[Sus], padding: String)
+	private def reportSystems(systems: Seq[Sus]): Seq[SystemReportEvent] =
 	{
-		for(system <- systems)
-			reportSystem(system, padding)
+		for(system <- systems) yield
+			reportSystem(system)
 	}
-	private def reportSystem(sus: Sus, padding: String)
+	private def reportSystem(sus: Sus): SystemReportEvent =
 	{
-		log.info(padding + sus.description + " " + sus.verb + sus.skippedSus.map(" (skipped: " + _.getMessage + ")").getOrElse(""))
-		for(description <- sus.literateDescription)
-			log.info(padding + new TextFormatter().format(description, sus.examples).text)
-		reportExamples(sus.examples, padding)
-		log.info(" ")
+		def format(description: Option[Elem]): Option[Group] = description match
+			{
+				case None => None
+				case Some(elem) => Some(new TextFormatter().format(elem, sus.examples))
+			}
+
+		SystemReportEvent(sus.description, sus.verb, sus.skippedSus, format(sus.literateDescription), reportExamples(sus.examples))
 	}
-	private def reportExamples(examples: Iterable[Example], padding: String)
+	private def reportExamples(examples: Seq[Example]): Seq[ExampleReportEvent] =
 	{
-		for(example <- examples)
-		{
-			reportExample(example, padding)
-			reportExamples(example.subExamples, padding + Indent)
-		}
+		for(example <- examples) yield
+			reportExample(example)
 	}
-	private def status(example: Example) =
+	private def reportExample(example: Example): ExampleReportEvent =
 	{
-		if (example.errors.size + example.failures.size > 0)
-			"x "
-		else if (example.skipped.size > 0)
-			"o "
-		else
-			"+ "
-	}
-	private def reportExample(example: Example, padding: String)
-	{
-		log.info(padding + status(example) + example.description)
-		for(skip <- example.skipped)
-		{
-			log.trace(skip)
-			log.warn(padding + skip.toString)
-		}
-		for(e <- example.failures ++ example.errors)
-		{
-			log.trace(e)
-			log.error(padding + e.toString)
-		}
+		ExampleReportEvent(example.description, example.errors, example.failures, example.skipped, reportExamples(example.subExamples))
 	}
 }
 
