@@ -20,7 +20,7 @@ trait TestFramework extends NotNull
 	def testSuperClassName: String
 	def testSubClassType: ClassType.Value
 	
-	def testRunner(classLoader: ClassLoader, log: Logger): TestRunner
+	def testRunner(classLoader: ClassLoader, log: Logger, listeners: Iterable[TestReportListener]): TestRunner
 }
 trait TestRunner extends NotNull
 {
@@ -29,10 +29,6 @@ trait TestRunner extends NotNull
 
 trait TestReportListener
 {
-	/** called once, at beginning. */
-  def doInit
-	/** called once, at end. */
-  def doComplete
 	/** called for each class or equivalent grouping */
   def startGroup(name: String)
 	/** called for each test method or equivalent */
@@ -43,6 +39,44 @@ trait TestReportListener
   def endGroup(name: String, result: Result.Value)
 }
 
+trait TestsListener extends TestReportListener
+{
+	/** called once, at beginning. */
+  def doInit
+	/** called once, at end. */
+  def doComplete(finalResult: Result.Value)
+}
+
+class FileReportListener(val file: Path) extends TestsListener
+{
+	import java.io.PrintWriter
+	var out: PrintWriter = null
+
+	def doInit = { out = new PrintWriter(file.asFile) }
+	def doComplete(finalResult: Result.Value) =
+	{
+		finalResult match
+		{
+			case Result.Error => out.println("Error during Tests")
+			case Result.Passed => out.println("All Tests Passed")
+			case Result.Failed => out.println("Tests Failed")
+		}
+		out.close()
+	}
+	def startGroup(name: String) = {}
+	def testEvent(event: TestEvent) = {}
+	def endGroup(name: String, t: Throwable) =
+	{
+		out.println("Exception in " + name)
+		t.printStackTrace(out)
+	}
+	def endGroup(name: String, result: Result.Value) = result match
+	{
+		case Result.Error => out.println("Error: " + name)
+		case Result.Passed => {}
+		case Result.Failed => out.println("Failed: " + name)
+	}
+}
 abstract class TestEvent
 
 sealed abstract class ScalaCheckEvent extends TestEvent
@@ -60,7 +94,8 @@ final case class SpecificationReportEvent(systems: Seq[SystemReportEvent], subSp
 final case class SystemReportEvent(description: String, verb: String, skippedSus:Option[Throwable], literateDescription: Option[Group], examples: Seq[ExampleReportEvent]) extends SpecsEvent
 final case class ExampleReportEvent(description: String, errors: Seq[Throwable], failures: Seq[RuntimeException], skipped: Seq[RuntimeException], subExamples: Seq[ExampleReportEvent]) extends SpecsEvent
 
-trait EventOutput[E <: TestEvent] {
+trait EventOutput[E <: TestEvent]
+{
 	def output(e: E): Unit
 }
 
@@ -68,7 +103,8 @@ sealed abstract class LazyEventOutput[E <: TestEvent](val log: Logger) extends E
 
 final class ScalaCheckOutput(log: Logger) extends LazyEventOutput[ScalaCheckEvent](log)
 {
-	def output(event: ScalaCheckEvent) = event match {
+	def output(event: ScalaCheckEvent) = event match
+		{
 			case PassedEvent(name, msg) => log.info("+ " + name + ": " + msg.text)
 			case FailedEvent(name, msg) => log.error("! " + name + ": " + msg.text)
 		}
@@ -160,40 +196,130 @@ final class SpecsOutput(log: Logger) extends LazyEventOutput[SpecsEvent](log)
 }
 abstract class BasicTestRunner extends TestRunner
 {
-	protected def testLoader:ClassLoader
 	protected def log: Logger
-	protected val listeners:Seq[TestReportListener] = Seq(new LogTestReportListener())
+	protected def listeners: Seq[TestReportListener]
+
 	final def run(testClass: String): Result.Value =
 	{
-		listeners.foreach(_.startGroup(testClass))
+		safeListenersCall(_.startGroup(testClass))
 		try
 		{
 			val result = runTest(testClass)
-			listeners.foreach(_.endGroup(testClass, result))
+			safeListenersCall(_.endGroup(testClass, result))
 			result
 		}
 		catch
 		{
 			case e =>
 			{
-				listeners.foreach(_.endGroup(testClass, e))
+				safeListenersCall(_.endGroup(testClass, e))
 				Result.Error
 			}
 		}
 	}
 	def runTest(testClass: String): Result.Value
 
-	protected def fire(event: TestEvent) = listeners.foreach(_.testEvent(event))
+	protected def fire(event: TestEvent) = safeListenersCall(_.testEvent(event))
+	protected def safeListenersCall(call: (TestReportListener) => Unit) = listeners.foreach(l => Control.trapAndLog(log){call(l)})
+}
 
-	private class LogTestReportListener() extends TestReportListener
+object TestFramework
+{
+	import scala.collection.{Map, Set}
+	def runTests(frameworks: Iterable[TestFramework], classpath: Iterable[Path], tests: Iterable[TestDefinition], log: Logger, listeners: Iterable[TestReportListener]): Option[String] =
 	{
-		//TODO: find a better home for these
-		private lazy val scalaCheckOutput: EventOutput[ScalaCheckEvent] = load("sbt.ScalaCheckOutput")
-		private lazy val scalaTestOutput: EventOutput[ScalaTestEvent] = load("sbt.ScalaTestOutput")
-		private lazy val specsOutput: EventOutput[SpecsEvent] = load("sbt.SpecsOutput")
+		val mappedTests = testMap(frameworks, tests)
+		if(mappedTests.isEmpty)
+		{
+			log.info("No tests to run.")
+			None
+		}
+		else
+			Control.trapUnit("", log) { doRunTests(classpath, mappedTests, log, listeners) }
+	}
+	private def testMap(frameworks: Iterable[TestFramework], tests: Iterable[TestDefinition]): Map[TestFramework, Set[String]] =
+	{
+		import scala.collection.mutable.{HashMap, HashSet, Set}
+		val map = new HashMap[TestFramework, Set[String]]
+		if(!frameworks.isEmpty)
+		{
+			for(test <- tests)
+			{
+				def isTestForFramework(framework: TestFramework) =
+					(framework.testSubClassType == ClassType.Module) == test.isModule &&
+					framework.testSuperClassName == test.superClassName
+				
+				for(framework <- frameworks.find(isTestForFramework))
+					map.getOrElseUpdate(framework, new HashSet[String]) += test.testClassName
+			}
+		}
+		map.readOnly
+	}
+	private def doRunTests(classpath: Iterable[Path], tests: Map[TestFramework, Set[String]], log: Logger, listeners: Iterable[TestReportListener]): Option[String] =
+	{
+		val loader: ClassLoader = new IntermediateLoader(classpath.map(_.asURL).toSeq.toArray, getClass.getClassLoader)
+		val testsListeners = listeners.filter(_.isInstanceOf[TestsListener]).map(_.asInstanceOf[TestsListener])
+		import Result._
+		var result: Value = Passed
+		testsListeners.foreach(l => Control.trapAndLog(log){ l.doInit })
+		for((framework, testClassNames) <- tests)
+		{
+			if(testClassNames.isEmpty)
+				log.debug("No tests to run for framework " + framework.name + ".")
+			else
+			{
+				log.info(" ")
+				log.info("Running " + framework.name + " tests...")
+				val runner = framework.testRunner(loader, log, listeners)
+				for(testClassName <- testClassNames)
+				{
+					runner.run(testClassName) match
+					{
+						case Error => result = Error
+						case Failed => if(result != Error) result = Failed
+						case _ => ()
+					}
+				}
+			}
+		}
 
-		def doInit = { log.debug("in doInit") }
-		def doComplete = { log.debug("in doComplete") }
+		testsListeners.foreach(l => Control.trapAndLog(log){ l.doComplete(result) })
+		result match
+		{
+			case Error => Some("ERROR occurred during testing.")
+			case Failed => Some("One or more tests FAILED.")
+			case Passed =>
+			{
+				log.info(" ")
+				log.info("All tests PASSED.")
+				None
+			}
+		}
+	}
+}
+sealed abstract class LazyTestFramework extends TestFramework
+{
+	/** The class name of the the test runner that executes
+	* tests for this framework.*/
+	protected def testRunnerClassName: String
+	
+	/** Creates an instance of the runner given by 'testRunnerClassName'.*/
+	final def testRunner(projectLoader: ClassLoader, log: Logger, listeners: Iterable[TestReportListener]): TestRunner =
+	{
+		val runnerClassName = testRunnerClassName
+		val lazyLoader = new LazyFrameworkLoader(runnerClassName, Array(FileUtilities.sbtJar.toURI.toURL), projectLoader, getClass.getClassLoader)
+		val runnerClass = Class.forName(runnerClassName, true, lazyLoader).asSubclass(classOf[TestRunner])
+
+		runnerClass.getConstructor(classOf[Logger], classOf[Seq[TestReportListener]], classOf[ClassLoader]).newInstance(log, Seq(new LogTestReportListener(log, lazyLoader)) ++ listeners, projectLoader)
+	}
+
+	private class LogTestReportListener(val log: Logger, val testLoader: ClassLoader) extends TestReportListener
+	{
+		import LazyTestFramework._
+		private lazy val scalaCheckOutput: EventOutput[ScalaCheckEvent] = load(ScalaCheckOutputClass)
+		private lazy val scalaTestOutput: EventOutput[ScalaTestEvent] = load(ScalaTestOutputClass)
+		private lazy val specsOutput: EventOutput[SpecsEvent] = load(SpecsOutputClass)
+
 		def startGroup(name: String)
 		{
 			log.info("")
@@ -226,93 +352,13 @@ abstract class BasicTestRunner extends TestRunner
 	}
 }
 
-object TestFramework
+object LazyTestFramework
 {
-	import scala.collection.{Map, Set}
-	def runTests(frameworks: Iterable[TestFramework], classpath: Iterable[Path], tests: Iterable[TestDefinition], log: Logger): Option[String] =
-	{
-		val mappedTests = testMap(frameworks, tests)
-		if(mappedTests.isEmpty)
-		{
-			log.info("No tests to run.")
-			None
-		}
-		else
-			Control.trapUnit("", log) { doRunTests(classpath, mappedTests, log) }
-	}
-	private def testMap(frameworks: Iterable[TestFramework], tests: Iterable[TestDefinition]): Map[TestFramework, Set[String]] =
-	{
-		import scala.collection.mutable.{HashMap, HashSet, Set}
-		val map = new HashMap[TestFramework, Set[String]]
-		if(!frameworks.isEmpty)
-		{
-			for(test <- tests)
-			{
-				def isTestForFramework(framework: TestFramework) =
-					(framework.testSubClassType == ClassType.Module) == test.isModule &&
-					framework.testSuperClassName == test.superClassName
-				
-				for(framework <- frameworks.find(isTestForFramework))
-					map.getOrElseUpdate(framework, new HashSet[String]) += test.testClassName
-			}
-		}
-		map.readOnly
-	}
-	private def doRunTests(classpath: Iterable[Path], tests: Map[TestFramework, Set[String]], log: Logger): Option[String] =
-	{
-		val loader: ClassLoader = new IntermediateLoader(classpath.map(_.asURL).toSeq.toArray, getClass.getClassLoader)
-		
-		import Result._
-		var result: Value = Passed
-		for((framework, testClassNames) <- tests)
-		{
-			if(testClassNames.isEmpty)
-				log.debug("No tests to run for framework " + framework.name + ".")
-			else
-			{
-				log.info(" ")
-				log.info("Running " + framework.name + " tests...")
-				val runner = framework.testRunner(loader, log)
-				for(testClassName <- testClassNames)
-				{
-					runner.run(testClassName) match
-					{
-						case Error => result = Error
-						case Failed => if(result != Error) result = Failed
-						case _ => ()
-					}
-				}
-			}
-		}
-		
-		result match
-		{
-			case Error => Some("ERROR occurred during testing.")
-			case Failed => Some("One or more tests FAILED.")
-			case Passed =>
-			{
-				log.info(" ")
-				log.info("All tests PASSED.")
-				None
-			}
-		}
-	}
+	private val ScalaCheckOutputClass = "sbt.ScalaCheckOutput"
+	private val ScalaTestOutputClass = "sbt.ScalaTestOutput"
+	private val SpecsOutputClass = "sbt.SpecsOutput"
 }
-sealed abstract class LazyTestFramework extends TestFramework
-{
-	/** The class name of the the test runner that executes
-	* tests for this framework.*/
-	protected def testRunnerClassName: String
-	
-	/** Creates an instance of the runner given by 'testRunnerClassName'.*/
-	final def testRunner(projectLoader: ClassLoader, log: Logger): TestRunner =
-	{
-		val runnerClassName = testRunnerClassName
-		val lazyLoader = new LazyFrameworkLoader(runnerClassName, Array(FileUtilities.sbtJar.toURI.toURL), projectLoader, getClass.getClassLoader)
-		val runnerClass = Class.forName(runnerClassName, true, lazyLoader).asSubclass(classOf[TestRunner])
-		runnerClass.getConstructor(classOf[Logger], classOf[ClassLoader]).newInstance(log, projectLoader)
-	}
-}
+
 /** The test framework definition for ScalaTest.*/
 object ScalaTestFramework extends LazyTestFramework
 {
@@ -355,7 +401,7 @@ object SpecsFramework extends LazyTestFramework
 *  framework are defined.*/
 
 /** The test runner for ScalaCheck tests. */
-private class ScalaCheckRunner(val log: Logger, val testLoader: ClassLoader) extends BasicTestRunner
+private class ScalaCheckRunner(val log: Logger, val listeners: Seq[TestReportListener], val testLoader: ClassLoader) extends BasicTestRunner
 {
 	import org.scalacheck.{Pretty, Properties, Test}
 	def runTest(testClassName: String): Result.Value =
@@ -376,7 +422,7 @@ private class ScalaCheckRunner(val log: Logger, val testLoader: ClassLoader) ext
 	}
 }
 /** The test runner for ScalaTest suites. */
-private class ScalaTestRunner(val log: Logger, val testLoader: ClassLoader) extends BasicTestRunner
+private class ScalaTestRunner(val log: Logger, val listeners: Seq[TestReportListener], val testLoader: ClassLoader) extends BasicTestRunner
 {
 	def runTest(testClassName: String): Result.Value =
 	{
@@ -448,7 +494,7 @@ private class ScalaTestRunner(val log: Logger, val testLoader: ClassLoader) exte
 	}
 }
 /** The test runner for specs tests. */
-private class SpecsRunner(val log: Logger, val testLoader: ClassLoader) extends BasicTestRunner
+private class SpecsRunner(val log: Logger, val listeners: Seq[TestReportListener], val testLoader: ClassLoader) extends BasicTestRunner
 {
 	import org.specs.Specification
 	import org.specs.runner.TextFormatter

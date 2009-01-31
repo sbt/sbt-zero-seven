@@ -21,6 +21,7 @@ trait ScalaProject extends Project with FileTasks
 	
 	case class ExcludeTests(tests: Iterable[String]) extends TestOption
 	case class TestResources(resources: PathFinder) extends TestOption
+	case class TestListeners(listeners: Iterable[TestReportListener]) extends TestOption
 	
 	case class ManifestOption(m: Manifest) extends PackageOption
 	{
@@ -186,8 +187,8 @@ trait ScalaProject extends Project with FileTasks
 			}
 			val resourcesAndClasspath = (for(TestResources(res) <- options) yield res).foldLeft(classpath)(_ +++ _)
 			val tests = HashSet.empty[TestDefinition] ++ analysis.allTests.filter(test => !excludeTestsSet.contains(test.testClassName))
-			
-			TestFramework.runTests(frameworks, resourcesAndClasspath.get, tests, log)
+			val listeners = (for(TestListeners(listeners) <- options) yield listeners).flatMap(x => x)
+			TestFramework.runTests(frameworks, resourcesAndClasspath.get, tests, log, listeners)
 	}
 }
 trait WebScalaProject extends ScalaProject
