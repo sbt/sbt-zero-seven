@@ -63,19 +63,23 @@ object ManageDependencies
 			configFile match
 			{
 				case Some(path) => ivy.configure(path.asFile)
-				case None => configureDefaults()
+				case None =>
+					configureDefaults()
+					scalaTools()
+			}
+		}
+		def scalaTools()
+		{
+			if(addScalaTools)
+			{
+				log.debug("Added Scala Tools Releases repository.")
+				addResolvers(ivy.getSettings, ScalaToolsReleases :: Nil, log)
 			}
 		}
 		def configureDefaults()
 		{
 			ivy.configureDefault
-			val settings = ivy.getSettings
-			if(addScalaTools)
-			{
-				log.debug("Added Scala Tools Releases repository.")
-				addResolvers(settings, ScalaToolsReleases :: Nil, log)
-			}
-			settings.setBaseDir(projectDirectory.asFile)
+			ivy.getSettings.setBaseDir(projectDirectory.asFile)
 		}
 		def addDependencies(moduleID: DefaultModuleDescriptor, dependencies: Iterable[ModuleID],
 			parser: Option[CustomXmlParser.CustomParser])
@@ -118,7 +122,10 @@ object ManageDependencies
 			if(defaultIvyConfigFile.canRead)
 				ivy.configure(defaultIvyConfigFile)
 			else
+			{
 				configureDefaults()
+				scalaTools()
+			}
 		}
 		def autodetectDependencies =
 		{
@@ -172,7 +179,8 @@ object ManageDependencies
 					{
 						log.debug("Using inline configuration.")
 						configureDefaults()
-						addResolvers(ivy.getSettings, resolvers, log)
+						val extra = if(addScalaTools) ScalaToolsReleases :: resolvers.toList else resolvers
+						addResolvers(ivy.getSettings, extra, log)
 					}
 					if(dependencies.isEmpty && dependenciesXML.isEmpty && autodetectUnspecified)
 						autodetectDependencies
