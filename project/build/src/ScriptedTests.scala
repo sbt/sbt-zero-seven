@@ -4,8 +4,17 @@
 /*import sbt._
 import java.io.File
 
-class ScriptedTests(testResources: Resources) extends NotNull
+trait TestFilter extends NotNull
 {
+	def accept(group: String, name: String): Boolean
+}
+object AcceptAllFilter extends TestFilter
+{
+	def accept(group: String, name: String): Boolean = true
+}
+class ScriptedTests(testResources: Resources, filter: TestFilter) extends NotNull
+{
+	def this(testResources: Resources) = this(testResources, AcceptAllFilter)
 	val ScriptFilename = "test"
 	import testResources._
 	
@@ -18,13 +27,17 @@ class ScriptedTests(testResources: Resources) extends NotNull
 			log.info("Test group " + group.getName)
 			for(test <- group.listFiles(DirectoryFilter) if includeDirectory(test))
 			{
-				scriptedTest(test, log) match
-				{
-					case Some(err) =>
-						log.error(" Test " + test.getName + " failed: " + err)
-						success = false
-					case None => log.info(" Test " + test.getName + " succeeded.")
-				}
+				val testName = test.getName
+				if(!filter.accept(group.getName, testName))
+					log.warn("Test " + testName + " skipped.")
+				else
+					scriptedTest(test, log) match
+					{
+						case Some(err) =>
+							log.error(" Test " + testName + " failed: " + err)
+							success = false
+						case None => log.info(" Test " + testName + " succeeded.")
+					}
 			}
 		}
 		if(success)
@@ -47,6 +60,7 @@ class ScriptedTests(testResources: Resources) extends NotNull
 statement*
 statement ::= ('$' | '>') word+ '[' word ']'
 word ::= [^ \[\]]+
+comment ::= '#' [^ \n\r]* ('\n' | '\r' | eof)
 */
 import scala.util.parsing.combinator._
 import scala.util.parsing.input.Positional
@@ -82,7 +96,7 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 					}
 			}
 		}
-	def space: Parser[String] = """\s*""".r
+	def space: Parser[String] = """(\s+|(\#[^\n\r]*))?""".r
 	def word: Parser[String] = WordRegex
 	
 	def parse(scriptFile: File): Either[String, Project => Option[String]] =
@@ -113,7 +127,7 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 			case "copy" :: paths => copy(paths, project)
 			case "exists" :: paths => exists(paths, project)
 			case "absent" :: paths => absent(paths, project)
-			case "pause" :: any => readLine("> Press enter to continue."); None
+			case "pause" :: any => readLine("Press enter to continue. "); println(); None
 			case unknown :: arguments => scriptError("Unknown command " + unknown)
 		}
 	}

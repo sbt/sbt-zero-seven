@@ -13,14 +13,23 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	override def mainClass = Some("sbt.Main")
 	override def testOptions = ExcludeTests("sbt.ReflectiveSpecification" :: Nil) :: super.testOptions.toList
 	
-	def sbtTestResources = testResourcesPath / "sbt-test-resources"
-	/*
+	/*def sbtTestResources = testResourcesPath / "sbt-test-resources"
+	
 	override def testAction = super.testAction dependsOn(scripted)
 	lazy val scripted =
 		task
 		{
 			log.info("Running scripted tests...")
 			log.info("")
-			(new ScriptedTests(new Resources(sbtTestResources.asFile))).scriptedTests(log)
-		}*/
+			(new ScriptedTests(new Resources(sbtTestResources.asFile), filter)).scriptedTests(log)
+		}
+		
+	val filter = new TestFilter
+	{
+		def accept(group: String, name: String) =
+		{
+			//group == "dependency-management" && name == "ivy-settings-b"
+			group == "source-dependencies" && name == "empty-a"
+		}
+	}*/
 }

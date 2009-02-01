@@ -1,0 +1,5 @@
+> update
+[success]
+
+$ exists lib_managed/default/scalacheck-1.5.jar
+[success]
