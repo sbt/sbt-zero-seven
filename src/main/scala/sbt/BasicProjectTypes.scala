@@ -68,6 +68,8 @@ trait ManagedProject extends ClasspathProject
 	/** An update option that explicitly specifies the dependency manager to use.  This can be used to
 	* override the default precendence. */
 	final case class LibraryManager(m: Manager) extends ManagedOption
+	/** An update option that overrides the default Ivy cache location. */
+	final case class CacheDirectory(dir: Path) extends ManagedOption
 	
 	private def withConfigurations(outputPattern: String, managedDependencyPath: Path, options: Seq[ManagedOption])
 		(doWith: (IvyConfiguration, UpdateConfiguration) => Option[String]) =
@@ -78,6 +80,7 @@ trait ManagedProject extends ClasspathProject
 		var addScalaTools = false
 		var errorIfNoConfiguration = false
 		var manager: Manager = AutoDetectManager
+		var cacheDirectory: Option[Path] = None
 		for(option <- options)
 		{
 			option match
@@ -88,11 +91,13 @@ trait ManagedProject extends ClasspathProject
 				case QuietUpdate => quiet = true
 				case AddScalaToolsReleases => addScalaTools = true
 				case ErrorIfNoConfiguration => errorIfNoConfiguration = true
+				case CacheDirectory(dir) => cacheDirectory = Some(dir)
 				case _ => log.warn("Ignored unknown managed option " + option)
 			}
 		}
-		val ivyConfiguration = IvyConfiguration(info.projectPath, managedDependencyPath, manager, validate,
-			addScalaTools, errorIfNoConfiguration, log)
+		val ivyPaths = IvyPaths(info.projectPath, managedDependencyPath, cacheDirectory)
+		val ivyFlags = IvyFlags(validate, addScalaTools, errorIfNoConfiguration)
+		val ivyConfiguration = IvyConfiguration(ivyPaths, manager, ivyFlags, log)
 		val updateConfiguration = UpdateConfiguration(outputPattern, synchronize, quiet)
 		doWith(ivyConfiguration, updateConfiguration)
 	}

@@ -19,9 +19,10 @@ import plugins.repository.BasicResource
 import plugins.resolver.{DependencyResolver, ChainResolver, IBiblioResolver}
 import util.{Message, MessageLogger}
 
-final case class IvyConfiguration(projectDirectory: Path, managedLibDirectory: Path, manager: Manager, validate: Boolean,
-	addScalaTools: Boolean, errorIfNoConfiguration: Boolean, log: Logger)
-final case class UpdateConfiguration(outputPattern: String, synchronize: Boolean, quiet: Boolean)
+final case class IvyPaths(projectDirectory: Path, managedLibDirectory: Path, cacheDirectory: Option[Path]) extends NotNull
+final case class IvyFlags(validate: Boolean, addScalaTools: Boolean, errorIfNoConfiguration: Boolean) extends NotNull
+final case class IvyConfiguration(paths: IvyPaths, manager: Manager, flags: IvyFlags, log: Logger) extends NotNull
+final case class UpdateConfiguration(outputPattern: String, synchronize: Boolean, quiet: Boolean) extends NotNull
 object ManageDependencies
 {
 	val DefaultIvyConfigFilename = "ivysettings.xml"
@@ -42,7 +43,7 @@ object ManageDependencies
 		
 		def readDependencyFile(file: File, parser: ModuleDescriptorParser) =
 			Control.trap("Could not read dependencies: ", log)
-				{ Right(parser.parseDescriptor(ivy.getSettings, file.toURI.toURL, validate)) }
+				{ Right(parser.parseDescriptor(ivy.getSettings, file.toURI.toURL, flags.validate)) }
 		
 		def readPom(pomFile: File) = readDependencyFile(pomFile, PomModuleDescriptorParser.getInstance)
 		def readIvyFile(ivyFile: File) = readDependencyFile(ivyFile, XmlModuleDescriptorParser.getInstance)
@@ -70,7 +71,7 @@ object ManageDependencies
 		}
 		def scalaTools()
 		{
-			if(addScalaTools)
+			if(flags.addScalaTools)
 			{
 				log.debug("Added Scala Tools Releases repository.")
 				addResolvers(ivy.getSettings, ScalaToolsReleases :: Nil, log)
@@ -79,7 +80,9 @@ object ManageDependencies
 		def configureDefaults()
 		{
 			ivy.configureDefault
-			ivy.getSettings.setBaseDir(projectDirectory.asFile)
+			val settings = ivy.getSettings
+			for(dir <- paths.cacheDirectory) settings.setDefaultCache(dir.asFile)
+			settings.setBaseDir(paths.projectDirectory.asFile)
 		}
 		def addDependencies(moduleID: DefaultModuleDescriptor, dependencies: Iterable[ModuleID],
 			parser: Option[CustomXmlParser.CustomParser])
@@ -118,7 +121,7 @@ object ManageDependencies
 		def autodetectConfiguration()
 		{
 			log.debug("Autodetecting configuration.")
-			val defaultIvyConfigFile = defaultIvyConfiguration(projectDirectory).asFile
+			val defaultIvyConfigFile = defaultIvyConfiguration(paths.projectDirectory).asFile
 			if(defaultIvyConfigFile.canRead)
 				ivy.configure(defaultIvyConfigFile)
 			else
@@ -130,15 +133,15 @@ object ManageDependencies
 		def autodetectDependencies =
 		{
 			log.debug("Autodetecting dependencies.")
-			val defaultPOMFile = defaultPOM(projectDirectory).asFile
+			val defaultPOMFile = defaultPOM(paths.projectDirectory).asFile
 			if(defaultPOMFile.canRead)
 				readPom(defaultPOMFile)
 			else
 			{
-				val defaultIvy = defaultIvyFile(projectDirectory).asFile
+				val defaultIvy = defaultIvyFile(paths.projectDirectory).asFile
 				if(defaultIvy.canRead)
 					readIvyFile(defaultIvy)
-				else if(config.errorIfNoConfiguration)
+				else if(flags.errorIfNoConfiguration)
 					Left("No readable dependency configuration found.  Need " + DefaultIvyFilename + " or " + DefaultMavenFilename)
 				else
 				{
@@ -150,7 +153,7 @@ object ManageDependencies
 			}
 		}
 		def moduleDescriptor =
-			manager match
+			config.manager match
 			{
 				case MavenManager(configuration, pom) =>
 				{
@@ -179,7 +182,7 @@ object ManageDependencies
 					{
 						log.debug("Using inline configuration.")
 						configureDefaults()
-						val extra = if(addScalaTools) ScalaToolsReleases :: resolvers.toList else resolvers
+						val extra = if(flags.addScalaTools) ScalaToolsReleases :: resolvers.toList else resolvers
 						addResolvers(ivy.getSettings, extra, log)
 					}
 					if(dependencies.isEmpty && dependenciesXML.isEmpty && autodetectUnspecified)
@@ -254,7 +257,7 @@ object ManageDependencies
 				{
 					val retrieveOptions = new RetrieveOptions
 					retrieveOptions.setSync(synchronize)
-					val patternBase = ivyConfig.managedLibDirectory.asFile.getCanonicalPath
+					val patternBase = ivyConfig.paths.managedLibDirectory.asFile.getCanonicalPath
 					val pattern =
 						if(patternBase.endsWith(File.separator))
 							patternBase + outputPattern
