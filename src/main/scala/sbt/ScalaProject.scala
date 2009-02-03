@@ -152,11 +152,11 @@ trait ScalaProject extends Project with FileTasks
 						}
 					}
 					case Recursive => recursive = true
-					case MainClassOption(mainClassName) => manifest.getMainAttributes.putValue(MainClassKey, mainClassName)
+					case MainClassOption(mainClassName) =>
+						manifest.getMainAttributes.put(Attributes.Name.MAIN_CLASS, mainClassName)
 					case _ => log.warn("Ignored unknown package option " + option)
 				}
 			}
-			
 			val jarPath = outputDirectory / jarName
 			FileUtilities.jar(sources.get, jarPath, manifest, recursive, log)
 		}

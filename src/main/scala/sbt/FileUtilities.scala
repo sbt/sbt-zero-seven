@@ -9,7 +9,7 @@ import java.io.{BufferedReader, BufferedWriter, FileReader, FileWriter, Reader, 
 import java.net.URL
 import java.nio.charset.{Charset, CharsetDecoder, CharsetEncoder}
 import java.nio.channels.FileChannel
-import java.util.jar.{JarEntry, JarOutputStream, Manifest}
+import java.util.jar.{Attributes, JarEntry, JarOutputStream, Manifest}
 import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 
 /** A collection of file related methods. */
@@ -86,12 +86,12 @@ object FileUtilities
 				nextEntry.setTime(sourceFile.lastModified)
 				output.putNextEntry(nextEntry)
 				transferAndClose(new FileInputStream(sourceFile), output, log)
-				output.closeEntry()
 			}
 			else
 				log.warn("\tSource " + source + " does not exist.")
 		}
 		sources.foreach(add)
+		output.closeEntry()
 		None
 	}
 	
@@ -104,7 +104,14 @@ object FileUtilities
 				val (zipOut, ext) =
 					manifest match
 					{
-						case Some(mf) => (new JarOutputStream(fileOut, mf), "jar")
+						case Some(mf) =>
+						{
+							import Attributes.Name.MANIFEST_VERSION
+							val main = mf.getMainAttributes
+							if(!main.containsKey(MANIFEST_VERSION))
+								main.put(MANIFEST_VERSION, "1.0")
+							(new JarOutputStream(fileOut, mf), "jar")
+						}
 						case None => (new ZipOutputStream(fileOut), "zip")
 					}
 				Control.trapUnitAndFinally("Error writing " + ext + ": ", log)
