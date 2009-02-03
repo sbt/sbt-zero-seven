@@ -69,6 +69,10 @@ src/test/resources/sbt-test-resources/dependency-management/ivy-settings-b/ivyse
 src/test/resources/sbt-test-resources/dependency-management/ivy-settings-b/project/build.properties -text
 src/test/resources/sbt-test-resources/dependency-management/ivy-settings-b/project/build/src/UpdateTestProject.scala -text
 src/test/resources/sbt-test-resources/dependency-management/ivy-settings-b/test -text
+src/test/resources/sbt-test-resources/package/manifest/project/build.properties -text
+src/test/resources/sbt-test-resources/package/manifest/project/build/src/ManifestTestProject.scala -text
+src/test/resources/sbt-test-resources/package/manifest/src/main/scala/jartest/Main.scala -text
+src/test/resources/sbt-test-resources/package/manifest/test -text
 src/test/resources/sbt-test-resources/source-dependencies/empty-a/changes/A.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/empty-a/changes/A2.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/empty-a/changes/B.scala -text
