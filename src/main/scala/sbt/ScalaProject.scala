@@ -23,11 +23,11 @@ trait ScalaProject extends Project with FileTasks
 	case class TestResources(resources: PathFinder) extends TestOption
 	case class TestListeners(listeners: Iterable[TestReportListener]) extends TestOption
 	
-	case class ManifestOption(m: Manifest) extends PackageOption
+	case class JarManifest(m: Manifest) extends PackageOption
 	{
 		assert(m != null)
 	}
-	case class MainClassOption(mainClassName: String) extends PackageOption
+	case class MainClass(mainClassName: String) extends PackageOption
 	case object Recursive extends PackageOption
 	
 	val Deprecation = CompileOption("-deprecation")
@@ -138,7 +138,7 @@ trait ScalaProject extends Project with FileTasks
 			{
 				option match
 				{
-					case ManifestOption(mergeManifest) => 
+					case JarManifest(mergeManifest) => 
 					{
 						mergeAttributes(manifest.getMainAttributes, mergeManifest.getMainAttributes)
 						val entryMap = Map(manifest.getEntries)
@@ -152,7 +152,7 @@ trait ScalaProject extends Project with FileTasks
 						}
 					}
 					case Recursive => recursive = true
-					case MainClassOption(mainClassName) =>
+					case MainClass(mainClassName) =>
 						manifest.getMainAttributes.put(Attributes.Name.MAIN_CLASS, mainClassName)
 					case _ => log.warn("Ignored unknown package option " + option)
 				}
