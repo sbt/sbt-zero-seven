@@ -26,10 +26,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 		
 	val filter = new TestFilter
 	{
-		def accept(group: String, name: String) =
-		{
-			//group == "dependency-management" && name == "ivy-settings-b"
-			group == "source-dependencies" && name == "empty-a"
-		}
+		def accept(group: String, name: String) = true
+			//group == "package" && name == "manifest"
 	}*/
 }

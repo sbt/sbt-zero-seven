@@ -2,7 +2,7 @@
  * Copyright 2009  Mark Harrah
  */
 /*import sbt._
-import java.io.File
+import java.io.{BufferedReader, File, InputStreamReader}
 
 trait TestFilter extends NotNull
 {
@@ -97,39 +97,76 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 			}
 		}
 	def space: Parser[String] = """(\s+|(\#[^\n\r]*))?""".r
-	def word: Parser[String] = WordRegex
-	
+	def word: Parser[String] =  ("\'" ~> "[^'\n\r]*".r <~ "\'")  |  ("\"" ~> "[^\"\n\r]*".r <~ "\"")  |  WordRegex
 	def parse(scriptFile: File): Either[String, Project => Option[String]] =
 	{
 		def parseReader(reader: java.io.Reader) =
 			parseAll(script, reader) match
 			{
 				case Success(result, next) => Right(result)
-				case err: NoSuccess => Left("Could not parse test script '" + scriptFile.getCanonicalPath + "': " + err.msg)
+				case err: NoSuccess =>
+				{
+					val pos = err.next.pos
+					Left("Could not parse test script '" + scriptFile.getCanonicalPath + 
+					"' (" + pos.line + "," + pos.column + "): " + err.msg)
+				}
 			}
 		FileUtilities.readValue(scriptFile, log)(parseReader)
 	}
 	
 	private def scriptError(message: String): Some[String] = Some("Test script error: " + message)
+	private def wrongArguments(commandName: String, args: List[String]): Some[String] =
+		scriptError("Command '" + commandName + "' does not accept arguments (found '" + spacedString(args) + "').")
 	private def wrongArguments(commandName: String, requiredArgs: String, args: List[String]): Some[String] = 
 		scriptError("Wrong number of arguments to " + commandName + " command.  " + requiredArgs + " required, found: '" + spacedString(args) + "'.")
 	private def evaluateCommand(command: List[String], successExpected: Boolean)(project: Project): Option[String] =
 	{
-		command match
+		evaluate(successExpected, "Command '" + command.firstOption.getOrElse("") + "'", project)
 		{
-			case Nil => scriptError("No command specified.")
-			case "touch" :: paths => touch(paths, project)
-			case "delete" :: paths => delete(paths, project)
-			case "copy-file" :: from :: to :: Nil => copyFile(from, to, project)
-			case "copy-file" :: args => wrongArguments("copy-file", "Two paths", args)
-			case "sync" :: from :: to :: Nil => sync(from, to, project)
-			case "sync" :: args => wrongArguments("sync", "Two directory paths", args)
-			case "copy" :: paths => copy(paths, project)
-			case "exists" :: paths => exists(paths, project)
-			case "absent" :: paths => absent(paths, project)
-			case "pause" :: any => readLine("Press enter to continue. "); println(); None
-			case unknown :: arguments => scriptError("Unknown command " + unknown)
+			command match
+			{
+				case Nil => scriptError("No command specified.")
+				case "touch" :: paths => touch(paths, project)
+				case "delete" :: paths => delete(paths, project)
+				case "copy-file" :: from :: to :: Nil => copyFile(from, to, project)
+				case "copy-file" :: args => wrongArguments("copy-file", "Two paths", args)
+				case "sync" :: from :: to :: Nil => sync(from, to, project)
+				case "sync" :: args => wrongArguments("sync", "Two directory paths", args)
+				case "copy" :: paths => copy(paths, project)
+				case "exists" :: paths => exists(paths, project)
+				case "absent" :: paths => absent(paths, project)
+				case "pause" :: Nil => readLine("Press enter to continue. "); println(); None
+				case "pause" :: args => wrongArguments("pause", args)
+				case "exec" :: command :: args => execute(command, args, project)
+				case "exec" :: other => wrongArguments("exec", "Command and arguments", other)
+				case unknown :: arguments => scriptError("Unknown command " + unknown)
+			}
 		}
+	}
+	private def evaluate(successExpected: Boolean, label: String, project: Project)(body: => Option[String]): Option[String] =
+	{
+		val buffered = project.log.asInstanceOf[BufferedLogger]
+		buffered.startRecording()
+		val result =
+			body match
+			{
+				case None =>
+					if(successExpected) None
+					else
+					{
+						buffered.play()
+						Some(label + " succeeded (expected failure).")
+					}
+				case Some(failure) =>
+					if(successExpected)
+					{
+						buffered.play()
+						Some(label + " failed (expected success): " + failure)
+					}
+					else None
+			}
+		buffered.clear()
+		result
 	}
 	private def evaluateAction(action: List[String], successExpected: Boolean)(project: Project): Option[String] =
 	{
@@ -137,31 +174,7 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 		action match
 		{
 			case Nil => scriptError("No action specified.")
-			case head :: Nil =>
-			{
-				val buffered = project.log.asInstanceOf[BufferedLogger]
-				buffered.startRecording()
-				val result =
-					project.act(head) match
-					{
-						case None =>
-							if(successExpected) None
-							else
-							{
-								buffered.play()
-								Some("Action '" + actionToString + "' succeeded (expected failure).")
-							}
-						case Some(failure) =>
-							if(successExpected)
-							{
-								buffered.play()
-								Some("Expected success, got error " + failure)
-							}
-							else None
-					}
-				buffered.clear()
-				result
-			}
+			case head :: Nil => evaluate(successExpected, "Action '" + actionToString + "'", project)(project.act(head))
 			case x => scriptError("An action must be a single word (was '" + actionToString + "')")
 		}
 	}
@@ -170,22 +183,22 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 	
 	private def fromStrings(paths: List[String], project: Project) = paths.map(path => fromString(path, project))
 	private def fromString(path: String, project: Project) = Path.fromString(project.info.projectPath, path)
-	def touch(paths: List[String], project: Project) =
+	private def touch(paths: List[String], project: Project) =
 		if(paths.isEmpty)
 			scriptError("No paths specified for touch command.")
 		else
 			wrap(lazyFold(paths) { path => FileUtilities.touch(fromString(path, project), log) })
 		
-	def delete(paths: List[String], project: Project) =
+	private def delete(paths: List[String], project: Project) =
 		if(paths.isEmpty)
 			scriptError("No paths specified for delete command.")
 		else
 			wrap(FileUtilities.clean(fromStrings(paths, project), true, log))
-	def sync(from: String, to: String, project: Project) =
+	private def sync(from: String, to: String, project: Project) =
 		wrap(FileUtilities.sync(fromString(from, project), fromString(to, project), log))
-	def copyFile(from: String, to: String, project: Project) =
+	private def copyFile(from: String, to: String, project: Project) =
 		wrap(FileUtilities.copyFile(fromString(from, project), fromString(to, project), log))
-	def copy(paths: List[String], project: Project) =
+	private def copy(paths: List[String], project: Project) =
 		paths match
 		{
 			case Nil => scriptError("No paths specified for copy command.")
@@ -195,18 +208,49 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 				val last = mapped.length - 1
 				wrap(FileUtilities.copy(mapped.take(last), mapped(last), log).left.toOption)
 		}
-	def exists(paths: List[String], project: Project) =
+	private def exists(paths: List[String], project: Project) =
 		fromStrings(paths, project).filter(!_.exists) match
 		{
 			case Nil => None
 			case x => Some("File(s) did not exist: " + x.mkString("[ ", " , ", " ]"))
 		}
-	def absent(paths: List[String], project: Project) =
+	private def absent(paths: List[String], project: Project) =
 		fromStrings(paths, project).filter(_.exists) match
 		{
 			case Nil => None
 			case x => Some("File(s) existed: " + x.mkString("[ ", " , ", " ]"))
 		}
+	private def execute(command: String, args: List[String], project: Project) =
+	{
+		if(command.trim.isEmpty)
+			Some("Command was empty.")
+		else
+		{
+			Control.trapUnit("Error running command: ", project.log)
+			{
+				val array = (command :: args).toArray
+				val builder = (new ProcessBuilder(array: _*)).directory(project.info.projectDirectory).redirectErrorStream(true)
+				val p = builder.start()
+				val reader = new BufferedReader(new InputStreamReader(p.getInputStream))
+				def readFully()
+				{
+					val line = reader.readLine()
+					if(line != null)
+					{
+						project.log.info(line)
+						readFully()
+					}
+				}
+				readFully()
+				p.waitFor()
+				val exitValue = p.exitValue
+				if(exitValue == 0)
+					None
+				else
+					Some("Nonzero exit value (" + exitValue + ")")
+			}
+		}
+	}
 }
 private object TestScriptParser
 {
@@ -214,7 +258,7 @@ private object TestScriptParser
 	val Failure = "error"
 	val CommandStart = "$"
 	val ActionStart = ">"
-	val WordRegex = """[^ \[\]\s]+""".r
+	val WordRegex = """[^ \[\]\s'\"][^ \[\]\s]*""".r
 	val StartRegex = ("[" + CommandStart + ActionStart + "]").r
 	
 	final def lazyFold[T](list: List[T])(f: T => Option[String]): Option[String] =
