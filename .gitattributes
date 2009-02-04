@@ -69,6 +69,8 @@ src/test/resources/sbt-test-resources/dependency-management/ivy-settings-b/ivyse
 src/test/resources/sbt-test-resources/dependency-management/ivy-settings-b/project/build.properties -text
 src/test/resources/sbt-test-resources/dependency-management/ivy-settings-b/project/build/src/UpdateTestProject.scala -text
 src/test/resources/sbt-test-resources/dependency-management/ivy-settings-b/test -text
+src/test/resources/sbt-test-resources/package/lazy-name/project/build.properties -text
+src/test/resources/sbt-test-resources/package/lazy-name/test -text
 src/test/resources/sbt-test-resources/package/manifest/project/build.properties -text
 src/test/resources/sbt-test-resources/package/manifest/project/build/src/ManifestTestProject.scala -text
 src/test/resources/sbt-test-resources/package/manifest/src/main/scala/jartest/Main.scala -text
@@ -95,6 +97,18 @@ src/test/resources/sbt-test-resources/source-dependencies/transitive-a/src/main/
 src/test/resources/sbt-test-resources/source-dependencies/transitive-a/src/main/scala/B.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/transitive-a/src/main/scala/C.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/transitive-a/test -text
+src/test/resources/sbt-test-resources/tests/scalacheck-a/changes/BasicTest.scala -text
+src/test/resources/sbt-test-resources/tests/scalacheck-a/changes/FailedTest.scala -text
+src/test/resources/sbt-test-resources/tests/scalacheck-a/project/build.properties -text
+src/test/resources/sbt-test-resources/tests/scalacheck-a/project/build/src/TestProject.scala -text
+src/test/resources/sbt-test-resources/tests/scalacheck-a/src/test/scala/DummyTest.scala -text
+src/test/resources/sbt-test-resources/tests/scalacheck-a/test -text
+src/test/resources/sbt-test-resources/tests/specs-a/changes/BasicTest.scala -text
+src/test/resources/sbt-test-resources/tests/specs-a/changes/FailTest.scala -text
+src/test/resources/sbt-test-resources/tests/specs-a/project/build.properties -text
+src/test/resources/sbt-test-resources/tests/specs-a/project/build/src/TestProject.scala -text
+src/test/resources/sbt-test-resources/tests/specs-a/src/test/scala/DummyTest.scala -text
+src/test/resources/sbt-test-resources/tests/specs-a/test -text
 src/test/scala/sbt/DagSpecification.scala -text
 src/test/scala/sbt/FileUtilitiesSpecification.scala -text
 src/test/scala/sbt/NameFilterSpecification.scala -text
