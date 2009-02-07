@@ -20,7 +20,7 @@ trait TestFramework extends NotNull
 	def testSuperClassName: String
 	def testSubClassType: ClassType.Value
 	
-	def testRunner(classLoader: ClassLoader, log: Logger, listeners: Iterable[TestReportListener]): TestRunner
+	def testRunner(classLoader: ClassLoader, listeners: Iterable[TestReportListener], log: Logger): TestRunner
 }
 trait TestRunner extends NotNull
 {
@@ -45,54 +45,154 @@ trait TestsListener extends TestReportListener
   def doInit
 	/** called once, at end. */
   def doComplete(finalResult: Result.Value)
+	/** called once, at end, if the test framework throw an exception. */
+  def doComplete(t: Throwable)
 }
 
-class FileReportListener(val file: Path) extends TestsListener
+abstract class WriterReportListener(val log: Logger) extends TestsListener
 {
-	import java.io.PrintWriter
-	var out: PrintWriter = null
+	import java.io.{IOException, PrintWriter, Writer}
+	import scala.collection.mutable.{Buffer, ListBuffer}
 
-	def doInit = { out = new PrintWriter(file.asFile) }
+	protected case class Summary(count: Int, failures: Int, errors: Int, skipped: Int, message: Option[String]) extends NotNull
+	private var out: Option[PrintWriter] = None
+	private var groupCount: Int = 0
+	private var groupFailures: Int = 0
+	private var groupErrors: Int = 0
+	private var groupSkipped: Int = 0
+	private var groupMessages: Seq[String] = Nil
+
+	protected val passedEventHandler: TestEvent => Summary = (event: TestEvent) => event match
+		{
+			case SpecificationReportEvent(successes, failures, errors, skipped, desc, systems, subSpecs) => Summary(successes, failures, errors, skipped, None)
+			case IgnoredEvent(name, Some(message)) => Summary(1, 0, 0, 1, Some(message.text))
+			case IgnoredEvent(name, None) => Summary(1, 0, 0, 1, None)
+			case _ => Summary(1, 0, 0, 0, None)
+		}
+	protected val failedEventHandler: TestEvent => Summary = (event: TestEvent) => event match
+		{
+			case FailedEvent(name, msg) => Summary(1, 1, 0, 0, Some("! " + name + ": " + msg.text))
+			case TypedErrorEvent(name, event, Some(msg)) => Summary(1, 1, 0, 0, Some(event + " - " + name + ": " + msg.text))
+			case TypedErrorEvent(name, event, None) => Summary(1, 1, 0, 0, Some(event + " - " + name))
+			case ErrorEvent(msg) => Summary(1, 1, 0, 0, Some(msg.text))
+			case SpecificationReportEvent(successes, failures, errors, skipped, desc, systems, subSpecs) => Summary(successes + failures + errors + skipped, failures, errors, skipped, Some(desc))
+			case _ => {log.warn("Unrecognized failure: " + event); Summary(1, 1, 0, 0, None)}
+		}
+	protected val errorEventHandler: TestEvent => Summary = (event: TestEvent) => event match
+		{
+			case FailedEvent(name, msg) => Summary(1, 0, 1, 0, Some("! " + name + ": " + msg.text))
+			case TypedErrorEvent(name, event, Some(msg)) => Summary(1, 0, 1, 0, Some(event + " - " + name + ": " + msg.text))
+			case TypedErrorEvent(name, event, None) => Summary(1, 0, 1, 0, Some(event + " - " + name))
+			case ErrorEvent(msg) => Summary(1, 0, 1, 0, Some(msg.text))
+			case SpecificationReportEvent(successes, failures, errors, skipped, desc, systems, subSpecs) => Summary(successes + failures + errors + skipped, failures, errors, skipped, Some(desc))
+			case _ => {log.warn("Unrecognized error: " + event); Summary(1, 0, 1, 0, None)}
+		}
+	protected def open: Writer
+	protected def close =
+	{
+		onOut(_.close())
+		out = None
+	}
+	def doInit = Control.trapAndLog(log){ out = Some(new PrintWriter(open)) }
 	def doComplete(finalResult: Result.Value) =
 	{
 		finalResult match
 		{
-			case Result.Error => out.println("Error during Tests")
-			case Result.Passed => out.println("All Tests Passed")
-			case Result.Failed => out.println("Tests Failed")
+			case Result.Error => println("Error during Tests")
+			case Result.Passed => println("All Tests Passed")
+			case Result.Failed => println("Tests Failed")
 		}
-		out.close()
+		close
 	}
-	def startGroup(name: String) = {}
-	def testEvent(event: TestEvent) = {}
+	def doComplete(t: Throwable) =
+	{
+		println("Exception in Test Framework")
+		onOut(t.printStackTrace(_))
+		close
+	}
+	def startGroup(name: String) =
+	{
+		groupCount = 0
+		groupFailures = 0
+		groupErrors = 0
+		groupSkipped = 0
+		groupMessages = Nil
+	}
+	def testEvent(event: TestEvent) = event.result match
+		{
+			case Some(result) =>
+			{
+				val Summary(count, failures, errors, skipped, msg) = result match
+				{
+					case Result.Passed => passedEventHandler(event)
+					case Result.Failed => failedEventHandler(event)
+					case Result.Error => errorEventHandler(event)
+				}
+				groupCount += count
+				groupFailures += failures
+				groupErrors += errors
+				groupSkipped += skipped
+				groupMessages ++= msg.toList
+			}
+			case None => {}
+		}
 	def endGroup(name: String, t: Throwable) =
 	{
-		out.println("Exception in " + name)
-		t.printStackTrace(out)
+		println("Exception in " + name)
+		onOut(t.printStackTrace(_))
 	}
-	def endGroup(name: String, result: Result.Value) = result match
+	def endGroup(name: String, result: Result.Value) =
 	{
-		case Result.Error => out.println("Error: " + name)
-		case Result.Passed => {}
-		case Result.Failed => out.println("Failed: " + name)
+		result match
+		{
+			case Result.Error => println("Error: " + name + " - Count " + groupCount + ", Failed " + groupFailures + ", Errors " + groupErrors)
+			case Result.Passed => println("Passed: " + name + " - Count " + groupCount + ", Failed " + groupFailures + ", Errors " + groupErrors)
+			case Result.Failed => println("Failed: " + name + " - Count " + groupCount + ", Failed " + groupFailures + ", Errors " + groupErrors)
+		}
+		if(!groupMessages.isEmpty)
+		{
+			groupMessages.foreach(println(_))
+			println("")
+		}
 	}
+	protected def onOut(f: PrintWriter => Unit) = Control.trapAndLog(log){
+			out match
+			{
+				case Some(pw) => f(pw)
+				case None => log.warn("Method called when output was not open")
+			}
+		}
+	protected def println(s: String) = onOut(_.println(s))
 }
-abstract class TestEvent
+
+class FileReportListener(val file: Path, log: Logger) extends WriterReportListener(log)
+{
+	def open = new java.io.FileWriter(file.asFile)
+}
+
+abstract class TestEvent extends NotNull
+{
+	def result: Option[Result.Value]
+}
 
 sealed abstract class ScalaCheckEvent extends TestEvent
-final case class PassedEvent(name: String, msg: Elem) extends ScalaCheckEvent
-final case class FailedEvent(name: String, msg: Elem) extends ScalaCheckEvent
+final case class PassedEvent(name: String, msg: Elem) extends ScalaCheckEvent { def result = Some(Result.Passed) }
+final case class FailedEvent(name: String, msg: Elem) extends ScalaCheckEvent { def result = Some(Result.Failed) }
 
-sealed abstract class ScalaTestEvent extends TestEvent
-final case class TypedEvent(name: String, `type`: String, msg: Option[Elem]) extends ScalaTestEvent
-final case class TypedErrorEvent(name: String, `type`: String, msg: Option[Elem]) extends ScalaTestEvent
-final case class MessageEvent(msg: Elem) extends ScalaTestEvent
-final case class ErrorEvent(msg: Elem) extends ScalaTestEvent
+sealed abstract class ScalaTestEvent(val result: Option[Result.Value]) extends TestEvent
+final case class TypedEvent(name: String, `type`: String, msg: Option[Elem])(result: Option[Result.Value]) extends ScalaTestEvent(result)
+final case class TypedErrorEvent(name: String, `type`: String, msg: Option[Elem])(result: Option[Result.Value]) extends ScalaTestEvent(result)
+final case class MessageEvent(msg: Elem) extends ScalaTestEvent(None)
+final case class ErrorEvent(msg: Elem) extends ScalaTestEvent(None)
+final case class IgnoredEvent(name: String, msg: Option[Elem]) extends ScalaTestEvent(Some(Result.Passed))
 
 sealed abstract class SpecsEvent extends TestEvent
-final case class SpecificationReportEvent(systems: Seq[SystemReportEvent], subSpecs: Seq[SpecificationReportEvent]) extends SpecsEvent
-final case class SystemReportEvent(description: String, verb: String, skippedSus:Option[Throwable], literateDescription: Option[Group], examples: Seq[ExampleReportEvent]) extends SpecsEvent
-final case class ExampleReportEvent(description: String, errors: Seq[Throwable], failures: Seq[RuntimeException], skipped: Seq[RuntimeException], subExamples: Seq[ExampleReportEvent]) extends SpecsEvent
+final case class SpecificationReportEvent(successes: Int, failures: Int, errors: Int, skipped: Int, pretty: String, systems: Seq[SystemReportEvent], subSpecs: Seq[SpecificationReportEvent]) extends SpecsEvent
+{
+	def result = if(errors > 0) Some(Result.Error) else if(failures > 0) Some(Result.Failed) else Some(Result.Passed)
+}
+final case class SystemReportEvent(description: String, verb: String, skippedSus:Option[Throwable], literateDescription: Option[Group], examples: Seq[ExampleReportEvent]) extends SpecsEvent { def result = None }
+final case class ExampleReportEvent(description: String, errors: Seq[Throwable], failures: Seq[RuntimeException], skipped: Seq[RuntimeException], subExamples: Seq[ExampleReportEvent]) extends SpecsEvent { def result = None }
 
 trait EventOutput[E <: TestEvent]
 {
@@ -120,6 +220,8 @@ final class ScalaTestOutput(log: Logger) extends LazyEventOutput[ScalaTestEvent]
 			case TypedErrorEvent(name, event, None) => log.error(event + " - " + name)
 			case MessageEvent(msg) => log.info(msg.text)
 			case ErrorEvent(msg) => log.error(msg.text)
+			case IgnoredEvent(name, Some(msg)) => log.info("Test ignored - " + name + ": " + msg.text)
+			case IgnoredEvent(name, None) => log.info("Test ignored - " + name)
 		}
 }
 
@@ -262,28 +364,37 @@ object TestFramework
 		import Result._
 		var result: Value = Passed
 		testsListeners.foreach(l => Control.trapAndLog(log){ l.doInit })
-		for((framework, testClassNames) <- tests)
-		{
-			if(testClassNames.isEmpty)
-				log.debug("No tests to run for framework " + framework.name + ".")
-			else
+		try {
+			for((framework, testClassNames) <- tests)
 			{
-				log.info(" ")
-				log.info("Running " + framework.name + " tests...")
-				val runner = framework.testRunner(loader, log, listeners)
-				for(testClassName <- testClassNames)
+				if(testClassNames.isEmpty)
+					log.debug("No tests to run for framework " + framework.name + ".")
+				else
 				{
-					runner.run(testClassName) match
+					log.info(" ")
+					log.info("Running " + framework.name + " tests...")
+					val runner = framework.testRunner(loader, listeners, log)
+					for(testClassName <- testClassNames)
 					{
-						case Error => result = Error
-						case Failed => if(result != Error) result = Failed
-						case _ => ()
+						runner.run(testClassName) match
+						{
+							case Error => result = Error
+							case Failed => if(result != Error) result = Failed
+							case _ => ()
+						}
 					}
 				}
 			}
+			testsListeners.foreach(l => Control.trapAndLog(log){ l.doComplete(result) })
 		}
-
-		testsListeners.foreach(l => Control.trapAndLog(log){ l.doComplete(result) })
+		catch
+		{
+			case t =>
+			{
+				testsListeners.foreach(l => Control.trapAndLog(log){ l.doComplete(t) })
+				throw t
+			}
+		}
 		result match
 		{
 			case Error => Some("ERROR occurred during testing.")
@@ -304,7 +415,7 @@ sealed abstract class LazyTestFramework extends TestFramework
 	protected def testRunnerClassName: String
 	
 	/** Creates an instance of the runner given by 'testRunnerClassName'.*/
-	final def testRunner(projectLoader: ClassLoader, log: Logger, listeners: Iterable[TestReportListener]): TestRunner =
+	final def testRunner(projectLoader: ClassLoader, listeners: Iterable[TestReportListener], log: Logger): TestRunner =
 	{
 		val runnerClassName = testRunnerClassName
 		val lazyLoader = new LazyFrameworkLoader(runnerClassName, Array(FileUtilities.sbtJar.toURI.toURL), projectLoader, getClass.getClassLoader)
@@ -442,20 +553,24 @@ private class ScalaTestRunner(val log: Logger, val listeners: Seq[TestReportList
 	private class ScalaTestReporter extends org.scalatest.Reporter with NotNull
 	{
 		import org.scalatest.Report
-		override def testIgnored(report: Report) { info(report, "Test ignored") }
-		override def testStarting(report: Report) { info(report, "Test starting") }
-		override def testSucceeded(report: Report) { info(report, "Test succeeded") }
+		override def testIgnored(report: Report) =
+		{
+			if(report.message.trim.isEmpty) fire(IgnoredEvent(report.name, None))
+			else fire(IgnoredEvent(report.name, Some(<message>report.message.trim</message>)))
+		}
+		override def testStarting(report: Report) { info(report, "Test starting", None) }
+		override def testSucceeded(report: Report) { info(report, "Test succeeded", Some(Result.Passed)) }
 		override def testFailed(report: Report)
 		{
 			succeeded = false
-			error(report, "Test failed")
+			error(report, "Test failed", Some(Result.Failed))
 		}
 		
-		override def infoProvided(report : Report) { info(report, "") }
+		override def infoProvided(report : Report) { info(report, "", None) }
 		
-		override def suiteStarting(report: Report) { info(report, "Suite starting") }
-		override def suiteCompleted(report: Report) { info(report, "Suite completed") }
-		override def suiteAborted(report: Report) { error(report, "Suite aborted") }
+		override def suiteStarting(report: Report) { info(report, "Suite starting", None) }
+		override def suiteCompleted(report: Report) { info(report, "Suite completed", None) }
+		override def suiteAborted(report: Report) { error(report, "Suite aborted", None) }
 		
 		override def runStarting(testCount: Int) { fire(MessageEvent(<message>Run starting</message>)) }
 		override def runStopped()
@@ -466,26 +581,26 @@ private class ScalaTestRunner(val log: Logger, val listeners: Seq[TestReportList
 		override def runAborted(report: Report)
 		{
 			succeeded = false
-			error(report, "Run aborted")
+			error(report, "Run aborted", None)
 		}
 		override def runCompleted() { log.info("Run completed.") }
 		
-		private def error(report: Report, event: String) { logReport(report, event, Level.Error) }
-		private def info(report: Report, event: String) { logReport(report, event, Level.Info) }
-		private def logReport(report: Report, event: String, level: Level.Value)
+		private def error(report: Report, event: String, result: Option[Result.Value]) { logReport(report, event, result, Level.Error) }
+		private def info(report: Report, event: String, result: Option[Result.Value]) { logReport(report, event, result, Level.Info) }
+		private def logReport(report: Report, event: String, result: Option[Result.Value], level: Level.Value)
 		{
 			level match
 			{
 				case Level.Error =>
 					if(report.message.trim.isEmpty)
-						fire(TypedErrorEvent(report.name, event, None))
+						fire(TypedErrorEvent(report.name, event, None)(result))
 					else
-						fire(TypedErrorEvent(report.name, event, Some(<message>{report.message.trim}</message>)))
+						fire(TypedErrorEvent(report.name, event, Some(<message>{report.message.trim}</message>))(result))
 				case Level.Info =>
 					if(report.message.trim.isEmpty)
-						fire(TypedEvent(report.name, event, None))
+						fire(TypedEvent(report.name, event, None)(result))
 					else
-						fire(TypedEvent(report.name, event, Some(<message>{report.message.trim}</message>)))
+						fire(TypedEvent(report.name, event, Some(<message>{report.message.trim}</message>))(result))
 				case l => log.warn("Level not prepared for:" + l)
 			}
 		}
@@ -515,9 +630,9 @@ private class SpecsRunner(val log: Logger, val listeners: Seq[TestReportListener
 	* part of specs, which is Copyright 2007-2008 Eric Torreborre.
 	* */
 	
-	private def reportSpecification(specification: Specification): SpecificationReportEvent =
+	private def reportSpecification(spec: Specification): SpecificationReportEvent =
 	{
-		return SpecificationReportEvent(reportSystems(specification.systems), reportSpecifications(specification.subSpecifications))
+		return SpecificationReportEvent(spec.successes.size, spec.failures.size, spec.errors.size, spec.skipped.size, spec.pretty, reportSystems(spec.systems), reportSpecifications(spec.subSpecifications))
 	}
 	private def reportSpecifications(specifications: Seq[Specification]): Seq[SpecificationReportEvent] =
 	{
