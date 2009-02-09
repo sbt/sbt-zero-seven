@@ -398,7 +398,7 @@ object FileUtilities
 	* children of <code>targetDirectory</code>.  Directories are not recursively entered.*/
 	def copyFilesFlat(sources: Iterable[File], targetDirectory: Path, log: Logger) =
 	{
-		require(targetDirectory.asFile.isDirectory)
+		require(targetDirectory.asFile.isDirectory, "Target '" + targetDirectory + "' is not a directory.")
 		val byName = new scala.collection.mutable.HashMap[String, File]
 		for(source <- sources) byName.put(source.getName, source)
 		val uniquelyNamedSources = byName.values
@@ -444,8 +444,8 @@ object FileUtilities
 	* exists, it is overwritten.*/
 	def copyFile(sourceFile: File, targetFile: File, log: Logger): Option[String] =
 	{
-		require(sourceFile.exists)
-		require(!sourceFile.isDirectory)
+		require(sourceFile.exists, "Source file '" + sourceFile.getAbsolutePath + "' does not exist.")
+		require(!sourceFile.isDirectory, "Source file '" + sourceFile.getAbsolutePath + "' is a directory.")
 		readChannel(sourceFile, log)(
 			in => writeChannel(targetFile, log) {
 				out => {
@@ -480,8 +480,8 @@ object FileUtilities
 	/** Copies the contents of the <code>source</code> directory to the <code>target</code> directory .*/
 	def copyDirectory(source: File, target: File, log: Logger): Option[String] =
 	{
-		require(source.isDirectory)
-		require(!target.exists)
+		require(source.isDirectory, "Source '" + source.getAbsolutePath + "' is not a directory.")
+		require(!target.exists, "Target '" + target.getAbsolutePath + "' already exists.")
 		def copyDirectory(sourceDir: File, targetDir: File): Option[String] =
 			createDirectory(targetDir, log) orElse copyContents(sourceDir, targetDir)
 		def copyContents(sourceDir: File, targetDir: File): Option[String] =

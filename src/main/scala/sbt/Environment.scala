@@ -146,7 +146,7 @@ trait BasicEnvironment extends Environment
 				notFound
 			else
 			{
-				Environment.convertException(format.fromString(rawValue)) match
+				Control.convertException(format.fromString(rawValue)) match
 				{
 					case Left(e) => ResolutionException("Error parsing system property '" + name + "': " + e.toString, Some(e))
 					case Right(x) => DefinedValue(x, false, false)
@@ -170,7 +170,7 @@ trait BasicEnvironment extends Environment
 		protected lazy val defaultValue = lazyDefaultValue
 		def update(t: T)
 		{
-			for(e <- Environment.convertException(System.setProperty(name, format.toString(t))).left)
+			for(e <- Control.convertException(System.setProperty(name, format.toString(t))).left)
 			{
 				log.trace(e)
 				log.warn("Error setting system property '" + name + "': " + e.toString)
@@ -280,11 +280,6 @@ trait BasicEnvironment extends Environment
 }
 private object Environment
 {
-	def convertException[T](t: => T): Either[Exception, T] =
-	{
-		try { Right(t) }
-		catch { case e: Exception => Left(e) }
-	}
 	def reflectiveMappings[T](obj: AnyRef, clazz: Class[T]): Map[String, T] =
 	{
 		val mappings = new scala.collection.mutable.OpenHashMap[String, T]
