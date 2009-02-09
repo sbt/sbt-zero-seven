@@ -39,7 +39,7 @@ object Control
 		try { Right(t) }
 		catch { case e: Exception => Left(e) }
 	}
-	def convertErrorMessage[T](t: => T): Either[String, T] =
+	def convertErrorMessage[T](log: Logger)(t: => T): Either[String, T] =
 	{
 		try { Right(t) }
 		catch { case e: Exception => log.trace(e); Left(e.toString) }

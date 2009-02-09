@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008, 2009  Steven Blundy, Mark Harrah, David MacIver
+ * Copyright 2008, 2009  Steven Blundy, Mark Harrah, David MacIver, Mikko Peltonen
  */
 package sbt
 
@@ -141,6 +141,11 @@ object Main
 	val ReloadAction = "reload"
 	/** The name of the command that toggles logging stacktraces. */
 	val TraceCommand = "trace"
+	/** The name of the command that compiles all sources continuously when they are modified. */
+	val ContinuousCompileCommand = "cc"
+	
+	/** The number of seconds between polling by the continuous compile command.*/
+	val ContinuousCompilePollDelaySeconds = 1
 
 	/** The list of all available commands at the interactive prompt in addition to the tasks defined
 	* by a project.*/
@@ -148,7 +153,8 @@ object Main
 	/** The list of logging levels.*/
 	private def logLevels: Iterable[String] = TreeSet.empty[String] ++ Level.elements.map(_.toString)
 	/** The list of all interactive commands other than logging level.*/
-	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent, HelpAction, ReloadAction, TraceCommand)
+	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent, HelpAction,
+		ReloadAction, TraceCommand, ContinuousCompileCommand)
 	
 	/** Enters interactive mode for the given root project.  It uses JLine for tab completion and
 	* history.  It returns normally when the user terminates or reloads the interactive session.  That is,
@@ -234,6 +240,7 @@ object Main
 		printCmd(ReloadAction, "Reloads sbt, recompiling modified project definitions if necessary.")
 		printCmd(SetAction + " <property> <value>", "Sets the value of the property given as its argument.")
 		printCmd(GetAction + " <property>", "Gets the value of the property given as its argument.")
+		printCmd(ContinuousCompileCommand, "Executes 'test-compile' action on active project when source files are modified (continuous compile).")
 		printCmd(HelpAction, "Displays this help message.")
 	}
 	private def listProject(p: Project) = printProject("\t", p)
@@ -262,6 +269,7 @@ object Main
 			}
 			case TraceCommand => toggleTrace(project)
 			case Level(level) => setLevel(project, level)
+			case ContinuousCompileCommand => compileContinuously(project)
 			case action => handleAction(project, action)
 		}
 	}
@@ -276,6 +284,7 @@ object Main
 				if(!project.taskNames.exists(_ == action))
 					project.log.info("Execute 'help' to see a list of commands or " + 
 						"'actions' for a list of available project actions")
+				printTime(project, startTime, "")
 			}
 			case None =>
 			{
@@ -451,6 +460,18 @@ object Main
 		else
 			setArgumentError(project.log)
 	}
+
+	private def compileContinuously(project: Project)
+	{
+		SourceModificationWatch.watchUntil(project, ContinuousCompilePollDelaySeconds)(System.in.available() > 0)
+		{
+			handleAction(project, "test-compile")
+			Console.println("Waiting for source changes... (press any key to interrupt)")
+		}
+
+		while (System.in.available() > 0) System.in.read()
+	}
+
 	private def isTerminateAction(s: String) = TerminateActions.elements.contains(s.toLowerCase)
 	private def setArgumentError(log: Logger) { log.error("Invalid arguments for 'set': expected property name and new value.") }
 	private def getArgumentError(log: Logger) { log.error("Invalid arguments for 'get': expected property name.") }
