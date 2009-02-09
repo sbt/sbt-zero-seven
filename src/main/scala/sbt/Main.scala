@@ -29,21 +29,22 @@ object Main
 		{
 			case LoadSetupError(message) =>
 				println("\n" + message)
-				runExitHooks(Project.log)
+				runExitHooks(Project.bootLogger)
 			case LoadSetupDeclined =>
-				runExitHooks(Project.log)
+				runExitHooks(Project.bootLogger)
 			case LoadError(errorMessage) =>
 			{
+				val log = Project.bootLogger
 				println(errorMessage)
-				runExitHooks(Project.log)
+				runExitHooks(log)
 				// Because this is an error that can probably be corrected, prompt user to try again.
 				val line =
 					try { Some(readLine("\n Hit enter to retry or 'exit' to quit: ")).filter(_ != null) }
 					catch
 					{
 						case e =>
-							Project.log.trace(e)
-							Project.log.error(e.toString)
+							log.trace(e)
+							log.error(e.toString)
 							None
 					}
 				line match
@@ -120,24 +121,26 @@ object Main
 		}
 	}
 	
-	/** The name of the action that shows the current project and logging level of that project.*/
+	/** The name of the command that shows the current project and logging level of that project.*/
 	val ShowCurrent = "current"
-	/** The name of the action that shows all available actions.*/
+	/** The name of the command that shows all available actions.*/
 	val ShowActions = "actions"
-	/** The name of the action that sets the currently active project.*/
+	/** The name of the command that sets the currently active project.*/
 	val ProjectAction = "project"
-	/** The name of the action that shows all available projects.*/
+	/** The name of the command that shows all available projects.*/
 	val ShowProjectsAction = "projects"
-	/** The list of lowercase action names that may be used to terminate the program.*/
+	/** The list of lowercase command names that may be used to terminate the program.*/
 	val TerminateActions: Iterable[String] = "exit" :: "quit" :: Nil
-	/** The name of the action that sets the value of the property given as its argument.*/
+	/** The name of the command that sets the value of the property given as its argument.*/
 	val SetAction = "set"
-	/** The name of the action that gets the value of the property given as its argument.*/
+	/** The name of the command that gets the value of the property given as its argument.*/
 	val GetAction = "get"
-	/** The name of the action that displays the help message. */
+	/** The name of the command that displays the help message. */
 	val HelpAction = "help"
-	/** The name of the action that reloads a project.  This is useful for when the project definition has changed. */
+	/** The name of the command that reloads a project.  This is useful for when the project definition has changed. */
 	val ReloadAction = "reload"
+	/** The name of the command that toggles logging stacktraces. */
+	val TraceCommand = "trace"
 
 	/** The list of all available commands at the interactive prompt in addition to the tasks defined
 	* by a project.*/
@@ -145,7 +148,7 @@ object Main
 	/** The list of logging levels.*/
 	private def logLevels: Iterable[String] = TreeSet.empty[String] ++ Level.elements.map(_.toString)
 	/** The list of all interactive commands other than logging level.*/
-	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent, HelpAction, ReloadAction)
+	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent, HelpAction, ReloadAction, TraceCommand)
 	
 	/** Enters interactive mode for the given root project.  It uses JLine for tab completion and
 	* history.  It returns normally when the user terminates or reloads the interactive session.  That is,
@@ -224,6 +227,7 @@ object Main
 		printCmd(ShowCurrent, "Shows the current project and logging level of that project.")
 		printCmd(ShowActions, "Shows all available actions.")
 		printCmd(Level.elements.mkString(", "), "Set logging for the current project to the specified level.")
+		printCmd(TraceCommand, "Toggles whether logging stack traces is enabled.")
 		printCmd(ProjectAction + " <project name>", "Sets the currently active project.")
 		printCmd(ShowProjectsAction, "Shows all available projects.")
 		printCmd(TerminateActions.elements.mkString(", "), "Terminates the program.")
@@ -249,12 +253,14 @@ object Main
 			{
 				printProject("Current project is ", project)
 				Console.println("Current log level is " + project.log.getLevel)
+				printTraceEnabled(project)
 			}
 			case ShowActions =>
 			{
 				for( (name, task) <- project.deepTasks)
 					Console.println("\t" + name + task.description.map(x => ": " + x).getOrElse(""))
 			}
+			case TraceCommand => toggleTrace(project)
 			case Level(level) => setLevel(project, level)
 			case action => handleAction(project, action)
 		}
@@ -277,6 +283,17 @@ object Main
 				project.log.success("Successful.")
 			}
 		}
+	}
+	/** Toggles whether stack traces are enabled.*/
+	private def toggleTrace(project: Project)
+	{
+		val newValue = !project.log.traceEnabled
+		project.topologicalSort.foreach(_.log.enableTrace(newValue))
+		printTraceEnabled(project)
+	}
+	private def printTraceEnabled(project: Project)
+	{
+		Console.println("Stack traces are " + (if(project.log.traceEnabled) "enabled" else "disabled"))
 	}
 	/** Sets the logging level on the given project.*/
 	private def setLevel(project: Project, level: Level.Value)

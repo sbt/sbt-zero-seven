@@ -60,11 +60,18 @@ class Resources(val baseDirectory: File)
 	}
 	
 	def withProject[T](projectDirectory: File, log: Logger)(f: Project => Either[String, T]): Either[String, T] =
-		readWriteResourceDirectory(projectDirectory, log)
-			{ dir => resultToEither(Project.loadProject(dir, Nil, None)).right.flatMap(f) }
+		readWriteResourceDirectory(projectDirectory, log)(loadProject(log)(f))
 	def withProject[T](group: String, name: String, log: Logger)(f: Project => Either[String, T]): Either[String, T] =
-		readWriteResourceDirectory(group, name, log)
-			{ dir => resultToEither(Project.loadProject(dir, Nil, None)).right.flatMap(f) }
+		readWriteResourceDirectory(group, name, log)(loadProject(log)(f))
+	private def loadProject[T](log: Logger)(f: Project => Either[String, T])(dir: File) =
+	{
+		val buffered = new BufferedLogger(log)
+		buffered.startRecording()
+		val result = resultToEither(Project.loadProject(dir, Nil, None, buffered)).right.flatMap(f)
+		if(result.isLeft) buffered.play()
+		buffered.clear()
+		result
+	}
 
 	def resultToEither(result: LoadResult): Either[String, Project] =
 		result match

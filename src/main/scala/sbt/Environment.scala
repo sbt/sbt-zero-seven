@@ -292,6 +292,7 @@ private object Environment
 			mappings(ReflectUtilities.transformCamelCase(name, '.')) = value
 		mappings
 	}
+	def scalaVersionString = scala.tools.nsc.Properties.versionString
 }
 
 sealed trait PropertyResolution[+T] extends NotNull

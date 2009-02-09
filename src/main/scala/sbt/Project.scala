@@ -123,7 +123,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	/** Loads the project at the given path and declares the project to have the given
 	* dependencies.  This method will configure the project according to the
 	* project/ directory in the directory denoted by path.*/
-	def project(path: Path, deps: Project*): Project = getProject(Project.loadProject(path, deps, Some(this)), path)
+	def project(path: Path, deps: Project*): Project = getProject(Project.loadProject(path, deps, Some(this), log), path)
 	
 	/** Loads the project at the given path using the given name and inheriting this project's version.
 	* The builder class is the default builder class, sbt.DefaultProject. The loaded project is declared
@@ -142,7 +142,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	* The construct function is used to obtain the Project instance. Any project/build/ directory for the project
 	* is ignored.  The project is declared to have the dependencies given by deps.*/
 	def project[P <: Project](path: Path, name: String, construct: ProjectInfo => P, deps: Project*): P =
-		initialize(construct(ProjectInfo(path.asFile, deps, Some(this))), Some(SetupInfo(name, None, false)))
+		initialize(construct(ProjectInfo(path.asFile, deps, Some(this))), Some(SetupInfo(name, None, false)), log)
 	
 	/** Initializes the project directories when a user has requested that sbt create a new project.*/
 	def initializeDirectories() {}
@@ -213,39 +213,49 @@ object Project
 	val DefaultBuilderClassName = "sbt.DefaultProject"
 	val DefaultBuilderClass = Class.forName(DefaultBuilderClassName).asSubclass(classOf[Project])
 	
-	/** The logger that should be used before the project definition is loaded.*/
-	private[sbt] val log = new ConsoleLogger
-	log.setLevel(Level.Trace)
-	
 	/** The name of the directory for project definitions.*/
 	val BuilderProjectDirectoryName = "build"
 	/** The name of the class that all projects must inherit from.*/
 	val ProjectClassName = classOf[Project].getName
 	
+	/** The logger that should be used before the root project definition is loaded.*/
+	private[sbt] def bootLogger =
+	{
+		val log = new ConsoleLogger
+		log.setLevel(Level.Debug)
+		log.enableTrace(true)
+		log
+	}
+	
 	/** Loads the project in the current working directory.*/
-	private[sbt] def loadProject: LoadResult = checkOutputDirectories(loadProject(new File("."), Nil, None))
+	private[sbt] def loadProject: LoadResult = loadProject(bootLogger)
+	/** Loads the project in the current working directory.*/
+	private[sbt] def loadProject(log: Logger): LoadResult = checkOutputDirectories(loadProject(new File("."), Nil, None, log))
 	/** Loads the project in the directory given by 'path' and with the given dependencies.*/
-	private[sbt] def loadProject(path: Path, deps: Iterable[Project], parent: Option[Project]): LoadResult =
-		loadProject(path.asFile, deps, parent)
+	private[sbt] def loadProject(path: Path, deps: Iterable[Project], parent: Option[Project], log: Logger): LoadResult =
+		loadProject(path.asFile, deps, parent, log)
 	/** Loads the project in the directory given by 'projectDirectory' and with the given dependencies.*/
-	private[sbt] def loadProject(projectDirectory: File, deps: Iterable[Project], parent: Option[Project]): LoadResult =
+	private[sbt] def loadProject(projectDirectory: File, deps: Iterable[Project], parent: Option[Project], log: Logger): LoadResult =
 	{
 		val info = ProjectInfo(projectDirectory, deps, parent)
 		ProjectInfo.setup(info, log) match
 		{
 			case SetupError(message) => LoadSetupError(message)
 			case SetupDeclined => LoadSetupDeclined
-			case AlreadySetup => loadProject(info, None)
-			case setup: SetupInfo => loadProject(info, Some(setup))
+			case AlreadySetup => loadProject(info, None, log)
+			case setup: SetupInfo => loadProject(info, Some(setup), log)
 		}
 	}
-	private def loadProject(info: ProjectInfo, setupInfo: Option[SetupInfo]): LoadResult =
+	private def loadProject(info: ProjectInfo, setupInfo: Option[SetupInfo], log: Logger): LoadResult =
 	{
 		try
 		{
+			val oldLevel = log.getLevel
+			log.setLevel(Level.Warn)
 			val result =
-				for(builderClass <- getProjectDefinition(info).right) yield
-					initialize(constructProject(info, builderClass), setupInfo)
+				for(builderClass <- getProjectDefinition(info, log).right) yield
+					initialize(constructProject(info, builderClass), setupInfo, log)
+			log.setLevel(oldLevel)
 			result.fold(LoadError(_), LoadSuccess(_))
 		}
 		catch
@@ -255,14 +265,14 @@ object Project
 				val cause =
 					if(ite.getCause == null) ite
 					else ite.getCause
-				errorLoadingProject(cause)
+				errorLoadingProject(cause, log)
 			}
 			case nme: NoSuchMethodException => LoadError("Constructor with one argument of type sbt.ProjectInfo required for project definition.")
-			case e: Exception => errorLoadingProject(e)
+			case e: Exception => errorLoadingProject(e, log)
 		}
 	}
 	/** Logs the stack trace and returns an error message in Left.*/
-	private def errorLoadingProject(e: Throwable) =
+	private def errorLoadingProject(e: Throwable, log: Logger) =
 	{
 		log.trace(e)
 		LoadError("Error loading project: " + e.toString)
@@ -271,7 +281,7 @@ object Project
 	private def constructProject[P <: Project](info: ProjectInfo, builderClass: Class[P]): P =
 		builderClass.getConstructor(classOf[ProjectInfo]).newInstance(info)
 	/** Checks the project's dependencies, initializes its environment, and possibly its directories.*/
-	private def initialize[P <: Project](p: P, setupInfo: Option[SetupInfo]): P =
+	private def initialize[P <: Project](p: P, setupInfo: Option[SetupInfo], log: Logger): P =
 	{
 		p.initializeEnvironment()
 		for(setup <- setupInfo)
@@ -285,17 +295,17 @@ object Project
 				p.initializeDirectories()
 		}
 		val useName = p.projectName.get.getOrElse("at " + p.info.projectDirectory.getCanonicalPath)
-		checkDependencies(useName, p.info.dependencies)
+		checkDependencies(useName, p.info.dependencies, log)
 		p
 	}
 	/** Compiles the project definition classes and returns the project definition class name
 	* and the class loader that should be used to load the definition. */
-	private def getProjectDefinition(info: ProjectInfo): Either[String, Class[P] forSome { type P <: Project }] =
+	private def getProjectDefinition(info: ProjectInfo, buildLog: Logger): Either[String, Class[P] forSome { type P <: Project }] =
 	{
 		val builderProjectPath = info.builderPath / BuilderProjectDirectoryName
 		if(builderProjectPath.asFile.isDirectory)
 		{
-			val builderProject = new BuilderProject(ProjectInfo(builderProjectPath.asFile, Nil, None))
+			val builderProject = new BuilderProject(ProjectInfo(builderProjectPath.asFile, Nil, None), buildLog)
 			builderProject.compile.run.toLeft
 			{
 				builderProject.projectDefinition match
@@ -318,7 +328,7 @@ object Project
 	}
 	/** Verifies that the given list of project dependencies contains no nulls.  The
 	* String argument should be the project name with the dependencies.*/
-	private def checkDependencies(forProject: String, deps: Iterable[Project])
+	private def checkDependencies(forProject: String, deps: Iterable[Project], log: Logger)
 	{
 		for(nullDep <- deps.find(_ == null))
 		{

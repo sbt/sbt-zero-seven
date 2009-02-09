@@ -7,6 +7,8 @@ trait Logger extends NotNull
 {
 	def getLevel: Level.Value
 	def setLevel(newLevel: Level.Value)
+	def enableTrace(flag: Boolean)
+	def traceEnabled: Boolean
 	
 	def atLevel(level: Level.Value) = level.id >= getLevel.id
 	def trace(t: => Throwable): Unit
@@ -23,12 +25,15 @@ trait Logger extends NotNull
 /** Implements the level-setting methods of Logger.*/
 trait BasicLogger extends Logger
 {
+	private var traceEnabledVar = false
 	private var level: Level.Value = Level.Info
 	def getLevel = level
 	def setLevel(newLevel: Level.Value)
 	{
 		level = newLevel
 	}
+	def enableTrace(flag: Boolean) { traceEnabledVar = flag }
+	def traceEnabled = traceEnabledVar
 }
 /** A logger that can buffer the logging done on it and then flush the buffer to the
 * delegate logger provided in the constructor.  Use 'startRecording' to start buffering
@@ -70,6 +75,7 @@ final class BufferedLogger(delegate: Logger) extends Logger
 			case Log(level, msg) => delegate.log(level, msg)
 			case Trace(t) => delegate.trace(t)
 			case SetLevel(level) => delegate.setLevel(level)
+			case SetTrace(enabled) => delegate.enableTrace(enabled)
 		}
 	}
 	/** Clears all buffered messages and disables buffering. */
@@ -84,6 +90,7 @@ final class BufferedLogger(delegate: Logger) extends Logger
 	private case class Log(level: Level.Value, msg: String) extends LogEvent
 	private case class Trace(t: Throwable) extends LogEvent
 	private case class SetLevel(newLevel: Level.Value) extends LogEvent
+	private case class SetTrace(enabled: Boolean) extends LogEvent
 	
 	def setLevel(newLevel: Level.Value)
 	{
@@ -91,10 +98,16 @@ final class BufferedLogger(delegate: Logger) extends Logger
 		delegate.setLevel(newLevel)
 	}
 	def getLevel = delegate.getLevel
+	def traceEnabled = delegate.traceEnabled
+	def enableTrace(flag: Boolean)
+	{
+		record(SetTrace(flag))
+		delegate.enableTrace(flag)
+	}
 	
 	def trace(t: => Throwable): Unit =
 	{
-		if(atLevel(Level.Trace))
+		if(traceEnabled)
 		{
 			if(recording)
 				record(Trace(t))
@@ -149,7 +162,7 @@ class ConsoleLogger extends BasicLogger
 	}
 	def trace(t: => Throwable)
 	{
-		if(atLevel(Level.Trace))
+		if(traceEnabled)
 			t.printStackTrace
 	}
 	def log(level: Level.Value, message: => String)
@@ -186,7 +199,6 @@ class ConsoleLogger extends BasicLogger
 * with id larger than its own id.  For example, Warn (id=3) includes Error (id=4).*/
 object Level extends Enumeration with NotNull
 {
-	val Trace = Value(0, "trace")
 	val Debug = Value(1, "debug")
 	val Info = Value(2, "info")
 	val Warn = Value(3, "warn")
@@ -207,6 +219,8 @@ trait DelegatingLogger extends Logger
 {
 	protected def delegate: Logger
 	
+	def enableTrace(flag: Boolean) { delegate.enableTrace(flag) }
+	def traceEnabled = delegate.traceEnabled
 	def getLevel = delegate.getLevel
 	def setLevel(newLevel: Level.Value)
 	{

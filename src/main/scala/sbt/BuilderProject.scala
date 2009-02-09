@@ -4,11 +4,8 @@
 package sbt
 
 /** The project definition used to build project definitions. */
-final class BuilderProject(val info: ProjectInfo) extends ScalaProject
-{
-	override protected def logImpl = new ConsoleLogger
-	log.setLevel(Level.Warn)
-	
+final class BuilderProject(val info: ProjectInfo, override protected val logImpl: Logger) extends ScalaProject
+{	
 	import BasicProjectPaths._
 	
 	def outputPath = path(DefaultOutputDirectoryName)
