@@ -13,9 +13,6 @@ $ delete src/test/scala/DummyTest.scala
 > update
 [success]
 
-$ pause
-[success]
-
 > test
 [success]
 
