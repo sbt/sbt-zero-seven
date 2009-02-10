@@ -81,6 +81,11 @@ src/test/resources/sbt-test-resources/source-dependencies/empty-a/changes/A2.sca
 src/test/resources/sbt-test-resources/source-dependencies/empty-a/changes/B.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/empty-a/project/build.properties -text
 src/test/resources/sbt-test-resources/source-dependencies/empty-a/test -text
+src/test/resources/sbt-test-resources/source-dependencies/new-cyclic/changes/A2.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/new-cyclic/project/build.properties -text
+src/test/resources/sbt-test-resources/source-dependencies/new-cyclic/src/main/scala/A.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/new-cyclic/src/main/scala/B.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/new-cyclic/test -text
 src/test/resources/sbt-test-resources/source-dependencies/remove-test-a/changes/1.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/remove-test-a/project/build.properties -text
 src/test/resources/sbt-test-resources/source-dependencies/remove-test-a/test -text
@@ -98,6 +103,12 @@ src/test/resources/sbt-test-resources/source-dependencies/transitive-a/src/main/
 src/test/resources/sbt-test-resources/source-dependencies/transitive-a/src/main/scala/B.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/transitive-a/src/main/scala/C.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/transitive-a/test -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-b/changes/A2.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-b/project/build.properties -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-b/src/main/scala/A.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-b/src/main/scala/B.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-b/src/main/scala/C.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/transitive-b/test -text
 src/test/resources/sbt-test-resources/tests/scalacheck-a/changes/BasicTest.scala -text
 src/test/resources/sbt-test-resources/tests/scalacheck-a/changes/FailedTest.scala -text
 src/test/resources/sbt-test-resources/tests/scalacheck-a/project/build.properties -text
