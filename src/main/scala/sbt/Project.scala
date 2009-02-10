@@ -194,7 +194,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 			}
 		}
 	}
-	def defaultExcludes = ".svn" | ".cvs"
+	def defaultExcludes = ".*"
 	/** Short for parent.descendentsExcept(include, defaultExcludes)*/
 	def descendents(parent: PathFinder, include: NameFilter) = parent.descendentsExcept(include, defaultExcludes)
 	override def toString = "Project " + projectName.get.getOrElse("at " + environmentLabel)
