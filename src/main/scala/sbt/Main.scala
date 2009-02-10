@@ -5,10 +5,9 @@ package sbt
 
 import scala.collection.immutable.TreeSet
 
-private object RunCompleteAction extends Enumeration
-{
-	val Exit, Reload = Value
-}
+private trait RunCompleteAction extends NotNull
+private case class Exit(code: Int) extends RunCompleteAction
+private case object Reload extends RunCompleteAction
 
 /** This class is the entry point for sbt.  If it is given any arguments, it interprets them
 * as actions, executes the corresponding actions, and exits.  If there were no arguments provided,
@@ -17,12 +16,18 @@ object Main
 {
 	/** The entry point for sbt.  If arguments are specified, they are interpreted as actions, executed,
 	* and then the program terminates.  If no arguments are specified, the program enters interactive
-	* mode.*/
+	* mode. Call run if you need to run sbt in the same JVM.*/
 	def main(args: Array[String])
 	{
-		run(args)
+		System.exit(run(args))
 	}
-	private def run(args: Array[String])
+	val NormalExitCode = 0
+	val SetupErrorExitCode = 1
+	val SetupDeclinedExitCode = 2
+	val LoadErrorExitCode = 3
+	val UsageErrorExitCode = 4
+	val BuildErrorExitCode = 5
+	private def run(args: Array[String]): Int =
 	{
 		val startTime = System.currentTimeMillis
 		Project.loadProject match
@@ -30,8 +35,10 @@ object Main
 			case LoadSetupError(message) =>
 				println("\n" + message)
 				runExitHooks(Project.bootLogger)
+				SetupErrorExitCode
 			case LoadSetupDeclined =>
 				runExitHooks(Project.bootLogger)
+				SetupDeclinedExitCode
 			case LoadError(errorMessage) =>
 			{
 				val log = Project.bootLogger
@@ -49,26 +56,29 @@ object Main
 					}
 				line match
 				{
-					case Some(l) => if(!isTerminateAction(l)) run(args)
-					case None => ()
+					case Some(l) => if(!isTerminateAction(l)) run(args) else NormalExitCode
+					case None => LoadErrorExitCode
 				}
 			}
 			case LoadSuccess(project) =>
 			{
-				val doNext =
+				val doNext: RunCompleteAction =
 					// in interactive mode, fill all undefined properties
 					if(args.length > 0 || fillUndefinedProjectProperties(project.topologicalSort.toList.reverse))
 						startProject(project, args, startTime)
 					else
-						RunCompleteAction.Exit
+						Exit(NormalExitCode)
 				runExitHooks(project.log)
-				if(doNext == RunCompleteAction.Reload)
-					run(args)
+				doNext match
+				{
+					case Reload => run(args)
+					case Exit(code) => code
+				}
 			}
 		}
 	}
 	/** Returns true if the project should be reloaded, false if sbt should exit.*/
-	private def startProject(project: Project, args: Array[String], startTime: Long): RunCompleteAction.Value =
+	private def startProject(project: Project, args: Array[String], startTime: Long): RunCompleteAction =
 	{
 		project.log.info("Building project " + project.name + " " + project.version.toString + " using " + project.getClass.getName)
 		if(args.length == 0)
@@ -104,20 +114,23 @@ object Main
 						val time = timeCompile()
 						println("Time to compile modified source " + source + ": " + time + " ms")
 					}
+					Exit(NormalExitCode)
 				}
-				case _ => project.log.error("Compile statistics only available on BasicScalaProjects.")
+				case _ =>
+					project.log.error("Compile statistics only available on BasicScalaProjects.")
+					Exit(UsageErrorExitCode)
 			}
-			RunCompleteAction.Exit
 		}
 		else
 		{
-			((None: Option[String]) /: args)( (errorMessage, arg) => errorMessage orElse project.act(arg) ) match
-			{
-				case None => project.log.success("Build completed successfully.")
-				case Some(errorMessage) => project.log.error("Error during build: " + errorMessage)
-			}
+			val exitCode =
+				((None: Option[String]) /: args)( (errorMessage, arg) => errorMessage orElse project.act(arg) ) match
+				{
+					case None => project.log.success("Build completed successfully."); NormalExitCode
+					case Some(errorMessage) => project.log.error("Error during build: " + errorMessage); BuildErrorExitCode
+				}
 			printTime(project, startTime, "build")
-			RunCompleteAction.Exit
+			Exit(exitCode)
 		}
 	}
 	
@@ -160,7 +173,7 @@ object Main
 	* history.  It returns normally when the user terminates or reloads the interactive session.  That is,
 	* it does not call System.exit to quit.
 	**/
-	private def interactive(baseProject: Project): RunCompleteAction.Value =
+	private def interactive(baseProject: Project): RunCompleteAction =
 	{
 		val reader = new JLineReader(baseProject, ProjectAction, interactiveCommands)
 		
@@ -169,7 +182,7 @@ object Main
 		*   the function returns the appropriate value.
 		* Otherwise, the command is handled and this function is called again
 		*   (tail recursively) to prompt for the next command. */
-		def loop(currentProject: Project): RunCompleteAction.Value =
+		def loop(currentProject: Project): RunCompleteAction =
 		{
 			reader.readLine("> ") match
 			{
@@ -179,9 +192,9 @@ object Main
 					if(trimmed.isEmpty)
 						loop(currentProject)
 					else if(isTerminateAction(trimmed))
-						RunCompleteAction.Exit
+						Exit(NormalExitCode)
 					else if(ReloadAction == trimmed)
-						RunCompleteAction.Reload
+						Reload
 					else if(trimmed.startsWith(ProjectAction + " "))
 					{
 						val projectName = trimmed.substring(ProjectAction.length + 1)
@@ -215,7 +228,7 @@ object Main
 						loop(currentProject)
 					}
 				}
-				case None => RunCompleteAction.Exit
+				case None => Exit(NormalExitCode)
 			}
 		}
 		
