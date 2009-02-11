@@ -1,7 +1,7 @@
 /* sbt -- Simple Build Tool
  * Copyright 2009  Mark Harrah
  */
-/*import sbt._
+import sbt._
 import java.io.{BufferedReader, File, InputStreamReader}
 
 trait TestFilter extends NotNull
@@ -29,7 +29,7 @@ class ScriptedTests(testResources: Resources, filter: TestFilter) extends NotNul
 			{
 				val testName = test.getName
 				if(!filter.accept(group.getName, testName))
-					log.warn("Test " + testName + " skipped.")
+					log.warn(" Test " + testName + " skipped.")
 				else
 					scriptedTest(test, log) match
 					{
@@ -272,4 +272,4 @@ private object TestScriptParser
 					case x => x
 				}
 		}
-}*/
+}
