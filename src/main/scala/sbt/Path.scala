@@ -5,7 +5,7 @@ package sbt
 
 import Path._
 import FileUtilities.wrapNull
-import java.io.{File, FileFilter}
+import java.io.File
 import scala.collection.mutable.{Set, HashSet}
 
 /** A Path represents a file in a project.
@@ -61,7 +61,6 @@ sealed abstract class Path extends PathFinder with NotNull
 	/** The hash code of a Path is that of the underlying <code>File</code>.*/
 	override final def hashCode = asFile.hashCode
 }
-
 private final case class BaseDirectory(private[sbt] val path: Path) extends Path
 {
 	override def toString = path.toString
@@ -209,10 +208,10 @@ sealed abstract class PathFinder extends NotNull
 	def ---(excludePaths: PathFinder): PathFinder = new ExcludePaths(this, excludePaths)
 	/** Constructs a new finder that selects all paths with a name that matches <code>filter</code> and are
 	* descendents of paths selected by this finder.*/
-	def **(filter: NameFilter): PathFinder = new DescendentOrSelfPathFinder(this, filter)
+	def **(filter: FileFilter): PathFinder = new DescendentOrSelfPathFinder(this, filter)
 	/** Constructs a new finder that selects all paths with a name that matches <code>filter</code> and are
 	* immediate children of paths selected by this finder.*/
-	def *(filter: NameFilter): PathFinder = new ChildPathFinder(this, filter)
+	def *(filter: FileFilter): PathFinder = new ChildPathFinder(this, filter)
 	/** Constructs a new finder that selects all paths with name <code>literal</code> that are immediate children
 	* of paths selected by this finder.*/
 	def / (literal: String): PathFinder = new ChildPathFinder(this, new ExactFilter(literal))
@@ -229,7 +228,7 @@ sealed abstract class PathFinder extends NotNull
 	* path with a name that matches <code>intermediateExclude</code>.  Typical usage is:
 	*
 	* <code>descendentsExcept("*.jar", ".svn")</code>*/
-	def descendentsExcept(include: NameFilter, intermediateExclude: NameFilter): PathFinder =
+	def descendentsExcept(include: FileFilter, intermediateExclude: FileFilter): PathFinder =
 		(this ** include) --- (this ** intermediateExclude ** include)
 	
 	/** Evaluates this finder.  The set returned by this method will reflect the underlying filesystem at the
@@ -253,8 +252,8 @@ private class BasePathFinder(base: PathFinder) extends PathFinder
 private abstract class FilterPath extends PathFinder with FileFilter
 {
 	def parent: PathFinder
-	def filter: NameFilter
-	final def accept(file: File) = filter.accept(file.getName)
+	def filter: FileFilter
+	final def accept(file: File) = filter.accept(file)
 	
 	protected def handlePath(path: Path, pathSet: Set[Path])
 	{
@@ -262,7 +261,7 @@ private abstract class FilterPath extends PathFinder with FileFilter
 			pathSet += path / matchedFile.getName
 	}
 }
-private class DescendentOrSelfPathFinder(val parent: PathFinder, val filter: NameFilter) extends FilterPath
+private class DescendentOrSelfPathFinder(val parent: PathFinder, val filter: FileFilter) extends FilterPath
 {
 	private[sbt] def addTo(pathSet: Set[Path])
 	{
@@ -280,7 +279,7 @@ private class DescendentOrSelfPathFinder(val parent: PathFinder, val filter: Nam
 			handlePathDescendent(path / childDirectory.getName, pathSet)
 	}
 }
-private class ChildPathFinder(val parent: PathFinder, val filter: NameFilter) extends FilterPath
+private class ChildPathFinder(val parent: PathFinder, val filter: FileFilter) extends FilterPath
 {
 	private[sbt] def addTo(pathSet: Set[Path])
 	{

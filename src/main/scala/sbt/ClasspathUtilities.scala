@@ -3,7 +3,7 @@
  */
 package sbt
 
-import java.io.{File, FileFilter}
+import java.io.File
 import scala.collection.Set
 import scala.collection.mutable.{HashSet, ListBuffer}
 
@@ -40,8 +40,8 @@ private[sbt] object ClasspathUtilities
 			val buffer = new ListBuffer[File]
 			def findJars(dir: File)
 			{
-				buffer ++= dir.listFiles(new FileFilter { def accept(f: File) = isArchive(f) })
-				for(dir <- dir.listFiles(new FileFilter { def accept(f: File) = f.isDirectory }))
+				buffer ++= dir.listFiles(new SimpleFileFilter(isArchive))
+				for(dir <- dir.listFiles(DirectoryFilter))
 					findJars(dir)
 			}
 			for(path <- FileUtilities.pathSplit(settings.extdirs.value); val dir = new File(path) if dir.isDirectory)

@@ -37,21 +37,29 @@ trait FileTasks extends Project
 			existenceCheck(products)(action)
 			{
 				val sources = files.sources
-				val oldestProductModifiedTime = mapLastModified(products).reduceLeft(_ min _)
-				val newestSourceModifiedTime = mapLastModified(sources).reduceLeft(_ max _)
-				if(oldestProductModifiedTime < newestSourceModifiedTime)
+				if(sources.isEmpty)
 				{
-					if(log.atLevel(Level.Debug))
-					{
-						log.debug("Task execution required because the following sources are newer than at least one product: ")
-						logDebugIndented(sources.filter(_.lastModified > oldestProductModifiedTime))
-						log.debug(" The following products are older than at least one source: ")
-						logDebugIndented(products.filter(_.lastModified < newestSourceModifiedTime))
-					}
+					log.debug("Task execution required because no sources exist.")
 					action
 				}
 				else
-					None
+				{
+					val oldestProductModifiedTime = mapLastModified(products).reduceLeft(_ min _)
+					val newestSourceModifiedTime = mapLastModified(sources).reduceLeft(_ max _)
+					if(oldestProductModifiedTime < newestSourceModifiedTime)
+					{
+						if(log.atLevel(Level.Debug))
+						{
+							log.debug("Task execution required because the following sources are newer than at least one product: ")
+							logDebugIndented(sources.filter(_.lastModified > oldestProductModifiedTime))
+							log.debug(" The following products are older than at least one source: ")
+							logDebugIndented(products.filter(_.lastModified < newestSourceModifiedTime))
+						}
+						action
+					}
+					else
+						None
+				}
 			}
 		}
 	def fileTask(products: => Iterable[Path])(action: => Option[String]): Task =

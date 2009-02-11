@@ -342,14 +342,14 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 		}
 	}
 	
-	protected def analysisCallback: AnalysisCallback =
-		new BasicAnalysisCallback(projectPath, testDefinitionClassNames, analysis)
+	protected def analysisCallback: AnalysisCallback = new CompileAnalysisCallback
+	protected class CompileAnalysisCallback extends BasicAnalysisCallback(projectPath, testDefinitionClassNames, analysis)
+	{
+		def foundSubclass(sourcePath: Path, subclassName: String, superclassName: String, isModule: Boolean)
 		{
-			def foundSubclass(sourcePath: Path, subclassName: String, superclassName: String, isModule: Boolean)
-			{
-				analysis.addTest(sourcePath, TestDefinition(isModule, subclassName, superclassName))
-			}
+			analysis.addTest(sourcePath, TestDefinition(isModule, subclassName, superclassName))
 		}
+	}
 }
 object ChangeDetection extends Enumeration
 {

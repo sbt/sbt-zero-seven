@@ -3,7 +3,7 @@
  */
 package sbt
 
-import java.io.{Closeable, File, FileFilter, FileInputStream, FileOutputStream, InputStream, OutputStream}
+import java.io.{Closeable, File, FileInputStream, FileOutputStream, InputStream, OutputStream}
 import java.io.{ByteArrayOutputStream, InputStreamReader, OutputStreamWriter}
 import java.io.{BufferedReader, BufferedWriter, FileReader, FileWriter, Reader, Writer}
 import java.net.URL
@@ -733,9 +733,4 @@ object FileUtilities
 	lazy val sbtJar: File = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
 	/** The producer of randomness for unique name generation.*/
 	private val random = new java.util.Random
-}
-
-object DirectoryFilter extends FileFilter
-{
-	def accept(file: File) = file.isDirectory
 }
