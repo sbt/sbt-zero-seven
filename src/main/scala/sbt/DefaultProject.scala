@@ -138,7 +138,8 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 	
 		
 	/** The list of test frameworks to use for testing.  Note that adding frameworks to this list
-	* for an active project currently requires an explicit 'clean'. */
+	* for an active project currently requires an explicit 'clean' to properly update the set of tests to
+	* run*/
 	def testFrameworks: Iterable[TestFramework] = ScalaCheckFramework :: SpecsFramework :: ScalaTestFramework :: Nil
 	
 	def mainLabel = "main"
