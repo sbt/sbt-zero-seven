@@ -44,4 +44,28 @@ object Control
 		try { Right(t) }
 		catch { case e: Exception => log.trace(e); Left(e.toString) }
 	}
+	final def lazyFold[T](list: List[T])(f: T => Option[String]): Option[String] =
+		list match
+		{
+			case Nil => None
+			case head :: tail =>
+				f(head) match
+				{
+					case None => lazyFold(tail)(f)
+					case x => x
+				}
+		}
+	final def lazyFold[T, S](list: List[T], value: S)(f: (S,T) => Either[String, S]): Either[String, S] =
+		list match
+		{
+			case Nil => Right(value)
+			case head :: tail =>
+				f(value, head) match
+				{
+					case Right(newValue) => lazyFold(tail, newValue)(f)
+					case x => x
+				}
+		}
+	def thread[T](e: Either[String, T])(f: T => Option[String]): Option[String] =
+		e.right.flatMap( t => f(t).toLeft(()) ).left.toOption
 }

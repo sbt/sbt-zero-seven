@@ -9,8 +9,8 @@ import java.io.{BufferedReader, BufferedWriter, FileReader, FileWriter, Reader, 
 import java.net.URL
 import java.nio.charset.{Charset, CharsetDecoder, CharsetEncoder}
 import java.nio.channels.FileChannel
-import java.util.jar.{Attributes, JarEntry, JarOutputStream, Manifest}
-import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
+import java.util.jar.{Attributes, JarEntry, JarFile, JarOutputStream, Manifest}
+import java.util.zip.{GZIPOutputStream, ZipEntry, ZipInputStream, ZipOutputStream}
 
 /** A collection of file related methods. */
 object FileUtilities
@@ -23,6 +23,28 @@ object FileUtilities
 
 	/** Splits a String around path separator characters. */
 	private[sbt] def pathSplit(s: String) = PathSeparatorPattern.split(s)
+	
+	/** Gzips the file 'in' and writes it to 'out'.  'in' cannot be the same file as 'out'. */
+	def gzip(in: Path, out: Path, log: Logger): Option[String] =
+	{
+		require(in != out, "Input file cannot be the same as the output file.")
+		readStream(in.asFile, log) { inputStream =>
+			writeStream(out.asFile, log) { outputStream =>
+				val gzStream = new GZIPOutputStream(outputStream)
+				Control.trapUnitAndFinally("Error gzipping '" + in + "' to '" + out + "': ", log)
+					{ transfer(inputStream, gzStream, log) }
+					{ gzStream.close() }
+			}
+		}
+	}
+	/** Gzips the InputStream 'in' and writes it to 'output'.  Neither stream is closed.*/
+	def gzip(input: InputStream, output: OutputStream, log: Logger): Option[String] =
+	{
+		val gzStream = new GZIPOutputStream(output)
+		Control.trapUnitAndFinally("Error gzipping: ", log)
+			{ transfer(input, gzStream, log) }
+			{ gzStream.finish() }
+	}
 	
 	/** Creates a jar file.
 	* @param sources The files to include in the jar file.  The path used for the jar is
@@ -437,11 +459,13 @@ object FileUtilities
 		Control.trap("Error copying files: ", log) { copyAll(uniquelyNamedSources.toList).toLeft(targetSet.readOnly) }
 	}
 	/** Copies <code>sourceFile</code> to <code>targetFile</code>.  If <code>targetFile</code>
-	* exists, it is overwritten.*/
+	* exists, it is overwritten.  Note that unlike higher level copies in FileUtilities, this
+	* method always performs the copy, even if sourceFile is older than targetFile.*/
 	def copyFile(sourceFile: Path, targetFile: Path, log: Logger): Option[String] =
 		copyFile(sourceFile.asFile, targetFile.asFile, log)
 	/** Copies <code>sourceFile</code> to <code>targetFile</code>.  If <code>targetFile</code>
-	* exists, it is overwritten.*/
+	* exists, it is overwritten.  Note that unlike higher level copies in FileUtilities, this
+	* method always performs the copy, even if sourceFile is older than targetFile.*/
 	def copyFile(sourceFile: File, targetFile: File, log: Logger): Option[String] =
 	{
 		require(sourceFile.exists, "Source file '" + sourceFile.getAbsolutePath + "' does not exist.")
@@ -463,15 +487,17 @@ object FileUtilities
 	* <code>targetDirectory</code> directory.*/
 	def sync(sourceDirectory: Path, targetDirectory: Path, log: Logger): Option[String] =
 	{
-		copy(((sourceDirectory ##) ** AllPassFilter).get, targetDirectory, log).right.flatMap { copiedTo =>
-		{
-			val existing = ((targetDirectory ##) ** AllPassFilter).get
-			val toRemove = scala.collection.mutable.HashSet(existing.toSeq: _*)
-			toRemove --= copiedTo
-			if(log.atLevel(Level.Debug))
-				toRemove.foreach(r => log.debug("Pruning " + r))
-			clean(toRemove, true, log).toLeft(())
-		}}.left.toOption
+		copy(((sourceDirectory ##) ** AllPassFilter).get, targetDirectory, log).right.flatMap
+			{ copiedTo => prune(targetDirectory, copiedTo, log).toLeft(()) }.left.toOption
+	}
+	def prune(directory: Path, keepOnly: Iterable[Path], log: Logger): Option[String] =
+	{
+		val existing = ((directory ##) ** AllPassFilter).get
+		val toRemove = scala.collection.mutable.HashSet(existing.toSeq: _*)
+		toRemove --= keepOnly
+		if(log.atLevel(Level.Debug))
+			toRemove.foreach(r => log.debug("Pruning " + r))
+		clean(toRemove, true, log)
 	}
 	
 	/** Copies the contents of the <code>source</code> directory to the <code>target</code> directory .*/
@@ -534,7 +560,7 @@ object FileUtilities
 		}
 	}
 	
-	private def open[T](file: File, log: Logger, constructor: File => T): Either[String, T] =
+	private[sbt] def open[T](file: File, log: Logger, constructor: File => T): Either[String, T] =
 	{
 		val parent = file.getParentFile
 		if(parent != null)
@@ -552,15 +578,16 @@ object FileUtilities
 		open(file, log, (f: File) => new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f, append), charset)) )
 	private def fileReader(charset: Charset)(file: File, log: Logger) =
 		open(file, log, (f: File) => new BufferedReader(new InputStreamReader(new FileInputStream(f), charset)) )
+	private[sbt] def openJarFile(verify: Boolean)(f: File, l: Logger) = open(f, l, new CloseableJarFile(_))
 	
-	private def ioOption[Source, T <: Closeable](src: Source, open: (Source, Logger) => Either[String, T],
+	private[sbt] def ioOption[Source, T <: Closeable](src: Source, open: (Source, Logger) => Either[String, T],
 		f: T => Option[String], op: String, log: Logger): Option[String] =
 			io(src, open, (t: T) => f(t).toLeft(()), op, log).left.toOption
-	private def io[Source, T <: Closeable, R](src: Source, open: (Source, Logger) => Either[String, T],
+	private[sbt] def io[Source, T <: Closeable, R](src: Source, open: (Source, Logger) => Either[String, T],
 		f: T => Either[String, R], op: String, log: Logger): Either[String, R] =
 			open(src, log).right flatMap
 			{
-				stream => Control.trapAndFinally("Error " + op + src + ": ", log)
+				stream => Control.trapAndFinally("Error " + op + " "+ src + ": ", log)
 					{ f(stream) }
 					{ stream.close }
 			}
@@ -733,4 +760,8 @@ object FileUtilities
 	lazy val sbtJar: File = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
 	/** The producer of randomness for unique name generation.*/
 	private val random = new java.util.Random
+}
+class CloseableJarFile(f: File, verify: Boolean) extends JarFile(f, verify) with Closeable
+{
+	def this(f: File) = this(f, false)
 }

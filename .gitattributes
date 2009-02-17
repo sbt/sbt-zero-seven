@@ -42,8 +42,10 @@ src/main/scala/sbt/Main.scala -text
 src/main/scala/sbt/ManageDependencies.scala -text
 src/main/scala/sbt/ModuleUtilities.scala -text
 src/main/scala/sbt/NameFilter.scala -text
+src/main/scala/sbt/Pack.scala -text
 src/main/scala/sbt/ParallelRunner.scala -text
 src/main/scala/sbt/Path.scala -text
+src/main/scala/sbt/Process.scala -text
 src/main/scala/sbt/Project.scala -text
 src/main/scala/sbt/ProjectInfo.scala -text
 src/main/scala/sbt/ReflectUtilities.scala -text
@@ -56,6 +58,7 @@ src/main/scala/sbt/TestFramework.scala -text
 src/main/scala/sbt/TrapExit.scala -text
 src/main/scala/sbt/Version.scala -text
 src/main/scala/sbt/WebApp.scala -text
+src/main/scala/sbt/Webstart.scala -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/project/build.properties -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/project/build/src/UpdateTestProject.scala -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/test -text

@@ -136,6 +136,13 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 	* (lib) and the managed directory for the specified configuration.*/
 	def projectClasspath(config: Configuration) = mainCompilePath +++ unmanagedClasspath +++ managedClasspath(config)
 	
+	// not ready for external use yet
+	protected[sbt] def scalaJars: Iterable[java.io.File] =
+	{
+		val externalJars = mainCompileConditional.analysis.allExternals.filter(ClasspathUtilities.isArchive)
+		//For now, just include scala-library.jar
+		externalJars.filter(_.getName == "scala-library.jar")
+	}
 		
 	/** The list of test frameworks to use for testing.  Note that adding frameworks to this list
 	* for an active project currently requires an explicit 'clean' to properly update the set of tests to
@@ -217,6 +224,15 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 	lazy val incrementVersion = incrementVersionAction
 	lazy val release = releaseAction
 	
+	def jarsOfProjectDependencies = Path.lazyPathFinder {
+		(topologicalSort - this) flatMap { p =>
+			p match
+			{
+				case bpp: BasicProjectPaths => List(bpp.outputPath / defaultJarName)
+				case _ => Nil
+			}
+		}
+	}
 	
 	/** The directories to which a project writes are listed here and is used
 	* to check a project and its dependencies for collisions.*/
@@ -228,14 +244,8 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	
 	lazy val prepareWebapp = prepareWebappAction
 	protected def prepareWebappAction =
-		prepareWebappTask(descendents(webappPath ##, "*") +++ extraWebappFiles, temporaryWarPath, runClasspath, extraWebappJars) dependsOn(compile)
+		prepareWebappTask(descendents(webappPath ##, "*") +++ extraWebappFiles, temporaryWarPath, runClasspath, scalaJars) dependsOn(compile)
 	protected def extraWebappFiles: PathFinder = Path.emptyPathFinder
-	private def extraWebappJars: Iterable[java.io.File] =
-	{
-		val externalJars = mainCompileConditional.analysis.allExternals.filter(ClasspathUtilities.isArchive)
-		//For now, just include scala-library.jar
-		externalJars.filter(_.getName == "scala-library.jar")
-	}
 	
 	lazy val jettyRun = jettyRunAction
 	protected def jettyRunAction =
@@ -243,6 +253,8 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 		
 	lazy val jettyStop = jettyStopAction
 	protected def jettyStopAction = jettyStopTask describedAs(JettyStopDescription)
+	
+	override def cleanAction = super.cleanAction dependsOn jettyStop
 	
 	override protected def packageAction = packageTask(descendents(temporaryWarPath ##, "*"), outputPath,
 		defaultWarName, Nil) dependsOn(prepareWebapp) describedAs PackageWarDescription

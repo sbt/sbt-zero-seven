@@ -121,7 +121,7 @@ trait ScalaProject extends Project with FileTasks
 	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: PackageOption*): Task =
 		packageTask(sources, outputDirectory, jarName, options)
 	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: => Seq[PackageOption]): Task =
-		fileTask((outputDirectory / jarName) from sources)
+		fileTask("package", (outputDirectory / jarName) from sources)
 		{
 			import scala.collection.jcl.Map
 			/** Copies the mappings in a2 to a1, mutating a1. */
@@ -193,7 +193,7 @@ trait ScalaProject extends Project with FileTasks
 }
 trait WebScalaProject extends ScalaProject
 {
-	protected def prepareWebappTask(webappContents: PathFinder, warPath: Path, classpath: PathFinder, extraJars: => Iterable[File]) =
+	protected def prepareWebappTask(webappContents: PathFinder, warPath: => Path, classpath: PathFinder, extraJars: => Iterable[File]) =
 		task
 		{
 			val (libs, classDirectories) = classpath.get.toList.partition(ClasspathUtilities.isArchive)
@@ -228,7 +228,7 @@ trait WebScalaProject extends ScalaProject
 				}
 			}}}}).left.toOption
 		}
-	def jettyRunTask(warPath: Path, defaultContextPath: String, classpath: PathFinder, classpathName: String) =
+	def jettyRunTask(warPath: => Path, defaultContextPath: => String, classpath: PathFinder, classpathName: String) =
 		interactiveTask { JettyRun(classpath.get, classpathName, warPath, defaultContextPath, scala.xml.NodeSeq.Empty, Nil, log) }
 	def jettyStopTask = interactiveTask { JettyRun.stop(); None }
 }
