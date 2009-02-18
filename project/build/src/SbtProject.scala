@@ -15,7 +15,8 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	def sbtTestResources = testResourcesPath / "sbt-test-resources"
 	
 	override def testAction = super.testAction dependsOn(scripted)
-	lazy val scripted =
+	lazy val scripted = scriptedTask dependsOn testCompile
+	def scriptedTask =
 		task
 		{
 			log.info("Running scripted tests...")
@@ -25,7 +26,9 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 		
 	val filter = new TestFilter
 	{
-		def accept(group: String, name: String) = true
-			//group == "package" && name == "manifest"
+		// properties currently excluded because ScriptedTests needs to be fixed to test the version of sbt
+		// being built, not the one doing the building.
+		def accept(group: String, name: String) =// true
+			group != "properties"// && name == "manifest"
 	}
 }
