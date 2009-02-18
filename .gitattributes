@@ -79,6 +79,12 @@ src/test/resources/sbt-test-resources/package/manifest/project/build.properties 
 src/test/resources/sbt-test-resources/package/manifest/project/build/src/ManifestTestProject.scala -text
 src/test/resources/sbt-test-resources/package/manifest/src/main/scala/jartest/Main.scala -text
 src/test/resources/sbt-test-resources/package/manifest/test -text
+src/test/resources/sbt-test-resources/properties/multi-project-a/project/build.properties -text
+src/test/resources/sbt-test-resources/properties/multi-project-a/project/build/src/TestProject.scala -text
+src/test/resources/sbt-test-resources/properties/multi-project-a/test -text
+src/test/resources/sbt-test-resources/properties/multi-project-b/project/build.properties -text
+src/test/resources/sbt-test-resources/properties/multi-project-b/project/build/src/TestProject.scala -text
+src/test/resources/sbt-test-resources/properties/multi-project-b/test -text
 src/test/resources/sbt-test-resources/source-dependencies/empty-a/changes/A.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/empty-a/changes/A2.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/empty-a/changes/B.scala -text
