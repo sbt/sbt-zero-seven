@@ -290,6 +290,7 @@ object Project
 			p.projectName() = setup.name
 			for(v <- setup.version)
 				p.projectVersion() = v
+			p.setEnvironmentModified(false)
 			for(errorMessage <- p.saveEnvironment())
 				log.error(errorMessage)
 			if(setup.initializeDirectories)

@@ -77,7 +77,7 @@ trait BasicEnvironment extends Environment
 	def environmentLabel = envBackingPath.asFile.getCanonicalPath
 	
 	private[this] var isModified = false
-	private[this] def setEnvironmentModified(modified: Boolean) { synchronized { isModified = modified } }
+	private[sbt] def setEnvironmentModified(modified: Boolean) { synchronized { isModified = modified } }
 	private[this] def isEnvironmentModified = synchronized { isModified }
 	
 	/** Implementation of 'Property' for user-defined properties. */
