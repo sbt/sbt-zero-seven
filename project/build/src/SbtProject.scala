@@ -3,6 +3,9 @@
  */
 import sbt._
 
+import java.net.URL
+import java.io.File
+
 class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 {
 	override def defaultJarBaseName = "sbt-" + version.toString
@@ -21,14 +24,37 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 		{
 			log.info("Running scripted tests...")
 			log.info("")
-			(new ScriptedTests(new Resources(sbtTestResources.asFile), filter)).scriptedTests(log)
+			// load ScriptedTests using a ClassLoader that loads from the project classpath so that the version
+			// of sbt being built is tested, not the one doing the building.
+			val loader = ScriptedLoader(runClasspath.get.map(_.asURL).toSeq.toArray)
+			val scriptedClass = Class.forName(ScriptedClassName, true, loader).asSubclass(classOf[Scripted])
+			val scriptedConstructor = scriptedClass.getConstructor(classOf[File], classOf[TestFilter])
+			val runner = scriptedConstructor.newInstance(sbtTestResources.asFile, filter)
+			runner.scriptedTests(log)
 		}
-		
+	val ScriptedClassName = "ScriptedTests"
+	
 	val filter = new TestFilter
 	{
-		// properties currently excluded because ScriptedTests needs to be fixed to test the version of sbt
-		// being built, not the one doing the building.
-		def accept(group: String, name: String) =// true
-			group != "properties"// && name == "manifest"
+		def accept(group: String, name: String) = true
+	}
+}
+package sbt { // need access to LoaderBase, which is private in package sbt
+	object ScriptedLoader
+	{
+		def apply(paths: Array[URL]): ClassLoader = new ScriptedLoader(paths)
+	}
+	private class ScriptedLoader(paths: Array[URL]) extends LoaderBase(paths, ScriptedLoader.getClass.getClassLoader)
+	{
+		def doLoadClass(className: String): Class[_] =
+		{
+			// Logger needs to be loaded from the version of sbt building the project because we need to pass
+			// a Logger from that loader into ScriptedTests.
+			// All other sbt classes should be loaded from the project classpath so that we test those classes with 'scripted'
+			if(className != "sbt.Logger" && className.startsWith("sbt."))
+				findClass(className)
+			else
+				selfLoadClass(className)
+		}
 	}
 }

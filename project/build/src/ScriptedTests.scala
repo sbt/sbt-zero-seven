@@ -8,13 +8,21 @@ trait TestFilter extends NotNull
 {
 	def accept(group: String, name: String): Boolean
 }
+trait Scripted extends NotNull
+{
+	def scriptedTests(log: Logger): Option[String]
+}
+
 object AcceptAllFilter extends TestFilter
 {
 	def accept(group: String, name: String): Boolean = true
 }
-class ScriptedTests(testResources: Resources, filter: TestFilter) extends NotNull
+class ScriptedTests(testResources: Resources, filter: TestFilter) extends Scripted
 {
+	def this(resourceBaseDirectory: File, filter: TestFilter) = this(new Resources(resourceBaseDirectory), filter)
 	def this(testResources: Resources) = this(testResources, AcceptAllFilter)
+	def this(resourceBaseDirectory: File) = this(new Resources(resourceBaseDirectory))
+	
 	val ScriptFilename = "test"
 	import testResources._
 	
@@ -137,6 +145,10 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 				case "absent" :: paths => absent(paths, project)
 				case "pause" :: Nil => readLine("Press enter to continue. "); println(); None
 				case "pause" :: args => wrongArguments("pause", args)
+				case "newer" :: a :: b :: Nil => newer(a, b, project)
+				case "newer" :: args => wrongArguments("newer", "Two paths", args)
+				case "sleep" :: time :: Nil => trap("Error while sleeping:") { Thread.sleep(time.toLong) }
+				case "sleep" :: args => wrongArguments("sleep", "Time in milliseconds", args)
 				case "exec" :: command :: args => execute(command, args, project)
 				case "exec" :: other => wrongArguments("exec", "Command and arguments", other)
 				case unknown :: arguments => scriptError("Unknown command " + unknown)
@@ -180,6 +192,7 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 	}
 	private def spacedString[T](l: Seq[T]) = l.mkString(" ")
 	private def wrap(result: Option[String]) = result.flatMap(scriptError)
+	private def trap(errorPrefix: String)(action: => Unit) = wrap( Control.trapUnit(errorPrefix, log) { action; None } )
 	
 	private def fromStrings(paths: List[String], project: Project) = paths.map(path => fromString(path, project))
 	private def fromString(path: String, project: Project) = Path.fromString(project.info.projectPath, path)
@@ -207,6 +220,13 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 				val mapped = fromStrings(paths, project).toArray
 				val last = mapped.length - 1
 				wrap(FileUtilities.copy(mapped.take(last), mapped(last), log).left.toOption)
+		}
+	private def newer(a: String, b: String, project: Project) =
+		trap("Error testing if '" + a + "' is newer than '" + b + "'")
+		{
+			val pathA = fromString(a, project)
+			val pathB = fromString(b, project)
+			pathA.exists && (!pathA.exists || pathA.lastModified > pathB.lastModified)
 		}
 	private def exists(paths: List[String], project: Project) =
 		fromStrings(paths, project).filter(!_.exists) match

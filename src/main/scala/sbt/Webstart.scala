@@ -71,16 +71,9 @@ trait WebstartScalaProject extends ScalaProject
 	protected def packPath(jar: Path) = modifyExtension(jar, ".pack", false)
 	protected def signOnly(jar: Path, signConfiguration: SignConfiguration) =
 	{
-		SignJar.checkSignedAndValid(jar, log) match
-		{
-			case Some(notValid) =>
-				log.debug("Signing " + jar + " (wasn't already signed because: " + notValid + ")")
-				SignJar.sign(jar, signConfiguration.alias, signConfiguration.options, log) orElse
-					SignJar.checkSignedAndValid(jar, log).map(err => "Signed jar failed verification: " + err)
-			case None =>
-				log.debug("Jar " + jar + " already signed.")
-				None
-		}
+		// TODO: only run if not signed
+		SignJar.sign(jar, signConfiguration.alias, signConfiguration.options, log) orElse
+			SignJar.verify(jar, signConfiguration.options, log).map(err => "Signed jar failed verification: " + err)
 	}
 	protected def gzipJar(jar: Path) =
 	{

@@ -4,6 +4,7 @@
 package sbt
 
 import java.io.File
+import java.net.{URL, URLClassLoader}
 import scala.xml.NodeSeq
 
 object JettyRun extends ExitHook
@@ -22,16 +23,25 @@ object JettyRun extends ExitHook
 			running = None
 		}
 	}
-	def apply(classpath: Iterable[Path], classpathName: String, war: Path, defaultContextPath: String, jettyConfigurationXML: NodeSeq, jettyConfigurationFiles: Seq[File], log: Logger) =
+	def apply(classpath: Iterable[Path], classpathName: String, war: Path, defaultContextPath: String, jettyConfigurationXML: NodeSeq,
+		jettyConfigurationFiles: Seq[File], log: Logger): Option[String] =
+			run(classpathName, JettyRunConfiguration(war, defaultContextPath, jettyConfigurationXML,
+				jettyConfigurationFiles, Nil, 0, toURLs(classpath)), log)
+	def apply(classpath: Iterable[Path], classpathName: String, war: Path, defaultContextPath: String, scanDirectories: Seq[File],
+		scanPeriod: Int, log: Logger): Option[String] =
+			run(classpathName, JettyRunConfiguration(war, defaultContextPath, NodeSeq.Empty, Nil, scanDirectories, scanPeriod, toURLs(classpath)), log)
+	private def toURLs(paths: Iterable[Path]) = paths.map(_.asURL).toSeq
+	private def run(classpathName: String, configuration: JettyRunConfiguration, log: Logger): Option[String] =
 		synchronized
 		{
+			import configuration._
 			def runJetty() =
 			{
-				val baseLoader = getClass.getClassLoader
-				val loader: ClassLoader = new IntermediateLoader(classpath.map(_.asURL).toSeq.toArray, baseLoader)
+				val baseLoader = this.getClass.getClassLoader
+				val loader: ClassLoader = new FilteredLoader(classpathURLs.toArray, baseLoader, "org.mortbay." :: "javax.servlet." :: Nil)
 				val lazyLoader = new LazyFrameworkLoader(implClassName, Array(FileUtilities.sbtJar.toURI.toURL), loader, baseLoader)
 				val runner = ModuleUtilities.getObject(implClassName, lazyLoader).asInstanceOf[JettyRun]
-				runner(war, defaultContextPath, jettyConfigurationXML, jettyConfigurationFiles, log)
+				runner(configuration, log)
 			}
 			
 			if(running.isDefined)
@@ -65,9 +75,10 @@ private trait Stoppable
 }
 private trait JettyRun
 {
-	def apply(war: Path, defaultContextPath: String, jettyConfigurationXML: NodeSeq, jettyConfigurationFiles: Seq[File],
-		log: Logger): Stoppable
+	def apply(configuration: JettyRunConfiguration, log: Logger): Stoppable
 }
+private case class JettyRunConfiguration(war: Path, defaultContextPath: String, jettyConfigurationXML: NodeSeq, jettyConfigurationFiles: Seq[File],
+		scanDirectories: Seq[File], scanInterval: Int, classpathURLs: Seq[URL]) extends NotNull
 
 /* This class starts Jetty.
 * NOTE: DO NOT actively use this class.  You will see NoClassDefFoundErrors if you fail
@@ -77,59 +88,121 @@ private trait JettyRun
 */
 private object LazyJettyRun extends JettyRun
 {
-	import org.mortbay.jetty.Server
+	import org.mortbay.jetty.{Handler, Server}
 	import org.mortbay.jetty.nio.SelectChannelConnector
 	import org.mortbay.jetty.webapp.WebAppContext
 	import org.mortbay.log.Log
+	import org.mortbay.util.Scanner
 	import org.mortbay.xml.XmlConfiguration
 	
 	import java.lang.ref.{Reference, WeakReference}
 	
-	def apply(war: Path, defaultContextPath: String, jettyConfigurationXML: NodeSeq, jettyConfigurationFiles: Seq[File],
-		log: Logger): Stoppable =
+	def apply(configuration: JettyRunConfiguration, log: Logger): Stoppable =
 	{
+		import configuration._
 		val oldLog = Log.getLog
 		Log.setLog(new JettyLogger(log))
 		val server = new Server
+		val useDefaults = jettyConfigurationXML.isEmpty && jettyConfigurationFiles.isEmpty
 		
-		if(jettyConfigurationXML.isEmpty && jettyConfigurationFiles.isEmpty)
-			configureDefaults(server, war, defaultContextPath)
-		else
+		val listener =
+			if(useDefaults)
+			{
+				configureDefaultConnector(server)
+				def createLoader = new URLClassLoader(classpathURLs.toArray, this.getClass.getClassLoader)
+				val webapp = new WebAppContext(war.asFile.getCanonicalPath, defaultContextPath)
+				webapp.setClassLoader(createLoader)
+				server.setHandler(webapp)
+				
+				Some(new Scanner.BulkListener {
+					def filesChanged(files: java.util.List[_]) {
+						reload(server, webapp.setClassLoader(createLoader), log)
+					}
+				})
+			}
+			else
+			{
+				for(x <- jettyConfigurationXML)
+					(new XmlConfiguration(x.toString)).configure(server)
+				for(file <- jettyConfigurationFiles)
+					(new XmlConfiguration(file.toURI.toURL)).configure(server)
+				None
+			}
+		
+		def configureScanner() =
 		{
-			for(x <- jettyConfigurationXML)
-				(new XmlConfiguration(x.toString)).configure(server)
-			for(file <- jettyConfigurationFiles)
-				(new XmlConfiguration(file.toURI.toURL)).configure(server)
+			if(listener.isEmpty || scanDirectories.isEmpty)
+				None
+			else
+			{
+				log.debug("Scanning for changes to: " + scanDirectories.mkString(", "))
+				val scanner = new Scanner
+				import scala.collection.jcl.Conversions._
+				val list = new java.util.ArrayList[File]
+				scanDirectories.foreach(x => list.add(x))
+				scanner.setScanDirs(list)
+				scanner.setRecursive(true)
+				scanner.setScanInterval(scanInterval)
+				scanner.setReportExistingFilesOnStartup(false)
+				scanner.addListener(listener.get)
+				scanner.start()
+				Some(new WeakReference(scanner))
+			}
 		}
 		
 		try
 		{
 			server.start()
-			new StopServer(new WeakReference(server), oldLog)
+			new StopServer(new WeakReference(server), configureScanner(), oldLog)
 		}
 		catch { case e => server.stop(); throw e }
 	}
-	private def configureDefaults(server: Server, war: Path, defaultContextPath: String)
+	private def configureDefaultConnector(server: Server)
 	{
 		val defaultConnector = new SelectChannelConnector
 		defaultConnector.setPort(8080)
 		defaultConnector.setMaxIdleTime(30000)
 		server.addConnector(defaultConnector)
-		
-		val webapp = new WebAppContext(war.asFile.getCanonicalPath, defaultContextPath)
-		webapp.setClassLoader(getClass.getClassLoader)
-		server.setHandler(webapp)
 	}
-	private class StopServer(serverReference: Reference[Server], oldLog: org.mortbay.log.Logger) extends Stoppable
+	private class StopServer(serverReference: Reference[Server], scannerReferenceOpt: Option[Reference[Scanner]], oldLog: org.mortbay.log.Logger) extends Stoppable
 	{
 		def stop()
 		{
 			val server = serverReference.get
 			if(server != null)
 				server.stop()
+			for(scannerReference <- scannerReferenceOpt)
+			{
+				val scanner = scannerReference.get
+				if(scanner != null)
+					scanner.stop()
+			}
 			Log.setLog(oldLog)
 		}
 	}
+	private def reload(server: Server, reconfigure: => Unit, log: Logger)
+	{
+		JettyRun.synchronized
+		{
+			log.info("Reloading web application...")
+			val handlers = wrapNull(server.getHandlers, server.getHandler)
+			log.debug("Stopping handlers: " + handlers.mkString(", "))
+			handlers.foreach(_.stop)
+			log.debug("Reconfiguring...")
+			reconfigure
+			log.debug("Restarting handlers: " + handlers.mkString(", "))
+			handlers.foreach(_.start)
+			log.info("Reload complete.")
+		}
+	}
+	private def wrapNull(a: Array[Handler], b: Handler) =
+		(a, b) match
+		{
+			case (null, null) => Nil
+			case (null, notB) => notB :: Nil
+			case (notA, null) => notA.toList
+			case (notA, notB) => notB :: notA.toList
+		}
 	private class JettyLogger(delegate: Logger) extends org.mortbay.log.Logger
 	{
 		def isDebugEnabled = delegate.atLevel(Level.Debug)

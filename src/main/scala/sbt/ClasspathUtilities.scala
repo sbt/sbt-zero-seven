@@ -92,6 +92,29 @@ private class IntermediateLoader(urls: Array[URL], parent: ClassLoader) extends 
 			selfLoadClass(className)
 	}
 }
+private class FilteredLoader(urls: Array[URL], parent: ClassLoader, filter: ClassFilter) extends URLClassLoader(urls, parent) with NotNull
+{
+	def this(urls: Array[URL], parent: ClassLoader, includePackages: Iterable[String]) =
+		this(urls, parent, new ClassFilter { def include(className: String) = includePackages.exists(className.startsWith) })
+	require(parent != null) // included because a null parent is legitimate in Java
+	@throws(classOf[ClassNotFoundException])
+	override final def loadClass(className: String, resolve: Boolean): Class[_] =
+	{
+		if(filter.include(className))
+			super.loadClass(className, resolve)
+		else
+		{
+			val loaded = parent.loadClass(className)
+			if(resolve)
+				resolveClass(loaded)
+			loaded
+		}
+	}
+}
+private trait ClassFilter
+{
+	def include(className: String): Boolean
+}
 private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], parent: ClassLoader, grandparent: ClassLoader)
 	extends LoaderBase(urls, parent) with NotNull
 {

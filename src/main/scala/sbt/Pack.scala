@@ -46,9 +46,9 @@ object Pack
 		pack(jarPath, out, log) orElse
 		unpack(out, jarPath, log) orElse
 		SignJar.sign(jarPath, alias, options, log) orElse
-		Pack.pack(jarPath, out, log) orElse
-		Pack.unpack(out, jarPath, log) orElse
-		SignJar.checkSignedAndValid(jarPath, log)
+		pack(jarPath, out, log) orElse
+		unpack(out, jarPath, log) orElse
+		SignJar.verify(jarPath, options, log)
 }
 
 import java.net.URL
@@ -72,7 +72,7 @@ object SignJar
 	
 	private def VerifyOption = "-verify"
 	
-	/** Uses jarsigner to sign the given jar.  Seems to not work properly all the time.  */
+	/** Uses jarsigner to sign the given jar.  */
 	def sign(jarPath: Path, alias: String, options: Seq[SignOption], log: Logger): Option[String] =
 	{
 		require(!alias.trim.isEmpty, "Alias cannot be empty")
@@ -99,48 +99,6 @@ object SignJar
 		}
 		else
 			Some("Error verifying jar (exit code was " + exitCode + ".)")
-	}
-	
-	private def unsignedAllowed(entry: JarEntry) =
-	{
-		entry.isDirectory ||
-		{
-			val name = entry.getName
-			name == "META-INF/MANIFEST.MF" || name == "META-INF/" ||
-				(name.startsWith("META-INF/") && ( name.endsWith(".DSA") || name.endsWith(".SF") ) )
-		}
-	}
-	/** Checks that the given jar is signed and valid.  It doesn't actually work properly. */
-	def checkSignedAndValid(jarPath: Path, log: Logger): Option[String] =
-	{
-		def verifyIt(f: JarFile) =
-		{
-			val entries = f.entries
-			val buffer = new Array[Byte](8192)
-			def verifyNext: Option[String] =
-			{
-				if(entries.hasMoreElements)
-				{
-					val entry = entries.nextElement.asInstanceOf[JarEntry]
-					val i = f.getInputStream(entry)
-					try {  while(i.read(buffer) >= 0) {} }
-					finally { i.close() }
-					// this is not an accurate gauge of whether an entry has been signed:
-					/*if(entry.getCertificates != null || unsignedAllowed(entry))
-						verifyNext
-					else
-						Some("Jar " + jarPath + " is not signed: entry '" + entry.getName + "' not signed.")*/
-					verifyNext
-				}
-				else
-					None
-			}
-			if(f.getManifest == null)
-				Some("Jar " + jarPath + " is not signed: no manifest present.")
-			else
-				verifyNext
-		}
-		ioOption(jarPath.asFile, openJarFile(true), verifyIt, "verifying jar", log)
 	}
 	
 	val CommandName = "jarsigner"

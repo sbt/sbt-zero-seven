@@ -84,7 +84,7 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 		windowTitle(name + " " + version + " API") ::
 		Nil
 	/** The options provided to the 'test' action.  You can specify tests to exclude here.*/
-	def testOptions: Seq[TestOption] = TestResources(testResourcesPath) :: Nil
+	def testOptions: Seq[TestOption] = TestResources(testResources) :: Nil
 	/** The options provided to the clean action.  You can add files to be removed here.*/
 	def cleanOptions: Seq[CleanOption] =
 		ClearAnalysis(mainCompileConditional.analysis) ::
@@ -245,15 +245,24 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	lazy val prepareWebapp = prepareWebappAction
 	protected def prepareWebappAction =
 		prepareWebappTask(descendents(webappPath ##, "*") +++ extraWebappFiles, temporaryWarPath, runClasspath, scalaJars) dependsOn(compile)
+	/** Additional files to include in the web application. */
 	protected def extraWebappFiles: PathFinder = Path.emptyPathFinder
 	
 	lazy val jettyRun = jettyRunAction
 	protected def jettyRunAction =
-		jettyRunTask(temporaryWarPath, jettyContextPath, testClasspath, "test") dependsOn(prepareWebapp) describedAs(JettyRunDescription)
+		jettyRunTask(temporaryWarPath, jettyContextPath, testClasspath, "test", scanDirectories.map(_.asFile), scanInterval) dependsOn(prepareWebapp) describedAs(JettyRunDescription)
 		
+	/** The directories that should be watched to determine if the web application needs to be reloaded..*/
+	def scanDirectories: Seq[Path] = temporaryWarPath :: Nil
+	/** The time in seconds between scans that check whether the web application should be reloaded.*/
+	def scanInterval: Int = 3
+
+	lazy val jettyRestart = jettyStop && jettyRun
 	lazy val jettyStop = jettyStopAction
 	protected def jettyStopAction = jettyStopTask describedAs(JettyStopDescription)
 	
+	/** The clean action for a web project is modified so that it first stops jetty if it is running,
+	* since the webapp directory will be removed by the clean.*/
 	override def cleanAction = super.cleanAction dependsOn jettyStop
 	
 	override protected def packageAction = packageTask(descendents(temporaryWarPath ##, "*"), outputPath,
