@@ -29,7 +29,7 @@ trait WebstartScalaProject extends ScalaProject
 {
 	private def writeXML(xmlString: String, outputPath: Path, log: Logger): Option[String] =
 		FileUtilities.write(outputPath.asFile, xmlString, log)
-	protected def writeXML(xml: Elem, outputPath: Path, log: Logger): Option[String] =
+	private def writeXML(xml: Elem, outputPath: Path, log: Logger): Option[String] =
 	{
 		val xmlString = scala.xml.Utility.toXML(xml, false)
 		if(!outputPath.exists)
@@ -56,7 +56,7 @@ trait WebstartScalaProject extends ScalaProject
 			result.fold(err => Some(err), x => x)
 		}
 	}
-	protected def modifyExtension(jar: Path, newExtension: String, append: Boolean) =
+	private def modifyExtension(jar: Path, newExtension: String, append: Boolean) =
 		jar match
 		{
 			case rp: RelativePath =>
@@ -67,29 +67,69 @@ trait WebstartScalaProject extends ScalaProject
 					parentPath / ( component.substring(0, component.length - ".jar".length) + newExtension )
 			case x => x
 		}
-	protected def gzipJarPath(jar: Path) = modifyExtension(jar, ".gz", true)
-	protected def packPath(jar: Path) = modifyExtension(jar, ".pack", false)
-	protected def signOnly(jar: Path, signConfiguration: SignConfiguration) =
+	private def gzipJarPath(jar: Path) = modifyExtension(jar, ".gz", true)
+	private def packPath(jar: Path) = modifyExtension(jar, ".pack", false)
+	private def signOnly(jar: Path, signConfiguration: SignConfiguration, targetDirectory: Path) =
 	{
-		// TODO: only run if not signed
-		SignJar.sign(jar, signConfiguration.alias, signConfiguration.options, log) orElse
-			SignJar.verify(jar, signConfiguration.options, log).map(err => "Signed jar failed verification: " + err)
+		import SignJar._
+		val targetJar = targetDirectory / jar.asFile.getName
+		FileTasks.runOption("sign", targetJar from jar, log) {
+			log.debug("Signing " + jar)
+			(sign(jar, signConfiguration.alias, signedJar(targetJar.asFile.getAbsolutePath) :: signConfiguration.options.toList, log) orElse
+				verify(jar, signConfiguration.options, log).map(err => "Signed jar failed verification: " + err))
+		}.toLeft(targetJar :: Nil)
 	}
-	protected def gzipJar(jar: Path) =
+	private def gzipJar(jar: Path) =
 	{
 		val gzipJar = gzipJarPath(jar)
-		FileTasks.runOption("gzip", gzipJar from jar, log)( FileUtilities.gzip(jar, gzipJar, log) )
+		FileTasks.runOption("gzip", gzipJar from jar, log)
+		{
+			log.debug("Gzipping " + jar)
+			FileUtilities.gzip(jar, gzipJar, log)
+		}.toLeft(gzipJar :: Nil)
 	}
-	protected def signAndPack200(jar: Path, signConfiguration: SignConfiguration) =
+	private def signAndPack200(jar: Path, signConfiguration: SignConfiguration, targetDirectory: Path) =
 	{
-		val packedJar = packPath(jar)
+		val signedJar = targetDirectory / jar.asFile.getName
+		val packedJar = packPath(signedJar)
 		import signConfiguration._
-		FileTasks.runOption("sign and pack200", packedJar from jar, log)( Pack.signAndPack(jar, packedJar, alias, options, log) )
+		
+		FileTasks.runOption("sign and pack200", List(packedJar, signedJar) from jar, log) {
+			log.debug("Applying pack200 compression and signing " + jar)
+			signAndPack(jar, signedJar, packedJar, alias, options, log)
+		}.toLeft(packedJar :: signedJar :: Nil)
 	}
-	protected def pack200Only(jar: Path) =
+	private def signAndPack(jarPath: Path, signedPath: Path, out: Path, alias: String, options: Seq[SignJar.SignOption], log: Logger): Option[String] =
 	{
-		val packedJar = packPath(jar)
-		FileTasks.runOption("pack200", packedJar from jar, log)( Pack.pack(jar, packedJar, log) )
+		import Pack._
+		import SignJar._
+		pack(jarPath, out, log) orElse
+		unpack(out, signedPath, log) orElse
+		sign(signedPath, alias, options, log) orElse
+		pack(signedPath, out, log) orElse
+		unpack(out, signedPath, log) orElse
+		verify(signedPath, options, log)
+	}
+	private def pack200Only(jar: Path, targetDirectory: Path) =
+	{
+		val targetJar = targetDirectory / jar.asFile.getName
+		val packedJar = packPath(targetJar)
+		val packResult =
+			FileTasks.runOption("pack200", packedJar from jar, log)
+			{
+				log.debug("Applying pack200 compression to " + jar)
+				Pack.pack(jar, packedJar, log)
+			}
+		packResult match
+		{
+			case Some(err) => Left(err)
+			case None => copyJar(jar, targetDirectory).right.map(jars => packedJar :: jars)
+		}
+	}
+	private def copyJar(jar: Path, targetDirectory: Path) =
+	{
+		val targetJar = targetDirectory / jar.asFile.getName
+		FileTasks.runOption("copy jar", targetJar from jar, log)( FileUtilities.copyFile(jar, targetJar, log) ).toLeft(targetJar :: Nil)
 	}
 	private def isInDirectory(directory: Path, check: Path) = Path.relativize(directory, check).isDefined && directory != check
 	def webstartTask(options: WebstartOptions) =
@@ -104,36 +144,30 @@ trait WebstartScalaProject extends ScalaProject
 				require(!isInDirectory(webstartOutputDirectory, wz),
 					"Webstart output zip location (" + wz + " cannot be in webstart output directory (" + webstartOutputDirectory + ").")
 		
-			val outputJar = webstartOutputDirectory / webstartMainJar.asFile.getName
-	
 			def relativize(jar: Path) = Path.relativize(webstartOutputDirectory ##, jar) getOrElse
 				error("Jar (" + jar + ") was not in webstart output directory (" + webstartOutputDirectory + ").")
-			def signAndPack(jars: List[Path]): Either[String, List[Path]] =
+			def signAndPack(jars: List[Path], targetDirectory: Path): Either[String, List[Path]] =
 			{
-				log.debug(jars.mkString("Processing jars ", " ", ""))
 				lazyFold(jars, Nil: List[Path])
 				{ (allJars, jar) =>
-					def jarAndPacked(o: Option[String]) = o.toLeft(jar :: packPath(jar) :: Nil)
+					log.debug("Processing jar " + jar)
 					val signPackResult =
 						webstartSignConfiguration match
 						{
 							case Some(config) =>
 								if(webstartPack200)
-									jarAndPacked(signAndPack200(jar, config))
+									signAndPack200(jar, config, targetDirectory)
 								else
-									signOnly(jar, config).toLeft(jar :: Nil)
+									signOnly(jar, config, targetDirectory)
 							case None =>
 								if(webstartPack200)
-									jarAndPacked(pack200Only(jar))
+									pack200Only(jar, targetDirectory)
 								else
-									Right(jar :: Nil)
+									copyJar(jar, targetDirectory)
 						}
 					signPackResult.right flatMap { addJars =>
 						if(webstartGzip)
-						{
-							val result = Control.lazyFold(addJars) { jar => gzipJar(jar) }
-							result.toLeft(addJars.map(gzipJarPath).toList ::: addJars ::: allJars)
-						}
+							Control.lazyFold(addJars, addJars ::: allJars) { (accumulate, jar) => gzipJar(jar).right.map(_ ::: accumulate) }
 						else
 							Right(addJars ::: allJars)
 					}
@@ -141,14 +175,18 @@ trait WebstartScalaProject extends ScalaProject
 			}
 		
 			import FileUtilities._
-			val jars = (webstartLibraries.get.map(_.asFile) ++ webstartExtraLibraries).filter(ClasspathUtilities.isArchive)
+			import ClasspathUtilities.isArchive
 			
-			FileTasks.runOption("copy main jar", outputJar from webstartMainJar, log)( copyFile(webstartMainJar, outputJar, log) ) orElse
-			thread(copyFilesFlat(jars, webstartLibDirectory, log)) { copiedJars =>
-				thread(signAndPack(outputJar :: copiedJars.toList)) { allJars =>
-					writeXML(jnlpXML(jarResources(relativize(outputJar), copiedJars.map(relativize))), jnlpFile, log) orElse
+			def fileToPath(file: File): Path = new ProjectDirectory(file) // hack, don't do this normally
+			val jars = (webstartLibraries.get ++ webstartExtraLibraries.map(fileToPath)).filter(isArchive)
+			def process(jars: Iterable[Path]) = for(jar <- jars if jar.asFile.getName.endsWith(".jar")) yield relativize(jar)
+			
+			thread(signAndPack(webstartMainJar :: Nil, webstartOutputDirectory)) { mainJars =>
+				thread(signAndPack(jars.toList, webstartLibDirectory)) { copiedJars =>
+					val allJars = mainJars ::: copiedJars
+					writeXML(jnlpXML(jarResources(process(mainJars), process(copiedJars))), jnlpFile, log) orElse
 					thread(copy(webstartResources.get, webstartOutputDirectory, log)) { copiedResources =>
-						val keep = jnlpFile +++ outputJar +++ Path.lazyPathFinder(allJars ++ copiedResources) +++
+						val keep = jnlpFile +++ Path.lazyPathFinder(allJars ++ copiedResources) +++
 							webstartOutputDirectory +++ webstartLibDirectory
 						prune(webstartOutputDirectory, keep.get, log) orElse
 						webstartZip.flatMap( zipPath => zip(List(webstartOutputDirectory ##), zipPath, true, log) )
@@ -168,8 +206,8 @@ trait WebstartScalaProject extends ScalaProject
 			val file = jar.asFile
 			WebstartJarResource(file.getName, jar.relativePath, isMain)
 		}
-		private def jarResources(mainJar: Path, libraries: Iterable[Path]): Seq[WebstartJarResource] =
-			jarResource(true)(mainJar) :: libraries.map(jarResource(false)).toList
+		private def jarResources(mainJars: Iterable[Path], libraries: Iterable[Path]): Seq[WebstartJarResource] =
+			mainJars.map(jarResource(true)).toList ::: libraries.map(jarResource(false)).toList
 }
 abstract class DefaultWebstartProject(val info: ProjectInfo) extends BasicWebstartProject
 abstract class BasicWebstartProject extends BasicScalaProject with WebstartScalaProject with WebstartPaths

@@ -40,15 +40,6 @@ object Pack
 			DEFLATE_HINT -> FALSE,
 			UNKNOWN_ATTRIBUTE -> PASS
 		)
-		
-	/** Uses SignJar and so the signing part is not quite working yet. */
-	def signAndPack(jarPath: Path, out: Path, alias: String, options: Seq[SignJar.SignOption], log: Logger): Option[String] =
-		pack(jarPath, out, log) orElse
-		unpack(out, jarPath, log) orElse
-		SignJar.sign(jarPath, alias, options, log) orElse
-		pack(jarPath, out, log) orElse
-		unpack(out, jarPath, log) orElse
-		SignJar.verify(jarPath, options, log)
 }
 
 import java.net.URL
