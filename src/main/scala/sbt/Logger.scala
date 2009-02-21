@@ -3,7 +3,7 @@
  */
 package sbt
 
-trait Logger extends NotNull
+abstract class Logger extends NotNull
 {
 	def getLevel: Level.Value
 	def setLevel(newLevel: Level.Value)
@@ -23,7 +23,7 @@ trait Logger extends NotNull
 }
 
 /** Implements the level-setting methods of Logger.*/
-trait BasicLogger extends Logger
+abstract class BasicLogger extends Logger
 {
 	private var traceEnabledVar = false
 	private var level: Level.Value = Level.Info
@@ -50,12 +50,6 @@ final class BufferedLogger(delegate: Logger) extends Logger
 	private val buffer = new scala.collection.mutable.ListBuffer[LogEvent]
 	private var recording = false
 	
-	private def record(event: => LogEvent)
-	{
-		if(recording)
-			buffer += event
-	}
-	
 	/** Enables buffering. */
 	def startRecording()
 	{
@@ -71,11 +65,11 @@ final class BufferedLogger(delegate: Logger) extends Logger
 	{
 		event match
 		{
-			case Success(msg) => delegate.success(msg)
-			case Log(level, msg) => delegate.log(level, msg)
-			case Trace(t) => delegate.trace(t)
-			case SetLevel(level) => delegate.setLevel(level)
-			case SetTrace(enabled) => delegate.enableTrace(enabled)
+			case s: Success => delegate.success(s.msg)
+			case l: Log => delegate.log(l.level, l.msg)
+			case t: Trace => delegate.trace(t.exception)
+			case setL: SetLevel => delegate.setLevel(setL.newLevel)
+			case setT: SetTrace => delegate.enableTrace(setT.enabled)
 		}
 	}
 	/** Clears all buffered messages and disables buffering. */
@@ -86,22 +80,22 @@ final class BufferedLogger(delegate: Logger) extends Logger
 	}
 	// these wrap log messages so that they can be replayed later
 	private sealed trait LogEvent extends NotNull
-	private case class Success(msg: String) extends LogEvent
-	private case class Log(level: Level.Value, msg: String) extends LogEvent
-	private case class Trace(t: Throwable) extends LogEvent
-	private case class SetLevel(newLevel: Level.Value) extends LogEvent
-	private case class SetTrace(enabled: Boolean) extends LogEvent
+	private class Success(val msg: String) extends LogEvent
+	private class Log(val level: Level.Value, val msg: String) extends LogEvent
+	private class Trace(val exception: Throwable) extends LogEvent
+	private class SetLevel(val newLevel: Level.Value) extends LogEvent
+	private class SetTrace(val enabled: Boolean) extends LogEvent
 	
 	def setLevel(newLevel: Level.Value)
 	{
-		record(SetLevel(newLevel))
+		if(recording) buffer += new SetLevel(newLevel)
 		delegate.setLevel(newLevel)
 	}
 	def getLevel = delegate.getLevel
 	def traceEnabled = delegate.traceEnabled
 	def enableTrace(flag: Boolean)
 	{
-		record(SetTrace(flag))
+		if(recording) buffer += new SetTrace(flag)
 		delegate.enableTrace(flag)
 	}
 	
@@ -109,10 +103,8 @@ final class BufferedLogger(delegate: Logger) extends Logger
 	{
 		if(traceEnabled)
 		{
-			if(recording)
-				record(Trace(t))
-			else
-				delegate.trace(t)
+			if(recording) buffer += new Trace(t)
+			else delegate.trace(t)
 		}
 	}
 	override def success(message: => String): Unit =
@@ -120,7 +112,7 @@ final class BufferedLogger(delegate: Logger) extends Logger
 		if(atLevel(Level.Info))
 		{
 			if(recording)
-				record(Success(message))
+				buffer += new Success(message)
 			else
 				delegate.success(message)
 		}
@@ -130,7 +122,7 @@ final class BufferedLogger(delegate: Logger) extends Logger
 		if(atLevel(level))
 		{
 			if(recording)
-				record(Log(level, message))
+				buffer += new Log(level, message)
 			else
 				delegate.log(level, message)
 		}
@@ -215,7 +207,7 @@ object Level extends Enumeration with NotNull
 }
 
 /** Delegates all calls to the Logger provided by 'delegate'.*/
-trait DelegatingLogger extends Logger
+abstract class DelegatingLogger extends Logger
 {
 	protected def delegate: Logger
 	
