@@ -12,8 +12,7 @@ import BasicScalaProject._
 
 /** This class defines concrete instances of actions from ScalaProject using overridable paths,
 * options, and configuration. */
-abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathProject with ManagedProject
-	with BasicProjectPaths with ReflectiveManagedProject
+abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathProject with BasicManagedProject with BasicProjectPaths
 {
 	/** The class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
@@ -24,11 +23,17 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 	val testCompileConditional = new CompileConditional(testCompileConfiguration)
 
 	/** Declares all sources to be packaged by the package-src action.*/
-	def allSources =
+	def packageSourcePaths = descendents((mainScalaSourcePath +++ mainResourcesPath) ##, "*")
+	/** Declares all sources to be packaged by the package-test-src action.*/
+	def packageTestSourcePaths = descendents((testScalaSourcePath +++ testResourcesPath) ##, "*")
+	/** Declares all paths to be packaged by the package-project action.*/
+	def packageProjectPaths =
 	{
-		val sourceDirs = (mainScalaSourcePath +++ mainResourcesPath +++ testScalaSourcePath +++ testResourcesPath)
-		descendents(sourceDirs, "*")
+		val children = (info.projectPath ##) * (AllPassFilter -- defaultExcludes) --- packageProjectRootExcludes
+		descendents(children, "*")
 	}
+	protected def packageProjectRootExcludes: PathFinder = outputPath +++ managedDependencyPath
+	
 	/** A PathFinder that selects all main sources.  It excludes paths that match 'defaultExcludes'.*/
 	def mainSources = descendents(mainScalaSourcePath, "*.scala")
 	/** A PathFinder that selects all test sources.  It excludes paths that match 'defaultExcludes'.*/
@@ -45,30 +50,6 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 	
 	import Project._
 	
-	/** The dependency manager that represents inline declarations.  The default manager packages the information
-	* from 'ivyXML', 'projectID', 'repositories', and 'libraryDependencies' and does not typically need to be
-	* be overridden. */
-	def manager = SimpleManager(ivyXML, true, projectID, repositories, libraryDependencies.toList: _*)
-	
-	/** The pattern for Ivy to use when retrieving dependencies into the local project.  Classpath management
-	* depends on the first directory being [conf] and the extension being [ext].*/
-	def outputPattern = "[conf]/[artifact](-[revision]).[ext]"
-	/** Override this to specify the publications, configurations, and/or dependencies sections of an Ivy file.
-	* See http://code.google.com/p/simple-build-tool/wiki/LibraryManagement for details.*/
-	def ivyXML: scala.xml.NodeSeq = scala.xml.NodeSeq.Empty
-	/** The base options passed to the 'update' action. */
-	def baseUpdateOptions = Validate :: Synchronize :: QuietUpdate :: AddScalaToolsReleases :: Nil
-	/** The options provided to the 'update' action.  This is by default the options in 'baseUpdateOptions'.
-	* If 'manager' has any dependencies, resolvers, or inline Ivy XML (which by default happens when inline
-	* dependency management is used), it is passed as the dependency manager.*/
-	def updateOptions: Seq[ManagedOption] =
-	{
-		val m = manager
-		if(m.dependencies.isEmpty && m.resolvers.isEmpty && ivyXML.isEmpty)
-			baseUpdateOptions
-		else
-			LibraryManager(m) :: baseUpdateOptions
-	}
 	/** The options provided to the 'compile' action.*/
 	def compileOptions: Seq[CompileOption] = Deprecation :: Nil
 	/** The options provided to the 'test-compile' action, defaulting to those for the 'compile' action.*/
@@ -189,12 +170,16 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
 	protected def docTestAction = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions).dependsOn(testCompile) describedAs TestDocDescription
 	protected def testAction = testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
+	
 	protected def packageAction = packageTask(mainClasses +++ mainResources, outputPath, defaultJarName, packageOptions).dependsOn(compile) describedAs PackageDescription
 	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription
 	protected def packageDocsAction = packageTask(mainDocPath ##, outputPath, defaultJarBaseName + "-docs.jar", Recursive).dependsOn(doc) describedAs DocPackageDescription
-	protected def packageSrcAction = packageTask(allSources, outputPath, defaultJarBaseName + "-src.jar") describedAs SourcePackageDescription
+	protected def packageSrcAction = packageTask(packageSourcePaths, outputPath, defaultJarBaseName + "-src.jar") describedAs SourcePackageDescription
+	protected def packageTestSrcAction = packageTask(packageTestSourcePaths, outputPath, defaultJarBaseName + "-test-src.jar") describedAs TestSourcePackageDescription
+	protected def packageProjectAction = zipTask(packageProjectPaths, outputPath, defaultJarBaseName + "-project.zip") describedAs ProjectPackageDescription
+	
 	protected def docAllAction = (doc && docTest) describedAs DocAllDescription
-	protected def packageAllAction = (`package` && packageTest && packageSrc && packageDocs) describedAs PackageAllDescription
+	protected def packageAllAction = (`package` && packageTest && packageSrc && packageTestSrc && packageDocs) describedAs PackageAllDescription
 	protected def graphAction = graphTask(graphPath, mainCompileConditional.analysis).dependsOn(compile)
 	protected def updateAction = updateTask(outputPattern, managedDependencyPath, updateOptions) describedAs UpdateDescription
 	protected def cleanLibAction = cleanLibTask(managedDependencyPath) describedAs CleanLibDescription
@@ -215,6 +200,8 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 	lazy val packageTest = packageTestAction
 	lazy val packageDocs = packageDocsAction
 	lazy val packageSrc = packageSrcAction
+	lazy val packageTestSrc = packageTestSrcAction
+	lazy val packageProject = packageProjectAction
 	lazy val docAll = docAllAction
 	lazy val packageAll = packageAllAction
 	lazy val graph = graphAction
@@ -294,11 +281,15 @@ object BasicScalaProject
 	val TestPackageDescription =
 		"Creates a jar file containing test classes and resources."
 	val DocPackageDescription =
-		"Creates a jar file containing generated API documentation."
+		"Creates a zip file containing generated API documentation."
 	val SourcePackageDescription =
-		"Creates a jar file containing all source files."
+		"Creates a jar file containing all main source files and resources."
+	val TestSourcePackageDescription =
+		"Creates a jar file containing all test source files and resources."
+	val ProjectPackageDescription =
+		"Creates a zip file containing the entire project, excluding generated files."
 	val PackageAllDescription =
-		"Executes all package tasks."
+		"Executes all package tasks except package-project."
 	val DocAllDescription =
 		"Generates both main and test documentation."
 	val UpdateDescription =

@@ -95,10 +95,10 @@ trait ManagedProject extends ClasspathProject
 				case _ => log.warn("Ignored unknown managed option " + option)
 			}
 		}
-		val ivyPaths = IvyPaths(info.projectPath, managedDependencyPath, cacheDirectory)
-		val ivyFlags = IvyFlags(validate, addScalaTools, errorIfNoConfiguration)
-		val ivyConfiguration = IvyConfiguration(ivyPaths, manager, ivyFlags, log)
-		val updateConfiguration = UpdateConfiguration(outputPattern, synchronize, quiet)
+		val ivyPaths = new IvyPaths(info.projectPath, managedDependencyPath, cacheDirectory)
+		val ivyFlags = new IvyFlags(validate, addScalaTools, errorIfNoConfiguration)
+		val ivyConfiguration = new IvyConfiguration(ivyPaths, manager, ivyFlags, log)
+		val updateConfiguration = new UpdateConfiguration(outputPattern, synchronize, quiet)
 		doWith(ivyConfiguration, updateConfiguration)
 	}
 	private def withIvyTask(doTask: => Option[String]) =
@@ -142,17 +142,65 @@ trait ManagedProject extends ClasspathProject
 	implicit def toGroupID(groupID: String): GroupID =
 	{
 		nonEmpty(groupID, "Group ID")
-		GroupID(groupID)
+		new GroupID(groupID)
 	}
 	implicit def toRepositoryName(name: String): RepositoryName =
 	{
 		nonEmpty(name, "Repository name")
-		RepositoryName(name)
+		new RepositoryName(name)
 	}
 	implicit def moduleIDConfigurable(m: ModuleID): ModuleIDConfigurable =
 	{
 		require(m.configurations.isEmpty, "Configurations already specified for module " + m)
-		ModuleIDConfigurable(m)
+		new ModuleIDConfigurable(m)
+	}
+	
+	def config(name: String) = new Configuration(name)
+}
+trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject
+{
+	/** The dependency manager that represents inline declarations.  The default manager packages the information
+	* from 'ivyXML', 'projectID', 'repositories', and 'libraryDependencies' and does not typically need to be
+	* be overridden. */
+	def manager = new SimpleManager(ivyXML, true, projectID, repositories, ivyConfigurations, defaultConfiguration, libraryDependencies.toList: _*)
+	
+	/** The pattern for Ivy to use when retrieving dependencies into the local project.  Classpath management
+	* depends on the first directory being [conf] and the extension being [ext].*/
+	def outputPattern = "[conf]/[artifact](-[revision]).[ext]"
+	/** Override this to specify the publications, configurations, and/or dependencies sections of an Ivy file.
+	* See http://code.google.com/p/simple-build-tool/wiki/LibraryManagement for details.*/
+	def ivyXML: scala.xml.NodeSeq = scala.xml.NodeSeq.Empty
+	/** The base options passed to the 'update' action. */
+	def baseUpdateOptions = Validate :: Synchronize :: QuietUpdate :: AddScalaToolsReleases :: Nil
+	override def ivyConfigurations: Iterable[Configuration] =
+	{
+		val reflective = reflectiveIvyConfigurations
+		if(useMavenConfigurations)
+		{
+			val base = Configurations.defaultMavenConfigurations ++ reflective
+			val allConfigurations =
+				if(useIntegrationTestConfiguration)
+					base ++ List(Configurations.IntegrationTest)
+				else
+					base
+			Configurations.removeDuplicates(allConfigurations)
+		}
+		else
+			reflective
+	}
+	def useIntegrationTestConfiguration = false
+	def defaultConfiguration = if(useMavenConfigurations) Some(Configurations.Compile) else None
+	def useMavenConfigurations = false
+	/** The options provided to the 'update' action.  This is by default the options in 'baseUpdateOptions'.
+	* If 'manager' has any dependencies, resolvers, or inline Ivy XML (which by default happens when inline
+	* dependency management is used), it is passed as the dependency manager.*/
+	def updateOptions: Seq[ManagedOption] =
+	{
+		val m = manager
+		if(m.dependencies.isEmpty && m.resolvers.isEmpty && ivyXML.isEmpty)
+			baseUpdateOptions
+		else
+			LibraryManager(m) :: baseUpdateOptions
 	}
 }
 
@@ -164,15 +212,15 @@ object StringUtilities
 	}
 }
 import StringUtilities.nonEmpty
-final case class GroupID(groupID: String) extends NotNull
+final class GroupID private[sbt] (groupID: String) extends NotNull
 {
 	def % (artifactID: String) =
 	{
 		nonEmpty(artifactID, "Artifact ID")
-		GroupArtifactID(groupID, artifactID)
+		new GroupArtifactID(groupID, artifactID)
 	}
 }
-final case class GroupArtifactID(groupID: String, artifactID: String) extends NotNull
+final class GroupArtifactID private[sbt] (groupID: String, artifactID: String) extends NotNull
 {
 	def % (revision: String): ModuleID =
 	{
@@ -180,7 +228,7 @@ final case class GroupArtifactID(groupID: String, artifactID: String) extends No
 		ModuleID(groupID, artifactID, revision, None)
 	}
 }
-final case class ModuleIDConfigurable(moduleID: ModuleID) extends NotNull
+final class ModuleIDConfigurable private[sbt] (moduleID: ModuleID) extends NotNull
 {
 	def % (configurations: String): ModuleID =
 	{
@@ -189,12 +237,12 @@ final case class ModuleIDConfigurable(moduleID: ModuleID) extends NotNull
 		ModuleID(organization, name, revision, Some(configurations))
 	}
 }
-final case class RepositoryName(name: String) extends NotNull
+final class RepositoryName private[sbt] (name: String) extends NotNull
 {
 	def at (location: String) =
 	{
 		nonEmpty(location, "Repository location")
-		MavenRepository(name, location)
+		new MavenRepository(name, location)
 	}
 }
 
@@ -249,6 +297,12 @@ trait ReflectiveLibraryDependencies extends ManagedProject
 	def reflectiveLibraryDependencies : Set[ModuleID] = Set(Reflective.reflectiveMappings[ModuleID](this).values.toList: _*) -- excludeIDs
 }
 
+trait ReflectiveConfigurations extends Project
+{
+	def ivyConfigurations: Iterable[Configuration] = reflectiveIvyConfigurations
+	def reflectiveIvyConfigurations: Set[Configuration] = Configurations.removeDuplicates(Reflective.reflectiveMappings[Configuration](this).values.toList)
+}
+
 /** A Project that determines its library dependencies by reflectively finding all vals with a type
 * that conforms to ModuleID.*/
 trait ReflectiveRepositories extends Project
@@ -257,4 +311,4 @@ trait ReflectiveRepositories extends Project
 	def reflectiveRepositories: Set[Resolver] = Set(Reflective.reflectiveMappings[Resolver](this).values.toList: _*)
 }
 
-trait ReflectiveManagedProject extends ReflectiveProject with ReflectiveRepositories with ReflectiveLibraryDependencies
+trait ReflectiveManagedProject extends ReflectiveProject with ReflectiveRepositories with ReflectiveLibraryDependencies with ReflectiveConfigurations

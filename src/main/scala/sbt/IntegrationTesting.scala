@@ -37,7 +37,7 @@ trait ScalaIntegrationTesting extends IntegrationTesting
 
 /** A fully featured integration testing that may be mixed in with any subclass of <code>BasicScalaProject</code>.
  * Pre-suite setup and post-suite cleanup are provide by overriding <code>pretests</code> and <code>posttests</code> respectively.*/
-trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with IntegrationTestPaths
+trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with IntegrationTestPaths with BasicManagedProject
 {
 	self: BasicScalaProject =>
 
@@ -64,6 +64,7 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 	def integrationTestCompileConfiguration = new IntegrationTestCompileConfig
 
 	def integrationTestFrameworks = testFrameworks
+	override def useIntegrationTestConfiguration = true
 
 	class IntegrationTestCompileConfig extends BaseCompileConfig
 	{

@@ -7,7 +7,7 @@ import java.io.File
 
 import org.apache.ivy.{core, plugins, util, Ivy}
 import core.LogOptions
-import core.module.descriptor.{DefaultArtifact, DefaultDependencyDescriptor, DefaultModuleDescriptor, ModuleDescriptor}
+import core.module.descriptor.{DefaultArtifact, DefaultDependencyDescriptor, DefaultModuleDescriptor, MDArtifact, ModuleDescriptor}
 import core.module.id.ModuleRevisionId
 import core.resolve.ResolveOptions
 import core.retrieve.RetrieveOptions
@@ -15,14 +15,14 @@ import core.settings.IvySettings
 import plugins.parser.ModuleDescriptorParser
 import plugins.parser.m2.PomModuleDescriptorParser
 import plugins.parser.xml.XmlModuleDescriptorParser
-import plugins.repository.BasicResource
+import plugins.repository.{BasicResource, Resource}
 import plugins.resolver.{DependencyResolver, ChainResolver, IBiblioResolver}
 import util.{Message, MessageLogger}
 
-final case class IvyPaths(projectDirectory: Path, managedLibDirectory: Path, cacheDirectory: Option[Path]) extends NotNull
-final case class IvyFlags(validate: Boolean, addScalaTools: Boolean, errorIfNoConfiguration: Boolean) extends NotNull
-final case class IvyConfiguration(paths: IvyPaths, manager: Manager, flags: IvyFlags, log: Logger) extends NotNull
-final case class UpdateConfiguration(outputPattern: String, synchronize: Boolean, quiet: Boolean) extends NotNull
+final class IvyPaths(val projectDirectory: Path, val managedLibDirectory: Path, val cacheDirectory: Option[Path]) extends NotNull
+final class IvyFlags(val validate: Boolean, val addScalaTools: Boolean, val errorIfNoConfiguration: Boolean) extends NotNull
+final class IvyConfiguration(val paths: IvyPaths, val manager: Manager, val flags: IvyFlags, val log: Logger) extends NotNull
+final class UpdateConfiguration(val outputPattern: String, val synchronize: Boolean, val quiet: Boolean) extends NotNull
 object ManageDependencies
 {
 	val DefaultIvyConfigFilename = "ivysettings.xml"
@@ -33,6 +33,7 @@ object ManageDependencies
 	private def defaultIvyConfiguration(project: Path) = project / DefaultIvyConfigFilename
 	private def defaultPOM(project: Path) = project / DefaultMavenFilename
 	
+	/** Configures Ivy using the provided configuration 'config' and calls 'doWithIvy'.  This method takes care of setting up and cleaning up Ivy.*/
 	private def withIvy(config: IvyConfiguration)(doWithIvy: (Ivy, ModuleDescriptor) => Option[String]) =
 	{
 		import config._
@@ -41,24 +42,33 @@ object ManageDependencies
 		val ivy = Ivy.newInstance()
 		ivy.getLoggerEngine.pushLogger(logger)
 		
+		/** Parses the given dependency management file using the provided parser.*/
 		def readDependencyFile(file: File, parser: ModuleDescriptorParser) =
 			Control.trap("Could not read dependencies: ", log)
 				{ Right(parser.parseDescriptor(ivy.getSettings, file.toURI.toURL, flags.validate)) }
 		
+		/** Parses the given Maven pom 'pomFile'.*/
 		def readPom(pomFile: File) = readDependencyFile(pomFile, PomModuleDescriptorParser.getInstance)
+		/** Parses the given Ivy file 'ivyFile'.*/
 		def readIvyFile(ivyFile: File) = readDependencyFile(ivyFile, XmlModuleDescriptorParser.getInstance)
-		def parseXMLDependencies(xml: scala.xml.NodeSeq) = parseDependencies(xml.toString)
-		def parseDependencies(xml: String): Either[String, (ModuleDescriptor, CustomXmlParser.CustomParser)] =
+		/** Parses the given in-memory Ivy file 'xml', using the existing 'moduleID' and specifying the given 'defaultConfiguration'. */
+		def parseXMLDependencies(xml: scala.xml.NodeSeq, moduleID: DefaultModuleDescriptor, defaultConfiguration: String) =
+			parseDependencies(xml.toString, moduleID, defaultConfiguration)
+		/** Parses the given in-memory Ivy file 'xml', using the existing 'moduleID' and specifying the given 'defaultConfiguration'. */
+		def parseDependencies(xml: String, moduleID: DefaultModuleDescriptor, defaultConfiguration: String): Either[String, CustomXmlParser.CustomParser] =
 			Control.trap("Could not read dependencies: ", log)
 			{
 				val parser = new CustomXmlParser.CustomParser(ivy.getSettings)
-				parser.setDefaultConf("default")
+				parser.setMd(moduleID)
+				parser.setDefaultConf(defaultConfiguration)
 				val resource = new ByteResource(xml.getBytes)
 				parser.setInput(resource.openStream)
 				parser.setResource(resource)
 				parser.parse()
-				Right((parser.getModuleDescriptor, parser))
+				Right(parser)
 			}
+		/** Configures Ivy using the specified Ivy configuration file.  This method is used when the manager is explicitly requested to be MavenManager or
+		* IvyManager.  If a file is not specified, Ivy is configured with defaults and scala-tools releases is added as a repository.*/
 		def configure(configFile: Option[Path])
 		{
 			configFile match
@@ -69,6 +79,7 @@ object ManageDependencies
 					scalaTools()
 			}
 		}
+		/** Adds the scala-tools.org releases maven repository to the list of resolvers if configured to do so in IvyFlags.*/
 		def scalaTools()
 		{
 			if(flags.addScalaTools)
@@ -77,6 +88,7 @@ object ManageDependencies
 				addResolvers(ivy.getSettings, ScalaToolsReleases :: Nil, log)
 			}
 		}
+		/** Configures Ivy using defaults.  This is done when no ivy-settings.xml exists and no inline configurations or resolvers are specified. */
 		def configureDefaults()
 		{
 			ivy.configureDefault
@@ -84,29 +96,41 @@ object ManageDependencies
 			for(dir <- paths.cacheDirectory) settings.setDefaultCache(dir.asFile)
 			settings.setBaseDir(paths.projectDirectory.asFile)
 		}
+		/** This method is used to add inline dependencies to the provided module.  It properly handles the
+		* different ways of specifying configurations and dependencies. */
 		def addDependencies(moduleID: DefaultModuleDescriptor, dependencies: Iterable[ModuleID],
-			parser: Option[CustomXmlParser.CustomParser])
+			parser: Option[CustomXmlParser.CustomParser], defaultConfiguration: Option[Configuration])
 		{
 			for(dependency <- dependencies)
 			{
 				val dependencyDescriptor = new DefaultDependencyDescriptor(moduleID, toID(dependency), false, false, true)
 				dependency.configurations match
 				{
-					case None =>
+					case None => // The configuration for this dependency was not explicitly specified, so use the default
 					{
 						parser match
 						{
-							case Some(p) => p.parseDepsConfs(p.getDefaultConf, dependencyDescriptor)
-							case None => dependencyDescriptor.addDependencyConfiguration("default", "default")
+							case Some(p) =>
+								// let the parser used to parse the inline Ivy XML file add the dependency
+								p.parseDepsConfs(p.getDefaultConf, dependencyDescriptor)
+							case None =>
+								// no inline XML, so just map the default configuration to default
+								def getOrElse(o: Option[Configuration], default: String): String = if(o.isDefined) o.get.name else default
+								dependencyDescriptor.addDependencyConfiguration(getOrElse(defaultConfiguration, "default"), "default")
 						}
 					}
-					case Some(confs) =>
+					case Some(confs) => // The configuration mapping (looks like: test->default) was specified for this dependency
 						parser match
 						{
-							case Some(p) => p.parseDepsConfs(confs, dependencyDescriptor)
+							case Some(p) =>
+								// let the parser used to parse the inline Ivy XML file add the dependency
+								p.parseDepsConfs(confs, dependencyDescriptor)
 							case None =>
 							{
+								// no inline XML, so create a temporary parser to parse the configuration specifications
 								val p = new CustomXmlParser.CustomParser(ivy.getSettings)
+								p.setMd(moduleID)
+								defaultConfiguration.foreach(c => p.setDefaultConf(c.name))
 								p.parseDepsConfs(confs, dependencyDescriptor)
 							}
 						}
@@ -118,6 +142,9 @@ object ManageDependencies
 			moduleID.setModuleArtifact(artifact)
 			moduleID.check()
 		}
+		/** Called to configure Ivy when the configured dependency manager is SbtManager and inline configuration is specified or if the manager
+		* is AutodetectManager.  It will configure Ivy with an 'ivy-settings.xml' file if there is one, or configure the defaults and add scala-tools as
+		* a repository otherwise.*/
 		def autodetectConfiguration()
 		{
 			log.debug("Autodetecting configuration.")
@@ -130,6 +157,9 @@ object ManageDependencies
 				scalaTools()
 			}
 		}
+		/** Called to determine dependencies when the dependency manager is SbtManager and no inline dependencies (Scala or XML) are defined
+		* or if the manager is AutodetectManager.  It will try to read from pom.xml first and then ivy.xml if pom.xml is not found.  If neither is found,
+		* Ivy is configured with defaults unless IvyFlags.errorIfNoConfiguration is true, in which case an error is generated.*/
 		def autodetectDependencies =
 		{
 			log.debug("Autodetecting dependencies.")
@@ -147,25 +177,26 @@ object ManageDependencies
 				{
 					log.warn("No readable dependency configuration found.")
 					val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(ModuleID("", "", "", None)))
-					addDependencies(moduleID, Nil, None)
+					addDependencies(moduleID, Nil, None,None)
 					Right(moduleID)
 				}
 			}
 		}
+		/** Creates an Ivy module descriptor according the manager configured.*/
 		def moduleDescriptor =
 			config.manager match
 			{
-				case MavenManager(configuration, pom) =>
+				case mm: MavenManager =>
 				{
 					log.debug("Maven configuration explicitly requested.")
-					configure(configuration)
-					readPom(pom.asFile)
+					configure(mm.configuration)
+					readPom(mm.pom.asFile)
 				}
-				case IvyManager(configuration, dependencies) =>
+				case im: IvyManager =>
 				{
 					log.debug("Ivy configuration explicitly requested.")
-					configure(configuration)
-					readIvyFile(dependencies.asFile)
+					configure(im.configuration)
+					readIvyFile(im.dependencies.asFile)
 				}
 				case AutoDetectManager =>
 				{
@@ -189,35 +220,45 @@ object ManageDependencies
 						autodetectDependencies
 					else
 					{
-						val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(module))
-						if(dependenciesXML.isEmpty)
+						val moduleID =
+							defaultConfiguration match
+							{
+								case Some(defaultConf) => // inline configurations used
+								{
+									val mod = new DefaultModuleDescriptor(toID(module), "release", null, false)
+									mod.setLastModified(System.currentTimeMillis)
+									configurations.foreach(config => mod.addConfiguration(config.toIvyConfiguration))
+									mod.addArtifact(defaultConf.name, new MDArtifact(mod, module.name, "jar", "jar"))
+									mod
+								}
+								// no inline configurations, so leave Ivy to its defaults
+								case None => DefaultModuleDescriptor.newDefaultInstance(toID(module))
+							}
+						if(dependenciesXML.isEmpty) // 
 						{
 							log.debug("Using inline dependencies specified in Scala.")
-							addDependencies(moduleID, dependencies, None)
+							addDependencies(moduleID, dependencies, None,defaultConfiguration)
 							Right(moduleID)
 						}
 						else
 						{
-							for(idAndParser <- parseXMLDependencies(wrapped(module, dependenciesXML)).right) yield
+							log.debug("Using inline dependencies specified in Scala and XML.")
+							val defaultConf = defaultConfiguration match { case None => "default"; case Some(dc) => dc.name }
+							for(parser <- parseXMLDependencies(wrapped(module, dependenciesXML), moduleID, defaultConf).right) yield
 							{
-								val (xmlModuleID, parser) = idAndParser
-								log.debug("Using inline dependencies specified in Scala and XML.")
-								xmlModuleID.getConfigurations.foreach(moduleID.addConfiguration)
-								xmlModuleID.getDependencies.foreach(moduleID.addDependency)
-								for(artifact <- xmlModuleID.getAllArtifacts; conf <- artifact.getConfigurations)
-									moduleID.addArtifact(conf, artifact)
-								addDependencies(moduleID, dependencies, Some(parser))
+								addDependencies(moduleID, dependencies, Some(parser), defaultConfiguration)
 								moduleID
 							}
 						}
 					}
 				}
 			}
+		/** Creates a full ivy file for 'module' using the 'dependencies' XML as the part after the %lt;info&gt;...%lt;/info&gt; section. */
 		def wrapped(module: ModuleID, dependencies: scala.xml.NodeSeq) =
 		{
 			import module._
 			<ivy-module version="2.0">
-				<info organisation="{organization}" module="{name}"/>
+				<info organisation={organization} module={name} revision={revision}/>
 				{dependencies}
 			</ivy-module>
 		}
@@ -232,6 +273,7 @@ object ManageDependencies
 			finally { ivy.popContext() }
 		}
 	}
+	/** Clears the Ivy cache, as configured by 'config'. */
 	def cleanCache(config: IvyConfiguration) =
 	{
 		def doClean(ivy: Ivy, module: ModuleDescriptor) =
@@ -240,6 +282,8 @@ object ManageDependencies
 		
 		withIvy(config)(doClean)
 	}
+	/** Resolves and retrieves dependencies.  'ivyConfig' is used to produce an Ivy file and configuration.
+	* 'updateConfig' configures the actual resolution and retrieval process. */
 	def update(ivyConfig: IvyConfiguration, updateConfig: UpdateConfiguration) =
 	{
 		def processModule(ivy: Ivy, module: ModuleDescriptor) =
@@ -271,6 +315,7 @@ object ManageDependencies
 		
 		withIvy(ivyConfig)(processModule)
 	}
+	/** Sets the resolvers for 'settings' to 'resolvers'.  This is done by creating a new chain and making it the default. */
 	private def addResolvers(settings: IvySettings, resolvers: Iterable[Resolver], log: Logger)
 	{
 		val newDefault = new ChainResolver
@@ -285,35 +330,42 @@ object ManageDependencies
 			resolvers.foreach(r => log.debug("\t" + r.toString))
 		}
 	}
+	/** Converts the given sbt resolver into an Ivy resolver..*/
 	private def getResolver(r: Resolver) =
 		r match
 		{
-			case MavenRepository(name, root) =>
+			case repo: MavenRepository =>
 			{
 				val resolver = new IBiblioResolver
-				resolver.setName(name)
+				resolver.setName(repo.name)
 				resolver.setM2compatible(true)
 				resolver.setChangingPattern(""".*\-SNAPSHOT""")
-				resolver.setRoot(root)
+				resolver.setRoot(repo.root)
 				resolver
 			}
 		}
+	/** Converts the given sbt module id into an Ivy ModuleRevisionId.*/
 	private def toID(m: ModuleID) =
 	{
 		import m._
 		ModuleRevisionId.newInstance(organization, name, revision)
 	}
+	/** An implementation of Ivy's Resource class that provides the Ivy file from a byte array.  This is used to support
+	* inline Ivy file XML.*/
 	private class ByteResource(bytes: Array[Byte]) extends
 		BasicResource("Inline XML dependencies", true, bytes.length, System.currentTimeMillis, true)
 	{
 		override def openStream = new java.io.ByteArrayInputStream(bytes)
 	}
-	
+	/** Subclasses the default Ivy file parser in order to provide access to protected methods.*/
 	private object CustomXmlParser extends XmlModuleDescriptorParser with NotNull
 	{
 		import XmlModuleDescriptorParser.Parser
 		class CustomParser(settings: IvySettings) extends Parser(CustomXmlParser, settings) with NotNull
 		{
+			/** Overridden because the super implementation overwrites the module descriptor.*/
+			override def setResource(res: Resource) {}
+			override def setMd(md: DefaultModuleDescriptor) = super.setMd(md)
 			override def parseDepsConfs(confs: String, dd: DefaultDependencyDescriptor) = super.parseDepsConfs(confs, dd)
 			override def getDefaultConf = super.getDefaultConf
 			override def setDefaultConf(conf: String) = super.setDefaultConf(conf)
@@ -322,19 +374,30 @@ object ManageDependencies
 }
 
 sealed abstract class Manager extends NotNull
+/** This explicitly requests auto detection as a dependency manager.  It will first check for a 'pom.xml' file and if that does not exist, an 'ivy.xml' file.
+* Ivy is configured using the detected file or uses defaults.*/
 final object AutoDetectManager extends Manager
-final case class MavenManager(configuration: Option[Path], pom: Path) extends Manager
-final case class IvyManager(configuration: Option[Path], dependencies: Path) extends Manager
-trait SbtManager extends Manager
+/** This explicitly requests that the Maven pom 'pom' be used to determine dependencies.  An Ivy configuration file to use may be specified in
+* 'configuration', since Ivy currently cannot extract Maven repositories from a pom file. Otherwise, defaults are used.*/
+final class MavenManager(val configuration: Option[Path], val pom: Path) extends Manager
+/** This explicitly requests that the Ivy file 'dependencies' be used to determine dependencies.  An Ivy configuration file to use may be specified in
+* 'configuration'.  Otherwise, defaults are used.*/
+final class IvyManager(val configuration: Option[Path], val dependencies: Path) extends Manager
+/** This manager directly specifies the dependencies, resolvers, and configurations through sbt wrapper classes and through an in-memory
+* Ivy XML file. */
+sealed trait SbtManager extends Manager
 {
 	def module: ModuleID
 	def resolvers: Iterable[Resolver]
 	def dependencies: Iterable[ModuleID]
 	def autodetectUnspecified: Boolean
 	def dependenciesXML: scala.xml.NodeSeq
+	def configurations: Iterable[Configuration]
+	def defaultConfiguration: Option[Configuration]
 }
-case class SimpleManager(dependenciesXML: scala.xml.NodeSeq, autodetectUnspecified: Boolean,
-	module: ModuleID, resolvers: Iterable[Resolver], dependencies: ModuleID*) extends SbtManager
+final class SimpleManager private[sbt] (val dependenciesXML: scala.xml.NodeSeq, val autodetectUnspecified: Boolean,
+	val module: ModuleID, val resolvers: Iterable[Resolver], val configurations: Iterable[Configuration],
+	val defaultConfiguration: Option[Configuration], val dependencies: ModuleID*) extends SbtManager
 
 final case class ModuleID(organization: String, name: String, revision: String, configurations: Option[String]) extends NotNull
 {
@@ -361,23 +424,39 @@ object Resolver
 	val ScalaToolsReleasesRoot = "http://scala-tools.org/repo-releases"
 	val ScalaToolsSnapshotsRoot = "http://scala-tools.org/repo-snapshots"
 }
-
-final class Configuration(override val toString: String) extends NotNull
+/** Represents an Ivy configuration. */
+final class Configuration(val name: String, val description: String, val isPublic: Boolean, val extendsConfigs: List[Configuration], val transitive: Boolean) extends NotNull {
+	require(name != null && !name.isEmpty)
+	require(description != null)
+	def this(name: String) = this(name, "", true, Nil, true)
+	def describedAs(newDescription: String) = new Configuration(name, newDescription, isPublic, extendsConfigs, transitive)
+	def extend(configs: Configuration*) = new Configuration(name, description, isPublic, configs.toList ::: extendsConfigs, transitive)
+	def notTransitive = new Configuration(name, description, isPublic, extendsConfigs, false)
+	def hide = new Configuration(name, description, false, extendsConfigs, transitive)
+	override def toString = name
+	import org.apache.ivy.core.module.descriptor.{Configuration => IvyConfig}
+	import IvyConfig.Visibility._
+	def toIvyConfiguration = new IvyConfig(name, if(isPublic) PUBLIC else PRIVATE, description, extendsConfigs.map(_.name).toArray, transitive, null)
+}
 object Configurations
 {
-	val Compile = new Configuration("compile")
-	val Test = new Configuration("test")
-	val IntegrationTest = new Configuration("it")
-	val Provided = new Configuration("provided")
-	val Javadoc = new Configuration("javadoc")
-	val Runtime = new Configuration("runtime")
-	val Sources = new Configuration("sources")
-	val System = new Configuration("system")
-	val Master = new Configuration("master")
-	val Default = new Configuration("default")
-	val Optional = new Configuration("optional")
+	def config(name: String) = new Configuration(name)
+	def defaultMavenConfigurations = Compile :: Test :: Provided :: Javadoc :: Runtime :: Sources :: System :: Optional :: Nil
+	
+	lazy val Default = config("default")
+	lazy val Compile = config("compile")
+	lazy val IntegrationTest = config("it") extend(Compile)
+	lazy val Provided = config("provided")
+	lazy val Javadoc = config("javadoc")
+	lazy val Runtime = config("runtime") extend(Compile)
+	lazy val Test = config("test") extend(Runtime) hide
+	lazy val Sources = config("sources")
+	lazy val System = config("system")
+	lazy val Optional = config("optional")
+	
+	private[sbt] def removeDuplicates(configs: Iterable[Configuration]) = Set(scala.collection.mutable.Map(configs.map(config => (config.name, config)).toSeq: _*).values.toList: _*)
 }
-
+/** Interface between Ivy logging and sbt logging. */
 private class IvyLogger(log: Logger) extends MessageLogger
 {
 	private var progressEnabled = false
