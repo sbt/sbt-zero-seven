@@ -160,7 +160,12 @@ trait ScalaProject extends Project with FileTasks
 			val jarPath = outputDirectory / jarName
 			FileUtilities.jar(sources.get, jarPath, manifest, recursive, log)
 		}
-	
+	def zipTask(sources: PathFinder, outputDirectory: Path, zipName: => String): Task =
+		fileTask("zip", (outputDirectory / zipName) from sources)
+		{
+			val zipPath = outputDirectory / zipName
+			FileUtilities.zip(sources.get, zipPath, false, log)
+		}
 	def incrementVersionNumber()
 	{
 		projectVersion.get match
