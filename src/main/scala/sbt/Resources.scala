@@ -76,9 +76,9 @@ class Resources(val baseDirectory: File)
 	def resultToEither(result: LoadResult): Either[String, Project] =
 		result match
 		{
-			case LoadSuccess(project) => Right(project)
-			case LoadError(message) => Left(message)
-			case LoadSetupError(message) => Left(message)
+			case success: LoadSuccess => Right(success.project)
+			case err: LoadError => Left(err.message)
+			case err: LoadSetupError => Left(err.message)
 			case LoadSetupDeclined => Left("Setup declined")
 		}
 }

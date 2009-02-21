@@ -142,7 +142,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	* The construct function is used to obtain the Project instance. Any project/build/ directory for the project
 	* is ignored.  The project is declared to have the dependencies given by deps.*/
 	def project[P <: Project](path: Path, name: String, construct: ProjectInfo => P, deps: Project*): P =
-		initialize(construct(ProjectInfo(path.asFile, deps, Some(this))), Some(SetupInfo(name, None, false)), log)
+		initialize(construct(ProjectInfo(path.asFile, deps, Some(this))), Some(new SetupInfo(name, None, false)), log)
 	
 	/** Initializes the project directories when a user has requested that sbt create a new project.*/
 	def initializeDirectories() {}
@@ -165,9 +165,9 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 		result match
 		{
 			case LoadSetupDeclined => Predef.error("No project exists at path " + path)
-			case LoadSetupError(m) => Predef.error("Error setting up new project at path " + Path + " : " + m)
-			case LoadError(m) => Predef.error("Error loading project at path " + path + " : " + m)
-			case LoadSuccess(p) => p
+			case lse: LoadSetupError => Predef.error("Error setting up new project at path " + Path + " : " + lse.message)
+			case err: LoadError => Predef.error("Error loading project at path " + path + " : " + err.message)
+			case success: LoadSuccess => success.project
 		}
 	
 	/** The property for the project's version. */
@@ -203,10 +203,10 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	def normalizedName = name.toLowerCase.replaceAll("""\s+""", "-")
 }
 private[sbt] sealed trait LoadResult extends NotNull
-private[sbt] final case class LoadSuccess(p: Project) extends LoadResult
-private[sbt] final case class LoadError(message: String) extends LoadResult
-private[sbt] final case object LoadSetupDeclined extends LoadResult
-private[sbt] final case class LoadSetupError(message: String) extends LoadResult
+private[sbt] final class LoadSuccess(val project: Project) extends LoadResult
+private[sbt] final class LoadError(val message: String) extends LoadResult
+private[sbt] final object LoadSetupDeclined extends LoadResult
+private[sbt] final class LoadSetupError(val message: String) extends LoadResult
 
 object Project
 {
@@ -241,7 +241,7 @@ object Project
 		val info = ProjectInfo(projectDirectory, deps, parent)
 		ProjectInfo.setup(info, log) match
 		{
-			case SetupError(message) => LoadSetupError(message)
+			case err: SetupError => new LoadSetupError(err.message)
 			case SetupDeclined => LoadSetupDeclined
 			case AlreadySetup => loadProject(info, None, log)
 			case setup: SetupInfo => loadProject(info, Some(setup), log)
@@ -257,7 +257,7 @@ object Project
 				for(builderClass <- getProjectDefinition(info, log).right) yield
 					initialize(constructProject(info, builderClass), setupInfo, log)
 			log.setLevel(oldLevel)
-			result.fold(LoadError(_), LoadSuccess(_))
+			result.fold(new LoadError(_), new LoadSuccess(_))
 		}
 		catch
 		{
@@ -268,7 +268,7 @@ object Project
 					else ite.getCause
 				errorLoadingProject(cause, log)
 			}
-			case nme: NoSuchMethodException => LoadError("Constructor with one argument of type sbt.ProjectInfo required for project definition.")
+			case nme: NoSuchMethodException => new LoadError("Constructor with one argument of type sbt.ProjectInfo required for project definition.")
 			case e: Exception => errorLoadingProject(e, log)
 		}
 	}
@@ -276,7 +276,7 @@ object Project
 	private def errorLoadingProject(e: Throwable, log: Logger) =
 	{
 		log.trace(e)
-		LoadError("Error loading project: " + e.toString)
+		new LoadError("Error loading project: " + e.toString)
 	}
 	/** Loads the project for the given `info` and represented by an instance of 'builderClass'.*/
 	private def constructProject[P <: Project](info: ProjectInfo, builderClass: Class[P]): P =
@@ -345,11 +345,11 @@ object Project
 	private def checkOutputDirectories(result: LoadResult): LoadResult =
 		result match
 		{
-			case LoadSuccess(project) =>
-				if(project.shouldCheckOutputDirectories)
-					checkOutputDirectoriesImpl(project)
+			case success: LoadSuccess =>
+				if(success.project.shouldCheckOutputDirectories)
+					checkOutputDirectoriesImpl(success.project)
 				else
-					LoadSuccess(project)
+					success
 			case x => x
 		}
 	/** Verifies that output directories of the given project and all of its dependencies are
@@ -364,7 +364,7 @@ object Project
 			outputDirectories.getOrElseUpdate(path, new HashSet[Project]) += p
 		val shared = outputDirectories.filter(_._2.size > 1)
 		if(shared.isEmpty)
-			LoadSuccess(project)
+			new LoadSuccess(project)
 		else
 		{
 			val sharedString =
@@ -374,7 +374,7 @@ object Project
 						projectsSharingPath.map(_.name).mkString(", ") + " share " + path
 				s.mkString("\n\t")
 			}
-			LoadError("The same directory is used for output for multiple projects:\n\t" + sharedString +
+			new LoadError("The same directory is used for output for multiple projects:\n\t" + sharedString +
 			"\n  (If this is intentional, use 'override def shouldCheckOutputDirectories = false' in your project definition.)")
 		}
 	}

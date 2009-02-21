@@ -13,10 +13,10 @@ final case class ProjectInfo(projectDirectory: File, dependencies: Iterable[Proj
 }
 
 private[sbt] sealed trait SetupResult extends NotNull
-private[sbt] final case object SetupDeclined extends SetupResult
-private[sbt] final case class SetupError(message: String) extends SetupResult
-private[sbt] final case object AlreadySetup extends SetupResult
-private[sbt] final case class SetupInfo(name: String, version: Option[Version], initializeDirectories: Boolean) extends SetupResult
+private[sbt] final object SetupDeclined extends SetupResult
+private[sbt] final class SetupError(val message: String) extends SetupResult
+private[sbt] final object AlreadySetup extends SetupResult
+private[sbt] final class SetupInfo(val name: String, val version: Option[Version], val initializeDirectories: Boolean) extends SetupResult
 
 object ProjectInfo
 {
@@ -30,7 +30,7 @@ object ProjectInfo
 			if(builderDirectory.isDirectory)
 				AlreadySetup
 			else
-				SetupError("'" + builderDirectory.getAbsolutePath + "' is not a directory.")
+				new SetupError("'" + builderDirectory.getAbsolutePath + "' is not a directory.")
 		}
 		else
 			setupProject(info.projectDirectory, log)
@@ -41,14 +41,14 @@ object ProjectInfo
 		{
 			val name = trim(Console.readLine("Project Name: "))
 			if(name.isEmpty)
-				SetupError("Project not created: no name specified.")
+				new SetupError("Project not created: no name specified.")
 			else
 				readVersion(projectDirectory, log) match
 				{
-					case None => SetupError("Project not created: no version specified.")
+					case None => new SetupError("Project not created: no version specified.")
 					case Some(version) =>
 						if(verifyCreateProject(name, version))
-							SetupInfo(name, Some(version), true)
+							new SetupInfo(name, Some(version), true)
 						else
 							SetupDeclined
 				}

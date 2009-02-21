@@ -83,7 +83,7 @@ object TrapExit
 	{
 		e match
 		{
-			case TrapExitSecurityException(code) => code
+			case x: TrapExitSecurityException => x.exitCode
 			case _ => 
 			{
 				val cause = e.getCause
@@ -179,7 +179,7 @@ private class TrapExitSecurityManager(delegateManager: SecurityManager) extends 
 	{
 		val stack = Thread.currentThread.getStackTrace
 		if(stack == null || stack.exists(isRealExit))
-			throw TrapExitSecurityException(status)
+			throw new TrapExitSecurityException(status)
 	}
 	/** This ensures that only actual calls to exit are trapped and not just calls to check if exit is allowed.*/
 	private def isRealExit(element: StackTraceElement): Boolean =
@@ -196,7 +196,7 @@ private class TrapExitSecurityManager(delegateManager: SecurityManager) extends 
 	}
 }
 /** A custom SecurityException that tries not to be caught.*/
-private case class TrapExitSecurityException(exitCode: Int) extends SecurityException
+private class TrapExitSecurityException(val exitCode: Int) extends SecurityException
 {
 	private var accessAllowed = false
 	def allowAccess

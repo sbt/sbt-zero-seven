@@ -6,8 +6,8 @@ package sbt
 import scala.collection.immutable.TreeSet
 
 private trait RunCompleteAction extends NotNull
-private case class Exit(code: Int) extends RunCompleteAction
-private case object Reload extends RunCompleteAction
+private class Exit(val code: Int) extends RunCompleteAction
+private object Reload extends RunCompleteAction
 
 /** This class is the entry point for sbt.  If it is given any arguments, it interprets them
 * as actions, executes the corresponding actions, and exits.  If there were no arguments provided,
@@ -32,17 +32,17 @@ object Main
 		val startTime = System.currentTimeMillis
 		Project.loadProject match
 		{
-			case LoadSetupError(message) =>
-				println("\n" + message)
+			case err: LoadSetupError =>
+				println("\n" + err.message)
 				runExitHooks(Project.bootLogger)
 				SetupErrorExitCode
 			case LoadSetupDeclined =>
 				runExitHooks(Project.bootLogger)
 				SetupDeclinedExitCode
-			case LoadError(errorMessage) =>
+			case err: LoadError =>
 			{
 				val log = Project.bootLogger
-				println(errorMessage)
+				println(err.message)
 				runExitHooks(log)
 				// Because this is an error that can probably be corrected, prompt user to try again.
 				val line =
@@ -60,19 +60,20 @@ object Main
 					case None => LoadErrorExitCode
 				}
 			}
-			case LoadSuccess(project) =>
+			case success: LoadSuccess =>
 			{
+				import success.project
 				val doNext: RunCompleteAction =
 					// in interactive mode, fill all undefined properties
 					if(args.length > 0 || fillUndefinedProjectProperties(project.topologicalSort.toList.reverse))
 						startProject(project, args, startTime)
 					else
-						Exit(NormalExitCode)
+						new Exit(NormalExitCode)
 				runExitHooks(project.log)
 				doNext match
 				{
 					case Reload => run(args)
-					case Exit(code) => code
+					case x: Exit => x.code
 				}
 			}
 		}
@@ -114,11 +115,11 @@ object Main
 						val time = timeCompile()
 						println("Time to compile modified source " + source + ": " + time + " ms")
 					}
-					Exit(NormalExitCode)
+					new Exit(NormalExitCode)
 				}
 				case _ =>
 					project.log.error("Compile statistics only available on BasicScalaProjects.")
-					Exit(UsageErrorExitCode)
+					new Exit(UsageErrorExitCode)
 			}
 		}
 		else
@@ -130,7 +131,7 @@ object Main
 					case Some(errorMessage) => project.log.error("Error during build: " + errorMessage); BuildErrorExitCode
 				}
 			printTime(project, startTime, "build")
-			Exit(exitCode)
+			new Exit(exitCode)
 		}
 	}
 	
@@ -192,7 +193,7 @@ object Main
 					if(trimmed.isEmpty)
 						loop(currentProject)
 					else if(isTerminateAction(trimmed))
-						Exit(NormalExitCode)
+						new Exit(NormalExitCode)
 					else if(ReloadAction == trimmed)
 						Reload
 					else if(trimmed.startsWith(ProjectAction + " "))
@@ -228,7 +229,7 @@ object Main
 						loop(currentProject)
 					}
 				}
-				case None => Exit(NormalExitCode)
+				case None => new Exit(NormalExitCode)
 			}
 		}
 		
