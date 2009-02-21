@@ -61,7 +61,7 @@ sealed abstract class Path extends PathFinder with NotNull
 	/** The hash code of a Path is that of the underlying <code>File</code>.*/
 	override final def hashCode = asFile.hashCode
 }
-private final case class BaseDirectory(private[sbt] val path: Path) extends Path
+private final class BaseDirectory(private[sbt] val path: Path) extends Path
 {
 	override def toString = path.toString
 	def asFile = path.asFile
