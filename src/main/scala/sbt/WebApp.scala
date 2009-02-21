@@ -25,11 +25,11 @@ object JettyRun extends ExitHook
 	}
 	def apply(classpath: Iterable[Path], classpathName: String, war: Path, defaultContextPath: String, jettyConfigurationXML: NodeSeq,
 		jettyConfigurationFiles: Seq[File], log: Logger): Option[String] =
-			run(classpathName, JettyRunConfiguration(war, defaultContextPath, jettyConfigurationXML,
+			run(classpathName, new JettyRunConfiguration(war, defaultContextPath, jettyConfigurationXML,
 				jettyConfigurationFiles, Nil, 0, toURLs(classpath)), log)
 	def apply(classpath: Iterable[Path], classpathName: String, war: Path, defaultContextPath: String, scanDirectories: Seq[File],
 		scanPeriod: Int, log: Logger): Option[String] =
-			run(classpathName, JettyRunConfiguration(war, defaultContextPath, NodeSeq.Empty, Nil, scanDirectories, scanPeriod, toURLs(classpath)), log)
+			run(classpathName, new JettyRunConfiguration(war, defaultContextPath, NodeSeq.Empty, Nil, scanDirectories, scanPeriod, toURLs(classpath)), log)
 	private def toURLs(paths: Iterable[Path]) = paths.map(_.asURL).toSeq
 	private def run(classpathName: String, configuration: JettyRunConfiguration, log: Logger): Option[String] =
 		synchronized
@@ -77,8 +77,8 @@ private trait JettyRun
 {
 	def apply(configuration: JettyRunConfiguration, log: Logger): Stoppable
 }
-private case class JettyRunConfiguration(war: Path, defaultContextPath: String, jettyConfigurationXML: NodeSeq, jettyConfigurationFiles: Seq[File],
-		scanDirectories: Seq[File], scanInterval: Int, classpathURLs: Seq[URL]) extends NotNull
+private class JettyRunConfiguration(val war: Path, val defaultContextPath: String, val jettyConfigurationXML: NodeSeq, val jettyConfigurationFiles: Seq[File],
+		val scanDirectories: Seq[File], val scanInterval: Int, val classpathURLs: Seq[URL]) extends NotNull
 
 /* This class starts Jetty.
 * NOTE: DO NOT actively use this class.  You will see NoClassDefFoundErrors if you fail

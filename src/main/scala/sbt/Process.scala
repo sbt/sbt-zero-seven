@@ -9,18 +9,18 @@ package sbt
 import java.lang.ProcessBuilder
 import java.io.{File, InputStream, OutputStream}
 
-case class ProcessOptions(workingDirectory: File, redirectErrorStream: Boolean,
-	environment: Map[String, String], useDefaultEnvironment: Boolean) extends NotNull
+class ProcessOptions(val workingDirectory: File, val redirectErrorStream: Boolean,
+	val environment: Map[String, String], val useDefaultEnvironment: Boolean) extends NotNull
 {
-	def newDirectory(dir: File) = ProcessOptions(dir, redirectErrorStream, environment, useDefaultEnvironment)
-	def mergeErrorStream = ProcessOptions(workingDirectory, true, environment, useDefaultEnvironment)
+	def newDirectory(dir: File) = new ProcessOptions(dir, redirectErrorStream, environment, useDefaultEnvironment)
+	def mergeErrorStream = new ProcessOptions(workingDirectory, true, environment, useDefaultEnvironment)
 	def setEnvironment(env: Map[String, String]) =
-		ProcessOptions(workingDirectory, redirectErrorStream, env, true)
+		new ProcessOptions(workingDirectory, redirectErrorStream, env, true)
 	def modifyEnvironment(modifiedMappings: Iterable[(String, String)]) = 
-		ProcessOptions(workingDirectory, redirectErrorStream, environment ++ modifiedMappings, useDefaultEnvironment)
+		new ProcessOptions(workingDirectory, redirectErrorStream, environment ++ modifiedMappings, useDefaultEnvironment)
 }
-case class ProcessIO(connectInput: OutputStream => Unit, connectOutput: InputStream => Unit,
-	connectError: InputStream => Unit) extends NotNull
+class ProcessIO(val connectInput: OutputStream => Unit, val connectOutput: InputStream => Unit,
+	val connectError: InputStream => Unit) extends NotNull
 {
 	def this() = this(ProcessIO.close, ProcessIO.readFully, ProcessIO.readFully)
 	def this(log: Logger) = this(ProcessIO.close, ProcessIO.processFully(log, Level.Info), ProcessIO.processFully(log, Level.Error))
@@ -65,7 +65,7 @@ final class ProcessRunner(command: String, arguments: Seq[String], options: Proc
 {
 	require(!command.trim.isEmpty, "Command cannot be empty.")
 	def this(command: String, arguments: Seq[String], workingDirectory: File, redirectErrorStream: Boolean) =
-		this(command, arguments, ProcessOptions(workingDirectory, redirectErrorStream, Map.empty, true), new ProcessIO)
+		this(command, arguments, new ProcessOptions(workingDirectory, redirectErrorStream, Map.empty, true), new ProcessIO)
 	def this(command: String, arguments: Seq[String], workingDirectory: File) = this(command, arguments, workingDirectory, false)
 	def this(command: String, arguments: Seq[String]) = this(command, arguments, new File("."))
 	def this(command: String, argument0: String, arguments: String*) = this(command, argument0 :: arguments.toList, new File("."))

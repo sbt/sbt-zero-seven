@@ -47,19 +47,19 @@ import java.net.URL
 * on scalaz and it is difficult to determine whether a jar is both signed and valid.  */
 object SignJar
 {
-	final case class SignOption private[SignJar](toList: List[String], signOnly: Boolean) extends NotNull
+	final class SignOption private[SignJar](val toList: List[String], val signOnly: Boolean) extends NotNull
 	{
 		override def toString = toList.mkString(" ")
 	}
-	def keyStore(url: URL) = SignOption("-keystore" :: url.toExternalForm :: Nil, true)
-	def signedJar(p: Path) = SignOption("-signedjar" :: p.asFile.getAbsolutePath :: Nil, true)
-	def verbose = SignOption("-verbose" :: Nil, false)
-	def sigFile(name: String) = SignOption("-sigfile" :: name :: Nil, true)
-	def storeType(t: String) = SignOption("-storetype" :: t :: Nil, false)
-	def provider(p: String) = SignOption("-provider" :: p :: Nil, false)
-	def providerName(p: String) = SignOption("-providerName" :: p :: Nil, false)
-	def storePassword(p: String) = SignOption("-storepass" :: p :: Nil, true)
-	def keyPassword(p: String) = SignOption("-keypass" :: p :: Nil, true)
+	def keyStore(url: URL) = new SignOption("-keystore" :: url.toExternalForm :: Nil, true)
+	def signedJar(p: Path) = new SignOption("-signedjar" :: p.asFile.getAbsolutePath :: Nil, true)
+	def verbose = new SignOption("-verbose" :: Nil, false)
+	def sigFile(name: String) = new SignOption("-sigfile" :: name :: Nil, true)
+	def storeType(t: String) = new SignOption("-storetype" :: t :: Nil, false)
+	def provider(p: String) = new SignOption("-provider" :: p :: Nil, false)
+	def providerName(p: String) = new SignOption("-providerName" :: p :: Nil, false)
+	def storePassword(p: String) = new SignOption("-storepass" :: p :: Nil, true)
+	def keyPassword(p: String) = new SignOption("-keypass" :: p :: Nil, true)
 	
 	private def VerifyOption = "-verify"
 	
@@ -69,10 +69,12 @@ object SignJar
 		require(!alias.trim.isEmpty, "Alias cannot be empty")
 		val arguments = options.toList.flatMap(_.toList) ::: jarPath.asFile.getAbsolutePath :: alias :: Nil
 		val pr = (new ProcessRunner(CommandName, arguments)).logIO(log)
-		log.debug("Sign command: " + pr.commandLine)
 		val exitCode = pr.run.exitValue()
 		if(exitCode == 0)
+		{
+			log.debug("Signed " + jarPath)
 			None
+		}
 		else
 			Some("Error signing jar (exit code was " + exitCode + ".)")
 	}
@@ -81,7 +83,6 @@ object SignJar
 	{
 		val arguments = options.filter(!_.signOnly).toList.flatMap(_.toList) ::: VerifyOption :: jarPath.asFile.getAbsolutePath :: Nil
 		val pr = new ProcessRunner(CommandName, arguments)
-		log.debug("Verify command: " + pr.commandLine)
 		val exitCode = pr.run.exitValue()
 		if(exitCode == 0)
 		{
