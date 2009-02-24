@@ -65,7 +65,7 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 		windowTitle(name + " " + version + " API") ::
 		Nil
 	/** The options provided to the 'test' action.  You can specify tests to exclude here.*/
-	def testOptions: Seq[TestOption] = TestResources(testResources) :: Nil
+	def testOptions: Seq[TestOption] = TestFilter(includeTest) :: TestResources(testResources) :: Nil
 	/** The options provided to the clean action.  You can add files to be removed here.*/
 	def cleanOptions: Seq[CleanOption] =
 		ClearAnalysis(mainCompileConditional.analysis) ::
@@ -73,6 +73,8 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 		Nil
 		
 	def packageOptions: Seq[PackageOption] = mainClass.map(MainClass(_)).toList
+	
+	protected def includeTest(test: String): Boolean = true
 	
 	/** These are the directories that are created when a user makes a new project from sbt.*/
 	private def directoriesToCreate: List[Path] =
@@ -187,6 +189,9 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 	protected def incrementVersionAction = task { incrementVersionNumber(); None } describedAs IncrementVersionDescription
 	protected def releaseAction = (test && packageAll && incrementVersion) describedAs ReleaseDescription
 	
+	protected def findAction = findTask(managedDependencyPath, updateOptions)
+	lazy val find = findAction
+	
 	lazy val compile = compileAction
 	lazy val testCompile = testCompileAction
 	lazy val clean = cleanAction
@@ -281,7 +286,7 @@ object BasicScalaProject
 	val TestPackageDescription =
 		"Creates a jar file containing test classes and resources."
 	val DocPackageDescription =
-		"Creates a zip file containing generated API documentation."
+		"Creates a jar file containing generated API documentation."
 	val SourcePackageDescription =
 		"Creates a jar file containing all main source files and resources."
 	val TestSourcePackageDescription =

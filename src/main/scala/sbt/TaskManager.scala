@@ -28,6 +28,7 @@ trait TaskManager{
 		def describedAs(description : String) = new Task(Some(description), dependencies, interactive, action);
 		private def invoke = action;
 
+		final def setInteractive = new Task(description, dependencies, true, action)
 		final def run = {
 			// This is a foldr, but it has the right laziness properties
 			def invokeList(tasks : List[Task]) : Option[String] = tasks match {

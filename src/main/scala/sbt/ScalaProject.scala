@@ -22,6 +22,7 @@ trait ScalaProject extends Project with FileTasks
 	case class ExcludeTests(tests: Iterable[String]) extends TestOption
 	case class TestResources(resources: PathFinder) extends TestOption
 	case class TestListeners(listeners: Iterable[TestReportListener]) extends TestOption
+	case class TestFilter(filterTest: String => Boolean) extends TestOption
 	
 	case class JarManifest(m: Manifest) extends PackageOption
 	{
@@ -183,6 +184,7 @@ trait ScalaProject extends Project with FileTasks
 	protected def doTests(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]): Option[String] = {
 		import scala.collection.mutable.HashSet
 
+			val testFilters = for(TestFilter(include) <- options) yield include
 			val excludeTests = for(ExcludeTests(exclude) <- options) yield exclude
 			val excludeTestsSet = HashSet.empty[String] ++ excludeTests.flatMap(x => x)
 			if(excludeTestsSet.size > 0 && log.atLevel(Level.Debug))
@@ -190,8 +192,9 @@ trait ScalaProject extends Project with FileTasks
 				log.debug("Excluding tests: ")
 				excludeTestsSet.foreach(test => log.debug("\t" + test))
 			}
+			def includeTest(test: TestDefinition) = !excludeTestsSet.contains(test.testClassName) && testFilters.forall(filter => filter(test.testClassName))
 			val resourcesAndClasspath = (for(TestResources(res) <- options) yield res).foldLeft(classpath)(_ +++ _)
-			val tests = HashSet.empty[TestDefinition] ++ analysis.allTests.filter(test => !excludeTestsSet.contains(test.testClassName))
+			val tests = HashSet.empty[TestDefinition] ++ analysis.allTests.filter(includeTest)
 			val listeners = (for(TestListeners(listeners) <- options) yield listeners).flatMap(x => x)
 			TestFramework.runTests(frameworks, resourcesAndClasspath.get, tests, log, listeners)
 	}

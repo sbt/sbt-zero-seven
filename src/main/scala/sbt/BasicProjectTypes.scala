@@ -117,6 +117,19 @@ trait ManagedProject extends ClasspathProject
 	def updateTask(outputPattern: String, managedDependencyPath: Path, options: => Seq[ManagedOption]) =
 		withIvyTask(withConfigurations(outputPattern, managedDependencyPath, options)(ManageDependencies.update))
 		
+	def findTask(managedDependencyPath: Path, options: => Seq[ManagedOption]): Task =
+		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) =>
+			println("Enter module to search for: ")
+			val organization: String = readLine("\n  Organization: ")
+			val name: String = readLine("\n  Name: ")
+			val revision: String = readLine("\n  Revision: ")
+			println()
+			val result =ManageDependencies.listModules(ivyConf, organization, name, revision)
+			for(modules <- result.right; module <- modules)
+				println("    " + module)
+			result.left.toOption
+		}) setInteractive
+		
 	def cleanCacheTask(managedDependencyPath: Path, options: => Seq[ManagedOption]) =
 		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) => ManageDependencies.cleanCache(ivyConf) })
 		
