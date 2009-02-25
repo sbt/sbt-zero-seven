@@ -31,7 +31,7 @@ trait FileTasks extends Project
 	/** Creates a new task that performs 'action' only when the given products are out of date with respect to the given sources.. */
 	def fileTask(files: ProductsSources)(action: => Option[String]): Task = fileTask("", files)(action)
 	/** Creates a new task that performs 'action' only when at least one of the given products does not exist.. */
-	def fileTask(products: => Iterable[Path])(action: => Option[String]): Task = fileTask(products)(action)
+	def fileTask(products: => Iterable[Path])(action: => Option[String]): Task = fileTask("", products)(action)
 	
 }
 object FileTasks

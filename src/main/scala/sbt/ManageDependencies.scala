@@ -103,7 +103,7 @@ object ManageDependencies
 		/** This method is used to add inline dependencies to the provided module.  It properly handles the
 		* different ways of specifying configurations and dependencies. */
 		def addDependencies(moduleID: DefaultModuleDescriptor, dependencies: Iterable[ModuleID],
-			parser: Option[CustomXmlParser.CustomParser], defaultConfiguration: Option[Configuration])
+			parser: CustomXmlParser.CustomParser, defaultConfiguration: Option[Configuration])
 		{
 			for(dependency <- dependencies)
 			{
@@ -111,37 +111,16 @@ object ManageDependencies
 				dependency.configurations match
 				{
 					case None => // The configuration for this dependency was not explicitly specified, so use the default
-					{
-						parser match
-						{
-							case Some(p) =>
-								// let the parser used to parse the inline Ivy XML file add the dependency
-								p.parseDepsConfs(p.getDefaultConf, dependencyDescriptor)
-							case None =>
-								// no inline XML, so just map the default configuration to default
-								def getOrElse(o: Option[Configuration], default: String): String = if(o.isDefined) o.get.name else default
-								dependencyDescriptor.addDependencyConfiguration(getOrElse(defaultConfiguration, "default"), "default")
-						}
-					}
+						parser.parseDepsConfs(parser.getDefaultConf, dependencyDescriptor)
 					case Some(confs) => // The configuration mapping (looks like: test->default) was specified for this dependency
-						parser match
-						{
-							case Some(p) =>
-								// let the parser used to parse the inline Ivy XML file add the dependency
-								p.parseDepsConfs(confs, dependencyDescriptor)
-							case None =>
-							{
-								// no inline XML, so create a temporary parser to parse the configuration specifications
-								val p = new CustomXmlParser.CustomParser(ivy.getSettings)
-								p.setMd(moduleID)
-								defaultConfiguration.foreach(c => p.setDefaultConf(c.name))
-								p.parseDepsConfs(confs, dependencyDescriptor)
-							}
-						}
+						parser.parseDepsConfs(confs, dependencyDescriptor)
 				}
 				moduleID.addDependency(dependencyDescriptor)
 			}
-			
+			addMainArtifact(moduleID)
+		}
+		def addMainArtifact(moduleID: DefaultModuleDescriptor)
+		{
 			val artifact = DefaultArtifact.newIvyArtifact(moduleID.getResolvedModuleRevisionId, moduleID.getPublicationDate)
 			moduleID.setModuleArtifact(artifact)
 			moduleID.check()
@@ -164,7 +143,7 @@ object ManageDependencies
 		/** Called to determine dependencies when the dependency manager is SbtManager and no inline dependencies (Scala or XML) are defined
 		* or if the manager is AutodetectManager.  It will try to read from pom.xml first and then ivy.xml if pom.xml is not found.  If neither is found,
 		* Ivy is configured with defaults unless IvyFlags.errorIfNoConfiguration is true, in which case an error is generated.*/
-		def autodetectDependencies =
+		def autodetectDependencies(module: ModuleRevisionId) =
 		{
 			log.debug("Autodetecting dependencies.")
 			val defaultPOMFile = defaultPOM(paths.projectDirectory).asFile
@@ -179,9 +158,9 @@ object ManageDependencies
 					Left("No readable dependency configuration found.  Need " + DefaultIvyFilename + " or " + DefaultMavenFilename)
 				else
 				{
-					log.warn("No readable dependency configuration found.")
-					val moduleID = DefaultModuleDescriptor.newDefaultInstance(toID(ModuleID("", "", "", None)))
-					addDependencies(moduleID, Nil, None,None)
+					log.warn("No readable dependency configuration found, using defaults.")
+					val moduleID = DefaultModuleDescriptor.newDefaultInstance(module)
+					addMainArtifact(moduleID)
 					Right(moduleID)
 				}
 			}
@@ -202,11 +181,11 @@ object ManageDependencies
 					configure(im.configuration)
 					readIvyFile(im.dependencies.asFile)
 				}
-				case AutoDetectManager =>
+				case adm: AutoDetectManager =>
 				{
 					log.debug("No dependency manager explicitly specified.")
 					autodetectConfiguration()
-					autodetectDependencies
+					autodetectDependencies(toID(adm.module))
 				}
 				case sm: SbtManager =>
 				{
@@ -221,7 +200,7 @@ object ManageDependencies
 						addResolvers(ivy.getSettings, extra, log)
 					}
 					if(dependencies.isEmpty && dependenciesXML.isEmpty && autodetectUnspecified)
-						autodetectDependencies
+						autodetectDependencies(toID(module))
 					else
 					{
 						val moduleID =
@@ -238,21 +217,12 @@ object ManageDependencies
 								// no inline configurations, so leave Ivy to its defaults
 								case None => DefaultModuleDescriptor.newDefaultInstance(toID(module))
 							}
-						if(dependenciesXML.isEmpty) // 
+						log.debug("Using inline dependencies specified in Scala" + (if(dependenciesXML.isEmpty) "." else " and XML."))
+						val defaultConf = defaultConfiguration match { case None => "default"; case Some(dc) => dc.name }
+						for(parser <- parseXMLDependencies(wrapped(module, dependenciesXML), moduleID, defaultConf).right) yield
 						{
-							log.debug("Using inline dependencies specified in Scala.")
-							addDependencies(moduleID, dependencies, None,defaultConfiguration)
-							Right(moduleID)
-						}
-						else
-						{
-							log.debug("Using inline dependencies specified in Scala and XML.")
-							val defaultConf = defaultConfiguration match { case None => "default"; case Some(dc) => dc.name }
-							for(parser <- parseXMLDependencies(wrapped(module, dependenciesXML), moduleID, defaultConf).right) yield
-							{
-								addDependencies(moduleID, dependencies, Some(parser), defaultConfiguration)
-								moduleID
-							}
+							addDependencies(moduleID, dependencies, parser, defaultConfiguration)
+							moduleID
 						}
 					}
 				}
@@ -292,7 +262,7 @@ object ManageDependencies
 		def doMakePom(ivy: Ivy, module: ModuleDescriptor) =
 			Control.trapUnit("Could not make pom: ", config.log)
 			{
-				PomModuleDescriptorWriter.write(module, PomModuleDescriptorWriter.DEFAULT_MAPPING, output)
+				PomModuleDescriptorWriter.write(module, DefaultConfigurationMapping, output)
 				None
 			}
 		withIvy(config)(doMakePom)
@@ -388,10 +358,27 @@ object ManageDependencies
 	}
 }
 
+private object DefaultConfigurationMapping extends PomModuleDescriptorWriter.ConfigurationScopeMapping(new java.util.HashMap)
+{
+	override def getScope(confs: Array[String]) =
+	{
+		Configurations.defaultMavenConfigurations.find(conf => confs.contains(conf.name)) match
+		{
+			case Some(conf) => conf.name
+			case None =>
+				if(confs.isEmpty || confs(0) == Configurations.Default.name)
+					null
+				else
+					confs(0)
+		}
+	}
+	override def isOptional(confs: Array[String]) = confs.isEmpty || (confs.length == 1 && confs(0) == Configurations.Optional.name)
+}
+
 sealed abstract class Manager extends NotNull
 /** This explicitly requests auto detection as a dependency manager.  It will first check for a 'pom.xml' file and if that does not exist, an 'ivy.xml' file.
 * Ivy is configured using the detected file or uses defaults.*/
-final object AutoDetectManager extends Manager
+final class AutoDetectManager(val module: ModuleID) extends Manager
 /** This explicitly requests that the Maven pom 'pom' be used to determine dependencies.  An Ivy configuration file to use may be specified in
 * 'configuration', since Ivy currently cannot extract Maven repositories from a pom file. Otherwise, defaults are used.*/
 final class MavenManager(val configuration: Option[Path], val pom: Path) extends Manager
@@ -456,7 +443,7 @@ final class Configuration(val name: String, val description: String, val isPubli
 object Configurations
 {
 	def config(name: String) = new Configuration(name)
-	def defaultMavenConfigurations = Compile :: Test :: Provided :: Javadoc :: Runtime :: Sources :: System :: Optional :: Nil
+	def defaultMavenConfigurations = Compile :: Runtime :: Test :: Provided :: System :: Optional :: Sources :: Javadoc :: Nil
 	
 	lazy val Default = config("default")
 	lazy val Compile = config("compile")

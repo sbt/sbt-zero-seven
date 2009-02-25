@@ -79,7 +79,7 @@ trait ManagedProject extends ClasspathProject
 		var quiet = false
 		var addScalaTools = false
 		var errorIfNoConfiguration = false
-		var manager: Manager = AutoDetectManager
+		var manager: Manager = new AutoDetectManager(projectID)
 		var cacheDirectory: Option[Path] = None
 		for(option <- options)
 		{
@@ -116,6 +116,9 @@ trait ManagedProject extends ClasspathProject
 		updateTask(outputPattern, managedDependencyPath, options)
 	def updateTask(outputPattern: String, managedDependencyPath: Path, options: => Seq[ManagedOption]) =
 		withIvyTask(withConfigurations(outputPattern, managedDependencyPath, options)(ManageDependencies.update))
+		
+	def makePomTask(output: Path, managedDependencyPath: Path, options: => Seq[ManagedOption]) =
+		withIvyTask(withConfigurations("", managedDependencyPath: Path, options) { (ivyConf, ignore) => ManageDependencies.makePom(ivyConf, output.asFile) })
 		
 	def cleanCacheTask(managedDependencyPath: Path, options: => Seq[ManagedOption]) =
 		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) => ManageDependencies.cleanCache(ivyConf) })
