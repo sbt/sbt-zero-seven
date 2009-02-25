@@ -138,6 +138,7 @@ abstract class WriterReportListener(val log: Logger) extends TestsListener
 		}
 	def endGroup(name: String, t: Throwable) =
 	{
+		groupMessages = Nil
 		println("Exception in " + name)
 		onOut(t.printStackTrace(_))
 	}
@@ -152,6 +153,7 @@ abstract class WriterReportListener(val log: Logger) extends TestsListener
 		if(!groupMessages.isEmpty)
 		{
 			groupMessages.foreach(println(_))
+			groupMessages = Nil
 			println("")
 		}
 	}

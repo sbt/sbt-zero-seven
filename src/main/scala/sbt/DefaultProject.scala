@@ -189,9 +189,6 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 	protected def incrementVersionAction = task { incrementVersionNumber(); None } describedAs IncrementVersionDescription
 	protected def releaseAction = (test && packageAll && incrementVersion) describedAs ReleaseDescription
 	
-	protected def findAction = findTask(managedDependencyPath, updateOptions)
-	lazy val find = findAction
-	
 	lazy val compile = compileAction
 	lazy val testCompile = testCompileAction
 	lazy val clean = cleanAction

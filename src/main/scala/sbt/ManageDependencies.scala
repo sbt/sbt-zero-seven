@@ -297,20 +297,6 @@ object ManageDependencies
 			}
 		withIvy(config)(doMakePom)
 	}
-	/** Searches for modules. */
-	def listModules(config: IvyConfiguration, organization: String, name: String, revision: String): Either[String, Seq[ModuleID]] =
-	{
-		def doList(ivy: Ivy, module: ModuleDescriptor) =
-			Control.trap("Could not list modules: ", config.log)
-			{
-				val branch = PatternMatcher.ANY_EXPRESSION
-				val matcher = PatternMatcher.EXACT_OR_REGEXP
-				val settings = ivy.getSettings
-				val  modules = ivy.listModules(ModuleRevisionId.newInstance(organization, name, branch, revision), settings.getMatcher(matcher))
-				Right(modules.map(id => ModuleID(id.getOrganisation, id.getName, id.getRevision, None)).toList)
-			}
-		withIvyValue(config)(doList)
-	}
 	/** Resolves and retrieves dependencies.  'ivyConfig' is used to produce an Ivy file and configuration.
 	* 'updateConfig' configures the actual resolution and retrieval process. */
 	def update(ivyConfig: IvyConfiguration, updateConfig: UpdateConfiguration) =
