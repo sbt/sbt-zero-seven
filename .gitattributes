@@ -130,6 +130,10 @@ src/test/resources/sbt-test-resources/tests/specs-a/project/build.properties -te
 src/test/resources/sbt-test-resources/tests/specs-a/project/build/src/TestProject.scala -text
 src/test/resources/sbt-test-resources/tests/specs-a/src/test/scala/DummyTest.scala -text
 src/test/resources/sbt-test-resources/tests/specs-a/test -text
+src/test/resources/sbt-test-resources/tests/specs-nested/project/build.properties -text
+src/test/resources/sbt-test-resources/tests/specs-nested/project/build/src/TestProject.scala -text
+src/test/resources/sbt-test-resources/tests/specs-nested/src/test/scala/TestSpecification.scala -text
+src/test/resources/sbt-test-resources/tests/specs-nested/test -text
 src/test/scala/sbt/DagSpecification.scala -text
 src/test/scala/sbt/FileUtilitiesSpecification.scala -text
 src/test/scala/sbt/NameFilterSpecification.scala -text

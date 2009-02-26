@@ -28,15 +28,16 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 			// of sbt being built is tested, not the one doing the building.
 			val loader = ScriptedLoader(runClasspath.get.map(_.asURL).toSeq.toArray)
 			val scriptedClass = Class.forName(ScriptedClassName, true, loader).asSubclass(classOf[Scripted])
-			val scriptedConstructor = scriptedClass.getConstructor(classOf[File], classOf[TestFilter])
+			val scriptedConstructor = scriptedClass.getConstructor(classOf[File], classOf[ScriptedTestFilter])
 			val runner = scriptedConstructor.newInstance(sbtTestResources.asFile, filter)
 			runner.scriptedTests(log)
 		}
 	val ScriptedClassName = "ScriptedTests"
 	
-	val filter = new TestFilter
+	val filter = new ScriptedTestFilter
 	{
 		def accept(group: String, name: String) = true
+			//group == "tests" && name == "specs-nested"
 	}
 }
 package sbt { // need access to LoaderBase, which is private in package sbt

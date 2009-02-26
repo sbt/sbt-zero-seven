@@ -4,7 +4,7 @@
 import sbt._
 import java.io.{BufferedReader, File, InputStreamReader}
 
-trait TestFilter extends NotNull
+trait ScriptedTestFilter extends NotNull
 {
 	def accept(group: String, name: String): Boolean
 }
@@ -13,13 +13,13 @@ trait Scripted extends NotNull
 	def scriptedTests(log: Logger): Option[String]
 }
 
-object AcceptAllFilter extends TestFilter
+object AcceptAllFilter extends ScriptedTestFilter
 {
 	def accept(group: String, name: String): Boolean = true
 }
-class ScriptedTests(testResources: Resources, filter: TestFilter) extends Scripted
+class ScriptedTests(testResources: Resources, filter: ScriptedTestFilter) extends Scripted
 {
-	def this(resourceBaseDirectory: File, filter: TestFilter) = this(new Resources(resourceBaseDirectory), filter)
+	def this(resourceBaseDirectory: File, filter: ScriptedTestFilter) = this(new Resources(resourceBaseDirectory), filter)
 	def this(testResources: Resources) = this(testResources, AcceptAllFilter)
 	def this(resourceBaseDirectory: File) = this(new Resources(resourceBaseDirectory))
 	

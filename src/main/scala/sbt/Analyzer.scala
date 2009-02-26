@@ -3,9 +3,10 @@
  */
 package sbt
 
-import scala.tools.nsc.{io, plugins, Global, Phase}
+import scala.tools.nsc.{io, plugins, symtab, Global, Phase}
 import io.{AbstractFile, PlainFile, ZipArchive}
 import plugins.{Plugin, PluginComponent}
+import symtab.Flags
 import scala.collection.mutable.{HashMap, HashSet, Map, Set}
 
 import java.io.File
@@ -122,7 +123,7 @@ class Analyzer(val global: Global) extends Plugin
 				for(clazz @ ClassDef(mods, n, _, _) <- unit.body)
 				{
 					val sym = clazz.symbol
-					if(mods.isPublic && !mods.isDeferred && !sym.isImplClass && sym.isStatic)
+					if(mods.isPublic && !mods.isDeferred && !sym.isImplClass && sym.isStatic && !sym.isNestedClass)
 					{
 						val isModule = sym.isModuleClass
 						for(superclass <- superclasses.filter(sym.isSubClass))

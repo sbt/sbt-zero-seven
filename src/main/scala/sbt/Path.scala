@@ -29,7 +29,7 @@ sealed abstract class Path extends PathFinder with NotNull
 		if(asFile.exists)
 			pathSet += this
 	}
-	override def / (component: String): Path = if(component == ".") this else intern(new RelativePath(this, component))
+	override def / (component: String): Path = if(component == ".") this else new RelativePath(this, component)
 	/** True if and only if the file represented by this path exists.*/
 	def exists = asFile.exists
 	/** True if and only if the file represented by this path is a directory.*/
@@ -91,19 +91,6 @@ private[sbt] final class RelativePath(val parentPath: Path, val component: Strin
 }
 object Path
 {
-	import scala.collection.jcl.WeakHashMap
-	import java.lang.ref.{Reference,WeakReference}
-	
-	private val cache = new WeakHashMap(new java.util.WeakHashMap[Path, Reference[Path]](8096))
-	private def intern(p: Path): Path =
-	{
-		val interned = cache.getOrElseUpdate(p, new WeakReference(p)).get
-		if(interned == null)
-			p
-		else
-			interned
-	}
-
 	import java.io.File
 	import File.pathSeparator
 	
