@@ -765,7 +765,7 @@ private object OpenResource
 	private def unwrapEither(e: Either[String, Unit]): Option[String] = e.left.toOption
 	
 	def fileOutputStream(append: Boolean) =
-		new OpenFile[FileOutputStream] { protected def open(file: File) = new FileOutputStream(file) }
+		new OpenFile[FileOutputStream] { protected def open(file: File) = new FileOutputStream(file, append) }
 	def fileInputStream = new OpenFile[FileInputStream]
 		{ protected def open(file: File) = new FileInputStream(file) }
 	def urlInputStream = new OpenResource[URL, InputStream]
