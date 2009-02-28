@@ -12,7 +12,7 @@ import BasicScalaProject._
 
 /** This class defines concrete instances of actions from ScalaProject using overridable paths,
 * options, and configuration. */
-abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathProject with BasicManagedProject with BasicProjectPaths
+abstract class BasicScalaProject extends ScalaProject with BasicDependencyProject with BasicProjectPaths
 {
 	/** The class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
@@ -65,7 +65,7 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 		windowTitle(name + " " + version + " API") ::
 		Nil
 	/** The options provided to the 'test' action.  You can specify tests to exclude here.*/
-	def testOptions: Seq[TestOption] = TestFilter(includeTest) :: TestResources(testResources) :: Nil
+	def testOptions: Seq[TestOption] = TestFilter(includeTest) :: Nil
 	/** The options provided to the clean action.  You can add files to be removed here.*/
 	def cleanOptions: Seq[CleanOption] =
 		ClearAnalysis(mainCompileConditional.analysis) ::
@@ -103,21 +103,31 @@ abstract class BasicScalaProject extends ScalaProject with UnmanagedClasspathPro
 	* by default. */
 	def docClasspath = compileClasspath
 	/** A PathFinder that provides the classpath to pass to the compiler.*/
-	def compileClasspath = fullClasspath(Compile) +++ projectPathConcatenate[ManagedProject](_.managedClasspath(Provided, false)) +++ optionalClasspath
+	def compileClasspath = fullClasspath(Compile) +++ optionalClasspath
 	/** A PathFinder that provides the classpath to use when unit testing.*/
-	def testClasspath = projectPathConcatenate[BasicScalaProject](_.testCompilePath) +++ fullClasspath(Test) +++ optionalClasspath
+	def testClasspath = fullClasspath(Test) +++ optionalClasspath
 	/** A PathFinder that provides the classpath to use when running the class specified in 'mainClass'.*/
 	def runClasspath = fullClasspath(Runtime) +++ optionalClasspath
 	/** A PathFinder that provides the classpath to use for a Scala interpreter session.*/
 	def consoleClasspath = fullClasspath(consoleConfiguration) +++ optionalClasspath
 	/** A PathFinder that corresponds to Maven's optional scope.  It includes any managed libraries in the
-	* 'optional' configuration.*/
+	* 'optional' configuration for this project only.*/
 	def optionalClasspath = managedClasspath(Optional, false)
 
-	/** This returns the classpath for this project only for the given configuration.  It by default includes
-	* the main compiled classes for this project and the libraries in this project's unmanaged library directory
-	* (lib) and the managed directory for the specified configuration.*/
-	def projectClasspath(config: Configuration) = mainCompilePath +++ unmanagedClasspath +++ managedClasspath(config)
+	/** This returns the unmanaged classpath for only this project for the given configuration.  It by
+	* default includes the main compiled classes for this project and the libraries in this project's
+	* unmanaged library directory (lib) and the managed directory for the specified configuration.  It
+	* also adds the resource directories appropriate to the configuration.*/
+	def unmanagedClasspath(config: Configuration) =
+	{
+		val base =  mainCompilePath +++ mainResourcesPath +++ unmanagedClasspath
+		config match
+		{
+			case Test => testCompilePath +++ testResourcesPath +++ base
+			case _ => base
+		}
+	}
+	
 	
 	// not ready for external use yet
 	protected[sbt] def scalaJars: Iterable[java.io.File] =
@@ -325,7 +335,7 @@ trait BasicDependencyPaths extends Project
 	def dependencyPath = path(dependencyDirectoryName)
 	def managedDependencyPath = path(managedDirectoryName)
 }
-trait BasicProjectPaths extends BasicDependencyPaths
+trait BasicProjectPaths extends Project
 {
 	import BasicProjectPaths._
 	

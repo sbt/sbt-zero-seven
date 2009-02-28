@@ -22,7 +22,7 @@ trait WebstartOptions extends NotNull
 	def jnlpFile: Path
 	/** The location to put all jars that are not the main jar.  It must be in 'webstartOutputDirectory'.*/
 	def webstartLibDirectory: Path
-	/** The libraries needed for webstart.*/
+	/** The libraries needed for webstart.  Note that only jars are used; directories are discarded.*/
 	def webstartLibraries: PathFinder
 	/** Libraries external to the project needed for webstart.  This is mainly for scala libraries.*/
 	def webstartExtraLibraries: Iterable[File]

@@ -459,32 +459,35 @@ object Configurations
 	private[sbt] def removeDuplicates(configs: Iterable[Configuration]) = Set(scala.collection.mutable.Map(configs.map(config => (config.name, config)).toSeq: _*).values.toList: _*)
 }
 /** Interface between Ivy logging and sbt logging. */
-private class IvyLogger(log: Logger) extends MessageLogger
+private final class IvyLogger(log: Logger) extends MessageLogger
 {
 	private var progressEnabled = false
 	
 	def log(msg: String, level: Int)
 	{
-		import Message._
+		import Message.{MSG_DEBUG, MSG_VERBOSE, MSG_INFO, MSG_WARN, MSG_ERR}
 		level match
 		{
-			case MSG_DEBUG | MSG_VERBOSE => log.debug(msg)
-			case MSG_INFO => log.info(msg)
-			case MSG_WARN => log.warn(msg)
-			case MSG_ERR => log.error(msg)
+			case MSG_DEBUG | MSG_VERBOSE => debug(msg)
+			case MSG_INFO => info(msg)
+			case MSG_WARN => warn(msg)
+			case MSG_ERR => error(msg)
 		}
 	}
 	def rawlog(msg: String, level: Int)
 	{
 		log(msg, level)
 	}
-	def debug(msg: String) = log.debug(msg)
-	def verbose(msg: String) = log.debug(msg)
-	def deprecated(msg: String) = log.warn(msg)
-	def info(msg: String) = log.info(msg)
-	def rawinfo(msg: String) = log.info(msg)
-	def warn(msg: String) = log.warn(msg)
-	def error(msg: String) = log.error(msg)
+	import Level.{Debug, Info, Warn, Error}
+	def debug(msg: String) = logImpl(msg, Debug)
+	def verbose(msg: String) = debug(msg)
+	def deprecated(msg: String) = warn(msg)
+	def info(msg: String) = logImpl(msg, Info)
+	def rawinfo(msg: String) = info(msg)
+	def warn(msg: String) = logImpl(msg, Warn)
+	def error(msg: String) = logImpl(msg, Error)
+	
+	private def logImpl(msg: String, level: Level.Value) = log.log(level, msg)
 	
 	private def emptyList = java.util.Collections.emptyList[T forSome { type T}]
 	def getProblems = emptyList
@@ -496,7 +499,7 @@ private class IvyLogger(log: Logger) extends MessageLogger
 	def progress = ()
 	def endProgress = ()
 
-	def endProgress(msg: String) = log.info(msg)
+	def endProgress(msg: String) = info(msg)
 	def isShowProgress = false
 	def setShowProgress(progress: Boolean) {}
 }

@@ -20,7 +20,6 @@ trait ScalaProject extends Project with FileTasks
 	case class ClearAnalysis(analysis: TaskAnalysis[_, _, _]) extends CleanOption
 	
 	case class ExcludeTests(tests: Iterable[String]) extends TestOption
-	case class TestResources(resources: PathFinder) extends TestOption
 	case class TestListeners(listeners: Iterable[TestReportListener]) extends TestOption
 	case class TestFilter(filterTest: String => Boolean) extends TestOption
 	
@@ -193,10 +192,9 @@ trait ScalaProject extends Project with FileTasks
 				excludeTestsSet.foreach(test => log.debug("\t" + test))
 			}
 			def includeTest(test: TestDefinition) = !excludeTestsSet.contains(test.testClassName) && testFilters.forall(filter => filter(test.testClassName))
-			val resourcesAndClasspath = (for(TestResources(res) <- options) yield res).foldLeft(classpath)(_ +++ _)
 			val tests = HashSet.empty[TestDefinition] ++ analysis.allTests.filter(includeTest)
 			val listeners = (for(TestListeners(listeners) <- options) yield listeners).flatMap(x => x)
-			TestFramework.runTests(frameworks, resourcesAndClasspath.get, tests, log, listeners)
+			TestFramework.runTests(frameworks, classpath.get, tests, log, listeners)
 	}
 }
 trait WebScalaProject extends ScalaProject
@@ -204,15 +202,18 @@ trait WebScalaProject extends ScalaProject
 	protected def prepareWebappTask(webappContents: PathFinder, warPath: => Path, classpath: PathFinder, extraJars: => Iterable[File]) =
 		task
 		{
-			val (libs, classDirectories) = classpath.get.toList.partition(ClasspathUtilities.isArchive)
-			val classes = (Path.lazyPathFinder(classDirectories.map(_ ##))) ** "*.class"
-			
 			val webInfPath = warPath / "WEB-INF"
 			val webLibDirectory = webInfPath / "lib"
+			val classesTargetDirectory = webInfPath / "classes"
+			
+			val (libs, directories) = classpath.get.toList.partition(ClasspathUtilities.isArchive)
+			val classesAndResources = descendents(Path.lazyPathFinder(directories) ##, "*")
+			if(log.atLevel(Level.Debug))
+				directories.foreach(d => log.debug(" Copying the contents of directory " + d + " to " + classesTargetDirectory))
 			
 			import FileUtilities.{copy, copyFlat, copyFilesFlat, clean}
 			(copy(webappContents.get, warPath, log).right flatMap { copiedWebapp =>
-			copy(classes.get, webInfPath / "classes", log).right flatMap { copiedClasses =>
+			copy(classesAndResources.get, classesTargetDirectory, log).right flatMap { copiedClasses =>
 			copyFlat(libs, webLibDirectory, log).right flatMap { copiedLibs =>
 			copyFilesFlat(extraJars, webLibDirectory, log).right flatMap { copiedExtraLibs =>
 				{

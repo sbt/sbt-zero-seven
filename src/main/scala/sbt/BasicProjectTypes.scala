@@ -26,17 +26,11 @@ trait ClasspathProject extends Project
 			}
 			set.toList
 		}
-
-	import scala.reflect.Manifest
-	protected[sbt] def projectPathConcatenate[T <: Project](getPath: T => PathFinder)(implicit mf: Manifest[T]): PathFinder =
-	{
-		(Path.emptyPathFinder /: topologicalSort) { (current, project) =>
-			if(Manifest.classType(project.getClass) <:< mf)
-				getPath(project.asInstanceOf[T]) +++ current
-			else
-				current
-		}
-	}
+}
+trait BasicDependencyProject extends BasicManagedProject with UnmanagedClasspathProject with BasicDependencyPaths
+{
+	/** This returns the classpath for only this project for the given configuration.*/
+	def projectClasspath(config: Configuration) = unmanagedClasspath(config) +++ managedClasspath(config)
 }
 /** A project that provides a directory in which jars can be manually managed.*/
 trait UnmanagedClasspathProject extends ClasspathProject
@@ -45,6 +39,9 @@ trait UnmanagedClasspathProject extends ClasspathProject
 	def dependencyPath: Path
 	/** The classpath containing all jars in the unmanaged directory. */
 	def unmanagedClasspath: PathFinder = descendents(dependencyPath, "*.jar")
+	/** The classpath containing all unmanaged classpath elements for the given configuration. This typically includes
+	* at least 'unmanagedClasspath'.*/
+	def unmanagedClasspath(config: Configuration): PathFinder
 }
 
 /** A project that provides automatic dependency management.*/
@@ -127,7 +124,11 @@ trait ManagedProject extends ClasspathProject
 	
 	def projectID: ModuleID = ModuleID(normalizedName, normalizedName, version.toString, None)
 	def managedDependencyPath: Path
-	def managedClasspath(config: Configuration): PathFinder = managedClasspath(config, true)
+	/** The managed classpath for the given configuration, using the default configuration if this configuration
+	* does not exist in the managed library directory.*/
+	final def managedClasspath(config: Configuration): PathFinder = managedClasspath(config, true)
+	/** The managed classpath for the given configuration.  If 'useDefaultFallback' is true, the default configuration
+	* will be used if the configuration does not exist in the managed library directory.*/
 	def managedClasspath(config: Configuration, useDefaultFallback: Boolean): PathFinder =
 	{
 		val configDirectory = managedDependencyPath / config.toString
@@ -205,6 +206,18 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject
 		else
 			LibraryManager(m) :: baseUpdateOptions
 	}
+	def includeProvidedWithCompile = true
+	/** Includes the Provided configuration on the Compile classpath.  This can be overridden by setting
+	* includeProvidedWithCompile to false.*/
+	override def managedClasspath(config: Configuration, useDefaultFallback: Boolean) =
+	{
+		import Configurations.{Compile, Provided}
+		val superClasspath = super.managedClasspath(config, useDefaultFallback)
+		if(config == Compile && includeProvidedWithCompile)
+			superClasspath +++ super.managedClasspath(Provided, false)
+		else
+			superClasspath
+	}
 }
 
 object StringUtilities
@@ -270,14 +283,13 @@ trait ReflectiveModules extends Project
 trait ReflectiveProject extends ReflectiveModules with ReflectiveTasks
 
 /** This Project subclass is used to contain other projects as dependencies.*/
-class ParentProject(val info: ProjectInfo) extends UnmanagedClasspathProject with ReflectiveManagedProject
-	with ManagedProject with BasicDependencyPaths
+class ParentProject(val info: ProjectInfo) extends BasicDependencyProject
 {
 	def dependencies = info.dependencies ++ subProjects.values.toList
 	/** The directories to which a project writes are listed here and is used
 	* to check a project and its dependencies for collisions.*/
 	override def outputDirectories = managedDependencyPath :: Nil
-	def projectClasspath(config: Configuration) = unmanagedClasspath +++ managedClasspath(config)
+	def unmanagedClasspath(config: Configuration) = unmanagedClasspath
 }
 
 object Reflective

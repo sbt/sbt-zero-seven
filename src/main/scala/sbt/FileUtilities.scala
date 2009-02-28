@@ -560,38 +560,6 @@ object FileUtilities
 		}
 	}
 	
-	private[sbt] def open[T](file: File, log: Logger, constructor: File => T): Either[String, T] =
-	{
-		val parent = file.getParentFile
-		if(parent != null)
-			createDirectory(parent, log)
-		Control.trap("Error opening " + file + ": ", log) { Right(constructor(file)) }
-	}
-	private def urlInputStream(url: URL, log: Logger) =
-		Control.trap("Error opening " + url + ": ", log) { Right(url.openStream) }
-	private def fileOutputChannel(file: File, log: Logger) = open(file, log, (f: File) => (new FileOutputStream(f)).getChannel)
-	private def fileInputChannel(file: File, log: Logger) = open(file, log, (f: File) => (new FileInputStream(f)).getChannel)
-	private def fileInputStream(file: File, log: Logger) = open(file, log, (f: File) => new FileInputStream(f))
-	private def fileOutputStream(append: Boolean)(file: File, log: Logger) =
-		open(file, log, (f: File) => new FileOutputStream(f, append))
-	private def fileWriter(charset: Charset, append: Boolean)(file: File, log: Logger) =
-		open(file, log, (f: File) => new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f, append), charset)) )
-	private def fileReader(charset: Charset)(file: File, log: Logger) =
-		open(file, log, (f: File) => new BufferedReader(new InputStreamReader(new FileInputStream(f), charset)) )
-	private[sbt] def openJarFile(verify: Boolean)(f: File, l: Logger) = open(f, l, new CloseableJarFile(_))
-	
-	private[sbt] def ioOption[Source, T <: Closeable](src: Source, open: (Source, Logger) => Either[String, T],
-		f: T => Option[String], op: String, log: Logger): Option[String] =
-			io(src, open, (t: T) => f(t).toLeft(()), op, log).left.toOption
-	private[sbt] def io[Source, T <: Closeable, R](src: Source, open: (Source, Logger) => Either[String, T],
-		f: T => Either[String, R], op: String, log: Logger): Either[String, R] =
-			open(src, log).right flatMap
-			{
-				stream => Control.trapAndFinally("Error " + op + " "+ src + ": ", log)
-					{ f(stream) }
-					{ stream.close }
-			}
-	
 	/** Appends the given <code>String content</code> to the provided <code>file</code> using the default encoding.
 	* A new file is created if it does not exist.*/
 	def append(file: File, content: String, log: Logger): Option[String] = append(file, content, Charset.defaultCharset, log)
@@ -615,6 +583,8 @@ object FileUtilities
 			Some("String cannot be encoded by default charset.")
 	}
 	
+	import OpenResource._
+	
 	/** Opens a <code>Writer</code> on the given file using the default encoding,
 	* passes it to the provided function, and closes the <code>Writer</code>.*/
 	def write(file: File, log: Logger)(f: Writer => Option[String]): Option[String] =
@@ -624,7 +594,7 @@ object FileUtilities
 	def write(file: File, charset: Charset, log: Logger)(f: Writer => Option[String]): Option[String] =
 		write(file, charset, false, log)(f)
 	private def write(file: File, charset: Charset, append: Boolean, log: Logger)(f: Writer => Option[String]): Option[String] =
-		ioOption(file, fileWriter(charset, append), f, "writing", log)
+		fileWriter(charset, append).ioOption(file, "writing", log)(f)
 		
 	/** Opens a <code>Reader</code> on the given file using the default encoding,
 	* passes it to the provided function, and closes the <code>Reader</code>.*/
@@ -633,7 +603,7 @@ object FileUtilities
 	/** Opens a <code>Reader</code> on the given file using the default encoding,
 	* passes it to the provided function, and closes the <code>Reader</code>.*/
 	def read(file: File, charset: Charset, log: Logger)(f: Reader => Option[String]): Option[String] =
-		unwrapEither(readValue(file, charset, log)(wrapEither(f)))
+		fileReader(charset).ioOption(file, "reading", log)(f)
 	/** Opens a <code>Reader</code> on the given file using the default encoding,
 	* passes it to the provided function, and closes the <code>Reader</code>.*/
 	def readValue[R](file: File, log: Logger)(f: Reader => Either[String, R]): Either[String, R] =
@@ -641,7 +611,7 @@ object FileUtilities
 	/** Opens a <code>Reader</code> on the given file using the given encoding,
 	* passes it to the provided function, and closes the <code>Reader</code>.*/
 	def readValue[R](file: File, charset: Charset, log: Logger)(f: Reader => Either[String, R]): Either[String, R] =
-		io(file, fileReader(charset), f, "reading", log)
+		fileReader(charset).io(file, "reading", log)(f)
 		
 	/** Reads the contents of the given file into a <code>String</code> using the default encoding.
 	*  The resulting <code>String</code> is wrapped in <code>Right</code>.*/
@@ -702,45 +672,43 @@ object FileUtilities
 	/** Opens an <code>OutputStream</code> on the given file with append=true and passes the stream
 	* to the provided function.  The stream is closed before this function returns.*/
 	def appendStream(file: File, log: Logger)(f: OutputStream => Option[String]): Option[String] =
-		ioOption(file, fileOutputStream(true), f, "appending", log)
+		fileOutputStream(true).ioOption(file, "appending", log)(f)
 	/** Opens an <code>OutputStream</code> on the given file and passes the stream
 	* to the provided function.  The stream is closed before this function returns.*/
 	def writeStream(file: File, log: Logger)(f: OutputStream => Option[String]): Option[String] =
-		ioOption(file, fileOutputStream(false), f, "writing", log)
+		fileOutputStream(false).ioOption(file, "writing", log)(f)
 	private def writeStream(file: File, append: Boolean, log: Logger)(f: OutputStream => Option[String]): Option[String] =
 		if(append) appendStream(file, log)(f) else writeStream(file, log)(f)
 	/** Opens an <code>InputStream</code> on the given file and passes the stream
 	* to the provided function.  The stream is closed before this function returns.*/
 	def readStream(file: File, log: Logger)(f: InputStream => Option[String]): Option[String] =
-		unwrapEither(readStreamValue(file, log)(wrapEither(f)))
+		fileInputStream.ioOption(file, "reading", log)(f)
 	/** Opens an <code>InputStream</code> on the given file and passes the stream
 	* to the provided function.  The stream is closed before this function returns.*/
 	def readStreamValue[R](file: File, log: Logger)(f: InputStream => Either[String, R]): Either[String, R] =
-		io(file, fileInputStream, f, "reading", log)
+		fileInputStream.io(file, "reading", log)(f)
 	/** Opens an <code>InputStream</code> on the given <code>URL</code> and passes the stream
 	* to the provided function.  The stream is closed before this function returns.*/
 	def readStream(url: URL, log: Logger)(f: InputStream => Option[String]): Option[String] =
-		unwrapEither(readStreamValue(url, log)(wrapEither(f)))
+		urlInputStream.ioOption(url, "reading", log)(f)
 	/** Opens an <code>InputStream</code> on the given <code>URL</code> and passes the stream
 	* to the provided function.  The stream is closed before this function returns.*/
 	def readStreamValue[R](url: URL, log: Logger)(f: InputStream => Either[String, R]): Either[String, R] =
-		io(url, urlInputStream, f, "reading", log)
+		urlInputStream.io(url, "reading", log)(f)
 		
 	/** Opens a <code>FileChannel</code> on the given file for writing and passes the channel
 	* to the given function.  The channel is closed before this function returns.*/
 	def writeChannel(file: File, log: Logger)(f: FileChannel => Option[String]): Option[String] =
-		ioOption(file, fileOutputChannel, f, "writing", log)
+		fileOutputChannel.ioOption(file, "writing", log)(f)
 	/** Opens a <code>FileChannel</code> on the given file for reading and passes the channel
 	* to the given function.  The channel is closed before this function returns.*/
 	def readChannel(file: File, log: Logger)(f: FileChannel => Option[String]): Option[String] =
-		unwrapEither(readChannelValue(file, log)(wrapEither(f)))
+		fileInputChannel.ioOption(file, "reading", log)(f)
 	/** Opens a <code>FileChannel</code> on the given file for reading and passes the channel
 	* to the given function.  The channel is closed before this function returns.*/
 	def readChannelValue[R](file: File, log: Logger)(f: FileChannel => Either[String, R]): Either[String, R] =
-		io(file, fileInputChannel, f, "reading", log)
+		fileInputChannel.io(file, "reading", log)(f)
 	
-	private def wrapEither[R](f: R => Option[String]): (R => Either[String, Unit]) = (r: R) => f(r).toLeft(())
-	private def unwrapEither(e: Either[String, Unit]): Option[String] = e.left.toOption
 	private[sbt] def wrapNull(a: Array[File]): Array[File] =
 		if(a == null)
 			new Array[File](0)
@@ -764,4 +732,52 @@ object FileUtilities
 class CloseableJarFile(f: File, verify: Boolean) extends JarFile(f, verify) with Closeable
 {
 	def this(f: File) = this(f, false)
+}
+
+private abstract class OpenResource[Source, T <: Closeable] extends NotNull
+{
+	import OpenResource.{unwrapEither, wrapEither}
+	protected def open(src: Source, log: Logger): Either[String, T]
+	def ioOption(src: Source, op: String, log: Logger)(f: T => Option[String]) =
+		unwrapEither( io(src, op, log)(wrapEither(f)) )
+	def io[R](src: Source, op: String, log: Logger)(f: T => Either[String,R]): Either[String, R] =
+		open(src, log).right flatMap
+		{
+			resource => Control.trapAndFinally("Error " + op + " "+ src + ": ", log)
+				{ f(resource) }
+				{ resource.close }
+		}
+}
+private abstract class OpenFile[T <: Closeable] extends OpenResource[File, T]
+{
+	protected def open(file: File): T
+	protected final def open(file: File, log: Logger): Either[String, T] =
+	{
+		val parent = file.getParentFile
+		if(parent != null)
+			FileUtilities.createDirectory(parent, log)
+		Control.trap("Error opening " + file + ": ", log) { Right(open(file)) }
+	}
+}
+private object OpenResource
+{
+	private def wrapEither[R](f: R => Option[String]): (R => Either[String, Unit]) = (r: R) => f(r).toLeft(())
+	private def unwrapEither(e: Either[String, Unit]): Option[String] = e.left.toOption
+	
+	def fileOutputStream(append: Boolean) =
+		new OpenFile[FileOutputStream] { protected def open(file: File) = new FileOutputStream(file) }
+	def fileInputStream = new OpenFile[FileInputStream]
+		{ protected def open(file: File) = new FileInputStream(file) }
+	def urlInputStream = new OpenResource[URL, InputStream]
+		{ protected def open(url: URL, log: Logger) = Control.trap("Error opening " + url + ": ", log) { Right(url.openStream) } }
+	def fileOutputChannel = new OpenFile[FileChannel]
+		{ protected def open(f: File) = (new FileOutputStream(f)).getChannel }
+	def fileInputChannel = new OpenFile[FileChannel]
+		{ protected def open(f: File) = (new FileInputStream(f)).getChannel }
+	def fileWriter(charset: Charset, append: Boolean) = new OpenFile[Writer]
+		{ protected def open(f: File) = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f, append), charset)) }
+	def fileReader(charset: Charset) = new OpenFile[Reader]
+		{ protected def open(f: File) = new BufferedReader(new InputStreamReader(new FileInputStream(f), charset)) }
+	def openJarFile(verify: Boolean) = new OpenFile[CloseableJarFile]
+		{ protected def open(f: File) = new CloseableJarFile(f, verify) }
 }

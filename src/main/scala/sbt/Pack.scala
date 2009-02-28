@@ -17,8 +17,10 @@ object Pack
 		val packer = Pack200.newPacker
 		val properties = Conversions.convertMap(packer.properties)
 		properties ++= options
-		def packIt(f: JarFile) = writeStream(out.asFile, log) { stream => packer.pack(f, stream); None }
-		ioOption(jarPath.asFile, openJarFile(false), packIt, "applying pack200 compression to jar", log)
+		 
+		OpenResource.openJarFile(false).ioOption(jarPath.asFile, "applying pack200 compression to jar", log) {
+			f => writeStream(out.asFile, log) { stream => packer.pack(f, stream); None }
+		}
 	}
 	def unpack(packedPath: Path, toJarPath: Path, log: Logger): Option[String] =
 	{

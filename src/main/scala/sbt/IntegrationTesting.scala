@@ -37,7 +37,7 @@ trait ScalaIntegrationTesting extends IntegrationTesting
 
 /** A fully featured integration testing that may be mixed in with any subclass of <code>BasicScalaProject</code>.
  * Pre-suite setup and post-suite cleanup are provide by overriding <code>pretests</code> and <code>posttests</code> respectively.*/
-trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with IntegrationTestPaths with BasicManagedProject
+trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with IntegrationTestPaths with BasicDependencyProject
 {
 	self: BasicScalaProject =>
 
@@ -49,22 +49,30 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 	val integrationTestCompileConditional = new CompileConditional(integrationTestCompileConfiguration)
 
 	protected def integrationTestAction = integrationTestTask(integrationTestFrameworks, integrationTestClasspath, integrationTestCompileConditional.analysis, integrationTestOptions) dependsOn integrationTestCompile describedAs IntegrationTestCompileDescription
-	protected def integrationTestCompileAction = integrationTestCompileTask() describedAs IntegrationTestDescription
+	protected def integrationTestCompileAction = integrationTestCompileTask() dependsOn compile describedAs IntegrationTestDescription
 
 	protected def integrationTestCompileTask() = task{ integrationTestCompileConditional.run }
 
-	def integrationTestOptions: Seq[TestOption] = TestResources(integrationTestResourcesPath) :: Nil
+	def integrationTestOptions: Seq[TestOption] = Nil
 	def integrationTestCompileOptions = testCompileOptions
 	
-	def integrationTestClasspath = projectPathConcatenate[BasicScalaIntegrationTesting](_.integrationTestCompilePath) +++
-		fullClasspath(Configurations.Test) +++ optionalClasspath
+	def integrationTestConfiguration = if(useIntegrationTestConfiguration) Configurations.IntegrationTest else Configurations.Test
+	def integrationTestClasspath = fullClasspath(integrationTestConfiguration) +++ optionalClasspath
 	
 	def integrationTestSources = descendents(integrationTestScalaSourcePath, "*.scala")
 	def integrationTestLabel = "integration-test"
 	def integrationTestCompileConfiguration = new IntegrationTestCompileConfig
 
 	def integrationTestFrameworks = testFrameworks
-	override def useIntegrationTestConfiguration = true
+	override def useIntegrationTestConfiguration = false
+	abstract override def unmanagedClasspath(config: Configuration) =
+	{
+		val superClasspath = super.unmanagedClasspath(config)
+		if(config == integrationTestConfiguration)
+			integrationTestCompilePath +++ integrationTestResourcesPath +++ superClasspath
+		else
+			superClasspath
+	}
 
 	class IntegrationTestCompileConfig extends BaseCompileConfig
 	{
