@@ -118,6 +118,12 @@ src/test/resources/sbt-test-resources/source-dependencies/transitive-b/src/main/
 src/test/resources/sbt-test-resources/source-dependencies/transitive-b/src/main/scala/B.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/transitive-b/src/main/scala/C.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/transitive-b/test -text
+src/test/resources/sbt-test-resources/tests/resources/ivy.xml -text
+src/test/resources/sbt-test-resources/tests/resources/project/build.properties -text
+src/test/resources/sbt-test-resources/tests/resources/src/main/resources/MainResource.txt -text
+src/test/resources/sbt-test-resources/tests/resources/src/test/resources/TestResource.txt -text
+src/test/resources/sbt-test-resources/tests/resources/src/test/scala/BasicTest.scala -text
+src/test/resources/sbt-test-resources/tests/resources/test -text
 src/test/resources/sbt-test-resources/tests/scalacheck-a/changes/BasicTest.scala -text
 src/test/resources/sbt-test-resources/tests/scalacheck-a/changes/FailedTest.scala -text
 src/test/resources/sbt-test-resources/tests/scalacheck-a/project/build.properties -text
