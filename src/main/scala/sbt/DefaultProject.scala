@@ -206,12 +206,11 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		interDependencies.readOnly
 	}
 	protected def makePomAction = makePomTask(outputPath / "pom.xml", deliverProjectDependencies, updateOptions)
-	protected def deliverAction = deliverTask(publishConfiguration, updateOptions)
-	protected def publishAction = publishTask(publishConfiguration, updateOptions) dependsOn(`package`, deliver)
-	protected def publishConfiguration = new DefaultPublishConfiguration
-	protected class DefaultPublishConfiguration extends PublishConfiguration
+	protected def deliverLocalAction = deliverTask(publishLocalConfiguration, updateOptions)
+	protected def publishLocalAction = publishTask(publishLocalConfiguration, updateOptions) dependsOn(`package`, deliverLocal)
+	protected def publishLocalConfiguration = new DefaultPublishConfiguration("local", "release")
+	protected class DefaultPublishConfiguration(val resolverName: String, val status: String) extends PublishConfiguration
 	{
-		def resolverName = "local"
 		protected def deliveredPathPattern = outputPath / "[artifact]-[revision].[ext]"
 		def deliveredPattern = deliveredPathPattern.relativePath
 		def srcArtifactPatterns: Iterable[String] =
@@ -219,7 +218,6 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 			deliveredPathPattern :: 
 			Nil).map(_.relativePath)
 		def extraDependencies: Iterable[ModuleID] = Nil//deliverProjectDependencies
-		def status: String = "release"
 		/**  The configurations to include in the publish/deliver action: specify none for all configurations. */
 		def configurations: Option[Iterable[Configuration]] = None
 	}
@@ -244,8 +242,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	lazy val graph = graphAction
 	lazy val update = updateAction
 	lazy val makePom = makePomAction
-	lazy val deliver = deliverAction
-	lazy val publish = publishAction
+	lazy val deliverLocal = deliverLocalAction
+	lazy val publishLocal = publishLocalAction
 	lazy val cleanLib = cleanLibAction
 	lazy val cleanCache = cleanCacheAction
 	lazy val incrementVersion = incrementVersionAction
