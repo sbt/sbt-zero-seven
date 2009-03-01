@@ -199,8 +199,30 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	protected def incrementVersionAction = task { incrementVersionNumber(); None } describedAs IncrementVersionDescription
 	protected def releaseAction = (test && packageAll && incrementVersion) describedAs ReleaseDescription
 	
-	protected def makePomAction = makePomTask(outputPath / "pom.xml", managedDependencyPath, updateOptions)
-	lazy val makePom = makePomAction
+	protected def deliverProjectDependencies =
+	{
+		val interDependencies = new scala.collection.mutable.ListBuffer[ModuleID]
+		dependencies.foreach(dep => dep match { case mp: ManagedProject => interDependencies += mp.projectID; case _ => () })
+		interDependencies.readOnly
+	}
+	protected def makePomAction = makePomTask(outputPath / "pom.xml", deliverProjectDependencies, updateOptions)
+	protected def deliverAction = deliverTask(publishConfiguration, updateOptions)
+	protected def publishAction = publishTask(publishConfiguration, updateOptions) dependsOn(`package`, deliver)
+	protected def publishConfiguration = new DefaultPublishConfiguration
+	protected class DefaultPublishConfiguration extends PublishConfiguration
+	{
+		def resolverName = "local"
+		protected def deliveredPathPattern = outputPath / "[artifact]-[revision].[ext]"
+		def deliveredPattern = deliveredPathPattern.relativePath
+		def srcArtifactPatterns: Iterable[String] =
+			(outputPath / "[artifact]-[revision](-[type]).[ext]" ::
+			deliveredPathPattern :: 
+			Nil).map(_.relativePath)
+		def extraDependencies: Iterable[ModuleID] = Nil//deliverProjectDependencies
+		def status: String = "release"
+		/**  The configurations to include in the publish/deliver action: specify none for all configurations. */
+		def configurations: Option[Iterable[Configuration]] = None
+	}
 	
 	lazy val compile = compileAction
 	lazy val testCompile = testCompileAction
@@ -221,6 +243,9 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	lazy val packageAll = packageAllAction
 	lazy val graph = graphAction
 	lazy val update = updateAction
+	lazy val makePom = makePomAction
+	lazy val deliver = deliverAction
+	lazy val publish = publishAction
 	lazy val cleanLib = cleanLibAction
 	lazy val cleanCache = cleanCacheAction
 	lazy val incrementVersion = incrementVersionAction

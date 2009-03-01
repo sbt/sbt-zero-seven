@@ -114,8 +114,21 @@ trait ManagedProject extends ClasspathProject
 	def updateTask(outputPattern: String, managedDependencyPath: Path, options: => Seq[ManagedOption]) =
 		withIvyTask(withConfigurations(outputPattern, managedDependencyPath, options)(ManageDependencies.update))
 		
-	def makePomTask(output: Path, managedDependencyPath: Path, options: => Seq[ManagedOption]) =
-		withIvyTask(withConfigurations("", managedDependencyPath: Path, options) { (ivyConf, ignore) => ManageDependencies.makePom(ivyConf, output.asFile) })
+	def publishTask(publishConfig: PublishConfiguration, options: => Seq[ManagedOption]) =
+	{
+		import publishConfig._
+		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) =>
+			ManageDependencies.publish(ivyConf, resolverName, srcArtifactPatterns, deliveredPattern, configurations) } )
+	}
+	def deliverTask(deliverConfig: PublishConfiguration, options: => Seq[ManagedOption]) =
+	{
+		import deliverConfig._
+		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, updateConf) =>
+			ManageDependencies.deliver(ivyConf, updateConf, status, deliveredPattern, extraDependencies, configurations) } )
+	}
+	def makePomTask(output: Path, extraDependencies: Iterable[ModuleID], options: => Seq[ManagedOption]) =
+		withIvyTask(withConfigurations("", managedDependencyPath: Path, options) { (ivyConf, ignore) =>
+			ManageDependencies.makePom(ivyConf, extraDependencies, output.asFile) })
 		
 	def cleanCacheTask(managedDependencyPath: Path, options: => Seq[ManagedOption]) =
 		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) => ManageDependencies.cleanCache(ivyConf) })
@@ -161,6 +174,26 @@ trait ManagedProject extends ClasspathProject
 	
 	def config(name: String) = new Configuration(name)
 }
+/** This class groups required configuration for the deliver and publish tasks. */
+trait PublishConfiguration extends NotNull
+{
+	/** The name of the resolver to which publishing should be done.*/
+	def resolverName: String
+	/** The Ivy pattern used to determine the delivered Ivy file location.  An example is
+	* (outputPath / "[artifact]-[revision].[ext]").relativePath */
+	def deliveredPattern: String
+	/** Ivy patterns used to find artifacts for publishing.  An example pattern is
+	* (outputPath / "[artifact]-[revision].[ext]").relativePath */
+	def srcArtifactPatterns: Iterable[String]
+	/** Additional dependencies to include for delivering/publishing only.  These are typically dependencies on
+	* subprojects. */
+	def extraDependencies: Iterable[ModuleID]
+	/** The status to use when delivering or publishing.  This might be "release" or "integration" or another valid Ivy status. */
+	def status: String
+	/**  The configurations to include in the publish/deliver action: specify none for all configurations. */
+	def configurations: Option[Iterable[Configuration]]
+}
+	
 trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject
 {
 	/** The dependency manager that represents inline declarations.  The default manager packages the information
