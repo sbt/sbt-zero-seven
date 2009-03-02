@@ -250,6 +250,7 @@ object ManageDependencies
 	}
 	private def addDefaultArtifact(defaultConf: String, moduleID: DefaultModuleDescriptor) =
 		moduleID.addArtifact(defaultConf, new MDArtifact(moduleID, moduleID.getModuleRevisionId.getName, "jar", "jar"))
+	// todo: correct default configuration for extra dependencies
 	private def addLateDependencies(ivy: Ivy, md: ModuleDescriptor, defaultConfiguration: String, extraDependencies: Iterable[ModuleID]) =
 	{
 		val module = toDefaultModuleDescriptor(md)
@@ -261,7 +262,6 @@ object ManageDependencies
 	}
 	private def addConfigurations(configurations: Option[Iterable[Configuration]], to: { def setConfs(c: Array[String]): AnyRef })
 		{ for(confs <- configurations) { to.setConfs(confs.map(_.name).toList.toArray) } }
-	// todo: correct default configuration for extra dependencies
 	def deliver(ivyConfig: IvyConfiguration, updateConfig: UpdateConfiguration, status: String, deliverIvyPattern: String, extraDependencies: Iterable[ModuleID], configurations: Option[Iterable[Configuration]]) =
 	{
 		def doDeliver(ivy: Ivy, md: ModuleDescriptor, default: String) =

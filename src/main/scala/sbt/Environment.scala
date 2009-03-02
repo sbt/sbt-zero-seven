@@ -82,7 +82,7 @@ trait BasicEnvironment extends Environment
 	
 	/** Implementation of 'Property' for user-defined properties. */
 	private[sbt] class UserProperty[T](lazyDefaultValue: => Option[T], format: Format[T], inheritEnabled: Boolean,
-		private[BasicEnvironment] val manifest: Manifest[T]) extends Property[T]
+		inheritFirst: Boolean, private[BasicEnvironment] val manifest: Manifest[T]) extends Property[T]
 	{
 		/** The name of this property is used for persistence in the properties file and as an identifier in messages.*/
 		lazy val name = propertyMap.find( p => p._2 eq this ).map(_._1)
@@ -96,11 +96,30 @@ trait BasicEnvironment extends Environment
 		def resolve: PropertyResolution[T] =
 			synchronized
 			{
-				(explicitValue orElse defaultValue) match
-				{
-					case Some(v) => DefinedValue(v, false, explicitValue.isEmpty)
-					case None => inheritedValue
-				}
+				if(inheritFirst) resolveInheritFirst
+				else resolveDefaultFirst
+			}
+		private def resolveInheritFirst =
+			explicitValue match
+			{
+				case Some(v) => DefinedValue(v, false, false)
+				case None =>
+					val inherited = inheritedValue
+					 // note that the following means the default value will not be used if an exception occurs inheriting
+					inherited orElse
+					{
+						defaultValue match
+						{
+							case Some(v) => DefinedValue(v, false, true)
+							case None => inherited
+						}
+					}
+			}
+		private def resolveDefaultFirst =
+			(explicitValue orElse defaultValue) match
+			{
+				case Some(v) => DefinedValue(v, false, explicitValue.isEmpty)
+				case None => inheritedValue
 			}
 		
 		private def inheritedValue: PropertyResolution[T] =
@@ -185,11 +204,13 @@ trait BasicEnvironment extends Environment
 		new SystemProperty[T](propertyName, Some(defaultValue), format)
 	
 	def property[T](implicit manifest: Manifest[T], format: Format[T]): Property[T] =
-		new UserProperty[T](None, format, true, manifest)
+		new UserProperty[T](None, format, true, false, manifest)
 	def propertyLocal[T](implicit manifest: Manifest[T], format: Format[T]): Property[T] =
-		new UserProperty[T](None, format, false, manifest)
+		new UserProperty[T](None, format, false, false, manifest)
 	def propertyOptional[T](defaultValue: => T)(implicit manifest: Manifest[T], format: Format[T]): Property[T] =
-		new UserProperty[T](Some(defaultValue), format, true, manifest)
+		propertyOptional(defaultValue, false)(manifest, format)
+	def propertyOptional[T](defaultValue: => T, inheritFirst: Boolean)(implicit manifest: Manifest[T], format: Format[T]): Property[T] =
+		new UserProperty[T](Some(defaultValue), format, true, inheritFirst, manifest)
 	
 	private type AnyUserProperty = UserProperty[_]//T] forSome {type T}
 	/** Maps property name to property.  The map is populated by 'initializeEnvironment'.*/
@@ -220,7 +241,7 @@ trait BasicEnvironment extends Environment
 				case Some(property) => property.setStringValue(propertyValue)
 				case None =>
 				{
-					val p = new UserProperty[String](None, StringFormat, false, Manifest.classType(classOf[String]))
+					val p = new UserProperty[String](None, StringFormat, false, false, Manifest.classType(classOf[String]))
 					p() = propertyValue
 					propertyMap(name) = p
 					log.warn("Property '" + name + "' from " + environmentLabel + " is not used.")

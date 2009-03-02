@@ -135,7 +135,7 @@ trait ManagedProject extends ClasspathProject
 		
 	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, log) }
 	
-	def projectID: ModuleID = ModuleID(normalizedName, normalizedName, version.toString, None)
+	def projectID: ModuleID = ModuleID(organization, normalizedName, version.toString, None)
 	def managedDependencyPath: Path
 	/** The managed classpath for the given configuration, using the default configuration if this configuration
 	* does not exist in the managed library directory.*/

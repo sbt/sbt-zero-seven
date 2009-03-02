@@ -22,6 +22,9 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	final def name: String = projectName.value
 	/** The project version. */
 	final def version: Version = projectVersion.value
+	/** The project organization. */
+	final def organization: String = projectOrganization.value
+	
 	/** The tasks declared on this project. */
 	def tasks: Map[String, Task]
 	/** The names of all available tasks that may be called through `act`.  These include
@@ -174,6 +177,9 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	final val projectVersion = property[Version]
 	/** The property for the project's name. */
 	final val projectName = propertyLocalF[String](NonEmptyStringFormat)
+	/** The property for the project's organization.  Defaults to the parent project's organization or the project name if there is no parent. */
+	final val projectOrganization = propertyOptional[String](name, true)
+	
 	protected final override def parentEnvironment = info.parent
 	
 	def runAndSaveEnvironment[T](toRun: => Option[String]): Option[String] =
