@@ -87,7 +87,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 							{
 								if(multiProject)
 									showProjectHeader(project)
-								project.runAndSaveEnvironment( task.run ) orElse run(remaining)
+								project.runAndSaveEnvironment( if(task.interactive) task.runDependenciesOnly else task.run ) orElse run(remaining)
 							}
 						}
 				}
@@ -95,20 +95,26 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 		}
 
 		val definedTasks = ordered.flatMap(_.tasks.get(name).toList)
+		val interactiveTask = definedTasks.find(_.interactive)
 		if(definedTasks.isEmpty)
 			Some("Action '" + name + "' does not exist.")
-		else if(!tasks.contains(name) && definedTasks.forall(_.interactive))
-			Some("Action '" + name + "' is not defined on this project and is declared as interactive on all dependencies.")
-		else if(multiProject && parallelExecution)
-		{
-			ParallelRunner.run(this, name, Runtime.getRuntime.availableProcessors) match
-			{
-				case Nil => None
-				case x => Some(Set(x: _*).mkString("\n"))
-			}
-		}
+		else if( interactiveTask.isDefined && !tasks.contains(name) && definedTasks.size > 1)
+			Some("Cannot run action '" + name + "': it is defined on multiple subprojects but not this project and is declared as interactive on at least one subproject.")
 		else
-			runSequentially
+		{
+			val runResult =
+				if(multiProject && parallelExecution)
+				{
+					ParallelRunner.run(this, name, Runtime.getRuntime.availableProcessors) match
+					{
+						case Nil => None
+						case x => Some(Set(x: _*).mkString("\n"))
+					}
+				}
+				else
+					runSequentially
+			runResult orElse interactiveTask.flatMap(_.invoke)
+		}
 	}
 	/** Logs the list of projects at the debug level.*/
 	private def showBuildOrder(order: Iterable[Project])

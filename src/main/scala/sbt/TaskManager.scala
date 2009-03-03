@@ -26,7 +26,7 @@ trait TaskManager{
 		}
 		/** Creates a new task, identical to this task, except with the given description.*/
 		def describedAs(description : String) = new Task(Some(description), dependencies, interactive, action);
-		private def invoke = action;
+		private[sbt] def invoke = action;
 
 		final def setInteractive = new Task(description, dependencies, true, action)
 		final def run = {
@@ -57,6 +57,8 @@ trait TaskManager{
 	private def checkTaskDependencies(dependencyList: List[Task])
 	{
 		val nullDependencyIndex = dependencyList.findIndexOf(_ == null)
-		require(nullDependencyIndex < 0, "Dependency (at index " + nullDependencyIndex + ") was null.  This may be an initialization issue or a circular dependency.")
+		require(nullDependencyIndex < 0, "Dependency (at index " + nullDependencyIndex + ") is null.  This may be an initialization issue or a circular dependency.")
+		val interactiveDependencyIndex = dependencyList.findIndexOf(_.interactive)
+		require(interactiveDependencyIndex < 0, "Dependency (at index " + interactiveDependencyIndex + ") is interactive.  Interactive tasks cannot be dependencies.")
 	}
 }
