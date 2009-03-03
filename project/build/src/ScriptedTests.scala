@@ -104,7 +104,7 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 					}
 			}
 		}
-	def space: Parser[String] = """(\s+|(\#[^\n\r]*))?""".r
+	def space = ("""(\s+|(\#[^\n\r]*))""".r *)
 	def word: Parser[String] =  ("\'" ~> "[^'\n\r]*".r <~ "\'")  |  ("\"" ~> "[^\"\n\r]*".r <~ "\"")  |  WordRegex
 	def parse(scriptFile: File): Either[String, Project => Option[String]] =
 	{
@@ -136,6 +136,7 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 				case Nil => scriptError("No command specified.")
 				case "touch" :: paths => touch(paths, project)
 				case "delete" :: paths => delete(paths, project)
+				case "mkdir" :: paths => makeDirectories(paths, project)
 				case "copy-file" :: from :: to :: Nil => copyFile(from, to, project)
 				case "copy-file" :: args => wrongArguments("copy-file", "Two paths", args)
 				case "sync" :: from :: to :: Nil => sync(from, to, project)
@@ -220,6 +221,12 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 				val mapped = fromStrings(paths, project).toArray
 				val last = mapped.length - 1
 				wrap(FileUtilities.copy(mapped.take(last), mapped(last), log).left.toOption)
+		}
+	private def makeDirectories(paths: List[String], project: Project) =
+		fromStrings(paths, project) match
+		{
+			case Nil => scriptError("No paths specified for mkdir command.")
+			case p => FileUtilities.createDirectories(p, project.log)
 		}
 	private def newer(a: String, b: String, project: Project) =
 		trap("Error testing if '" + a + "' is newer than '" + b + "'")
