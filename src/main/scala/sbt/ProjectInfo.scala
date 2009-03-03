@@ -16,11 +16,12 @@ private[sbt] sealed trait SetupResult extends NotNull
 private[sbt] final object SetupDeclined extends SetupResult
 private[sbt] final class SetupError(val message: String) extends SetupResult
 private[sbt] final object AlreadySetup extends SetupResult
-private[sbt] final class SetupInfo(val name: String, val version: Option[Version], val initializeDirectories: Boolean) extends SetupResult
+private[sbt] final class SetupInfo(val name: String, val version: Option[Version], val organization: Option[String], val initializeDirectories: Boolean) extends SetupResult
 
 object ProjectInfo
 {
 	val MetadataDirectoryName = "project"
+	private val DefaultOrganization = "empty"
 	
 	def setup(info: ProjectInfo, log: Logger): SetupResult =
 	{
@@ -43,21 +44,31 @@ object ProjectInfo
 			if(name.isEmpty)
 				new SetupError("Project not created: no name specified.")
 			else
+			{
+				val organization =
+				{
+					val org = trim(Console.readLine("Organization [" + DefaultOrganization + "]: "))
+					if(org.isEmpty)
+						DefaultOrganization
+					else
+						org
+				}
 				readVersion(projectDirectory, log) match
 				{
 					case None => new SetupError("Project not created: no version specified.")
 					case Some(version) =>
-						if(verifyCreateProject(name, version))
-							new SetupInfo(name, Some(version), true)
+						if(verifyCreateProject(name, version, organization))
+							new SetupInfo(name, Some(version), Some(organization), true)
 						else
 							SetupDeclined
 				}
+			}
 		}
 		else
 			SetupDeclined
 	}
-	private def verifyCreateProject(name: String, version: Version): Boolean =
-		confirmPrompt("Create new project " + name + " " + version + " ?", true)
+	private def verifyCreateProject(name: String, version: Version, organization: String): Boolean =
+		confirmPrompt("Create new project " + name + " " + version + " with organization " + organization +" ?", true)
 	
 	private def confirmPrompt(question: String, defaultYes: Boolean) =
 	{

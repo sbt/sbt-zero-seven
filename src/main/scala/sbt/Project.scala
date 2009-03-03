@@ -145,7 +145,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	* The construct function is used to obtain the Project instance. Any project/build/ directory for the project
 	* is ignored.  The project is declared to have the dependencies given by deps.*/
 	def project[P <: Project](path: Path, name: String, construct: ProjectInfo => P, deps: Project*): P =
-		initialize(construct(ProjectInfo(path.asFile, deps, Some(this))), Some(new SetupInfo(name, None, false)), log)
+		initialize(construct(ProjectInfo(path.asFile, deps, Some(this))), Some(new SetupInfo(name, None, None, false)), log)
 	
 	/** Initializes the project directories when a user has requested that sbt create a new project.*/
 	def initializeDirectories() {}
@@ -296,6 +296,8 @@ object Project
 			p.projectName() = setup.name
 			for(v <- setup.version)
 				p.projectVersion() = v
+			for(org <- setup.organization)
+				p.projectOrganization() = org
 			if(!setup.initializeDirectories)
 				p.setEnvironmentModified(false)
 			for(errorMessage <- p.saveEnvironment())
