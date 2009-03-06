@@ -71,17 +71,15 @@ final class BuilderProject(val info: ProjectInfo, override protected val logImpl
 			def options = compileOptions.map(_.asString)
 		}
 		
-	def projectDefinition: Option[String] =
+	def projectDefinition: Either[String, Option[String]] =
 	{
 		compileConditional.analysis.allProjects.toList match
 		{
 			case Nil => 
-				log.debug("No project definitions detected: expecting explicit configuration.")
-				None
-			case singleDefinition :: Nil => Some(singleDefinition)
-			case _ =>
-				log.debug("Multiple project definitions detected: expecting explicit configuration.")
-				None
+				log.debug("No project definitions detected using default project.")
+				Right(None)
+			case singleDefinition :: Nil => Right(Some(singleDefinition))
+			case _ =>Left("Multiple project definitions detected: expecting explicit configuration.")
 		}
 	}
 }

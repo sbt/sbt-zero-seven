@@ -95,11 +95,20 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 		}
 
 		val definedTasks = ordered.flatMap(_.tasks.get(name).toList)
-		val interactiveTask = definedTasks.find(_.interactive)
+		val interactiveTasks = definedTasks.filter(_.interactive)
+		val interactiveTask = interactiveTasks.firstOption
 		if(definedTasks.isEmpty)
 			Some("Action '" + name + "' does not exist.")
-		else if( interactiveTask.isDefined && !tasks.contains(name) && definedTasks.size > 1)
-			Some("Cannot run action '" + name + "': it is defined on multiple subprojects but not this project and is declared as interactive on at least one subproject.")
+		// If there is an interactive task with this name,
+		//  There cannot be non-interactive tasks with the same name
+		//  There can only be one interactive task with this name or else this project must define an interactive task with that name
+		else if( interactiveTask.isDefined && ((definedTasks.size != interactiveTasks.size) || (interactiveTasks.size > 1 && !tasks.contains(name)) ) )
+		{
+			if(definedTasks.size != interactiveTasks.size)
+				Some("Cannot run action '" + name + "': interactive and non-interactive actions with the same name are not allowed.")
+			else
+				Some("Cannot run interactive action '" + name + "' defined on multiple subprojects (change to the desired project with 'project <name>').")
+		}
 		else
 		{
 			val runResult =
@@ -323,10 +332,8 @@ object Project
 		if(builderProjectPath.asFile.isDirectory)
 		{
 			val builderProject = new BuilderProject(ProjectInfo(builderProjectPath.asFile, Nil, None), buildLog)
-			builderProject.compile.run.toLeft
-			{
-				builderProject.projectDefinition match
-				{
+			builderProject.compile.run.toLeft(()).right.flatMap { ignore =>
+				builderProject.projectDefinition.right.map {
 					case Some(definition) =>
 					{
 						val compileClassPath = Array(builderProject.compilePath.asURL)

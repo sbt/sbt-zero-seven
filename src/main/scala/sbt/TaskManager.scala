@@ -43,8 +43,8 @@ trait TaskManager{
 			def invokeList(tasks : List[Task]) : Option[String] =
 				tasks match
 				{
-					case Nil => None
-					case task :: ignoreSelf :: Nil => task.invoke
+					case Nil=> None
+					case ignoreSelf :: Nil => None
 					case task :: more => task.invoke.orElse(invokeList(more))
 				}
 			invokeList(topologicalSort)
