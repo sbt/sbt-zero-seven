@@ -18,6 +18,7 @@ licenses/LICENSE_specs -text
 project/build.properties -text
 project/build/src/SbtProject.scala -text
 project/build/src/ScriptedTests.scala -text
+project/build/src/TestScriptParser.scala -text
 src/main/resources/scalac-plugin.xml -text
 src/main/scala/sbt/Analysis.scala -text
 src/main/scala/sbt/AnalysisCallback.scala -text
