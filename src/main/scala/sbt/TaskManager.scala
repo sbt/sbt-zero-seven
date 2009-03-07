@@ -45,26 +45,9 @@ trait TaskManager{
 		private[sbt] def invoke = action;
 
 		final def setInteractive = new Task(description, dependencies, true, action)
-		final def run = {
-			// This is a foldr, but it has the right laziness properties
-			def invokeList(tasks : List[Task]) : Option[String] = tasks match {
-				case Nil => None;
-				case task::more => task.invoke.orElse(invokeList(more)) 
-			}
-			invokeList(topologicalSort);
-		}
-		final def runDependenciesOnly =
-		{
-			// This is a fold, but it has the right laziness properties
-			def invokeList(tasks : List[Task]) : Option[String] =
-				tasks match
-				{
-					case Nil=> None
-					case ignoreSelf :: Nil => None
-					case task :: more => task.invoke.orElse(invokeList(more))
-				}
-			invokeList(topologicalSort)
-		}
+		final def run = runSequentially(topologicalSort)
+		final def runDependenciesOnly = runSequentially(topologicalSort.dropRight(1))
+		private def runSequentially(tasks: List[Task]) = Control.lazyFold(tasks)(_.invoke)
 
 		def &&(that : Task) =
 			new Task(None, dependencies ::: that.dependencies, interactive || that.interactive, this.invoke.orElse(that.invoke))
