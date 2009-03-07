@@ -61,6 +61,16 @@ src/main/scala/sbt/Version.scala -text
 src/main/scala/sbt/WebApp.scala -text
 src/main/scala/sbt/Webstart.scala -text
 src/main/scala/sbt/impl/CommandParser.scala -text
+src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject2.scala -text
+src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject3.scala -text
+src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject4.scala -text
+src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject5.scala -text
+src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject6.scala -text
+src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject7.scala -text
+src/test/resources/sbt-test-resources/actions/interactive/project/build.properties -text
+src/test/resources/sbt-test-resources/actions/interactive/project/build/src/Marker.scala -text
+src/test/resources/sbt-test-resources/actions/interactive/project/build/src/TestProject.scala -text
+src/test/resources/sbt-test-resources/actions/interactive/test -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/project/build.properties -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/project/build/src/UpdateTestProject.scala -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/test -text

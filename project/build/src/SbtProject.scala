@@ -16,7 +16,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	override def testOptions = ExcludeTests("sbt.ReflectiveSpecification" :: Nil) :: super.testOptions.toList
 	
 	def sbtTestResources = testResourcesPath / "sbt-test-resources"
-	
+	/*
 	override def testAction = super.testAction dependsOn(scripted)
 	lazy val scripted = scriptedTask dependsOn testCompile
 	def scriptedTask =
@@ -39,6 +39,9 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 		def accept(group: String, name: String) = true
 			//group == "tests" && name == "specs-nested"
 	}
+	//override protected def includeTest(test: String): Boolean = true
+		//test == "sbt.WriteContentSpecification"
+*/
 }
 package sbt { // need access to LoaderBase, which is private in package sbt
 	object ScriptedLoader
