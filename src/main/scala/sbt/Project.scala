@@ -114,36 +114,45 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 				}
 			run(ordered)
 		}
+		def run =
+		{
+			if(multiProject && parallelExecution)
+			{
+				ParallelRunner.run(this, name, Runtime.getRuntime.availableProcessors) match
+				{
+					case Nil => None
+					case x => Some(Set(x: _*).mkString("\n"))
+				}
+			}
+			else
+				runSequentially
+		}
 
 		val definedTasks = ordered.flatMap(_.tasks.get(name).toList)
-		val interactiveTasks = definedTasks.filter(_.interactive)
-		val interactiveTask = interactiveTasks.firstOption
 		if(definedTasks.isEmpty)
 			Some("Action '" + name + "' does not exist.")
-		// If there is an interactive task with this name,
-		//  There cannot be non-interactive tasks with the same name
-		//  There can only be one interactive task with this name or else this project must define an interactive task with that name
-		else if( interactiveTask.isDefined && ((definedTasks.size != interactiveTasks.size) || (interactiveTasks.size > 1 && !tasks.contains(name)) ) )
-		{
-			if(definedTasks.size != interactiveTasks.size)
-				Some("Cannot run action '" + name + "': interactive and non-interactive actions with the same name are not allowed.")
-			else
-				Some("Cannot run interactive action '" + name + "' defined on multiple subprojects (change to the desired project with 'project <name>').")
-		}
 		else
 		{
-			val runResult =
-				if(multiProject && parallelExecution)
+			// If there is an interactive task with this name,
+			//  There cannot be non-interactive tasks with the same name
+			//  There can only be one interactive task with this name or else this project must define an interactive task with that name
+			val interactiveTasks = definedTasks.filter(_.interactive)
+			val interactiveCheck: Either[String, Option[Project#Task]] =	
+				interactiveTasks match
 				{
-					ParallelRunner.run(this, name, Runtime.getRuntime.availableProcessors) match
-					{
-						case Nil => None
-						case x => Some(Set(x: _*).mkString("\n"))
-					}
+					case Nil => Right(None)
+					case _ if definedTasks.size != interactiveTasks.size =>
+						Left("Cannot run action '" + name + "': interactive and non-interactive actions with the same name are not allowed.")
+					case single :: Nil => Right(Some(single))
+					case multiple=>
+						tasks.get(name) match
+						{
+							case Some(task) => Right(Some(task))
+							case None =>Left("Cannot run interactive action '" + name +
+								"' defined on multiple subprojects (change to the desired project with 'project <name>').")
+						}
 				}
-				else
-					runSequentially
-			runResult orElse interactiveTask.flatMap(_.invoke)
+			interactiveCheck.fold(err => Some(err), interactiveTask => run orElse interactiveTask.flatMap(_.invoke))
 		}
 	}
 	/** Logs the list of projects at the debug level.*/
@@ -428,6 +437,6 @@ object Project
 		val projectHeader = "Project " + project.name
 		project.log.info("")
 		project.log.info(projectHeader)
-		project.log.info(("=": scala.runtime.RichString) * projectHeader.length)
+		project.log.info("=" * projectHeader.length)
 	}
 }
