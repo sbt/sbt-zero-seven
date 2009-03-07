@@ -34,16 +34,16 @@ object Main
 		{
 			case err: LoadSetupError =>
 				println("\n" + err.message)
-				runExitHooks(Project.bootLogger)
+				ExitHooks.runExitHooks(Project.bootLogger)
 				SetupErrorExitCode
 			case LoadSetupDeclined =>
-				runExitHooks(Project.bootLogger)
+				ExitHooks.runExitHooks(Project.bootLogger)
 				SetupDeclinedExitCode
 			case err: LoadError =>
 			{
 				val log = Project.bootLogger
 				println(err.message)
-				runExitHooks(log)
+				ExitHooks.runExitHooks(log)
 				// Because this is an error that can probably be corrected, prompt user to try again.
 				val line =
 					try { Some(readLine("\n Hit enter to retry or 'exit' to quit: ")).filter(_ != null) }
@@ -69,7 +69,7 @@ object Main
 						startProject(project, args, startTime)
 					else
 						new Exit(NormalExitCode)
-				runExitHooks(project.log)
+				ExitHooks.runExitHooks(project.log)
 				doNext match
 				{
 					case Reload => run(args)
@@ -176,7 +176,7 @@ object Main
 	**/
 	private def interactive(baseProject: Project): RunCompleteAction =
 	{
-		val reader = new JLineReader(baseProject, ProjectAction, interactiveCommands)
+		val reader = new JLineReader(baseProject, new Completors(ProjectAction, interactiveCommands, List(GetAction, SetAction)))
 		
 		/** Prompts the user for the next command using 'currentProject' as context.
 		* If the command indicates that the user wishes to terminate or reload the session,
@@ -290,23 +290,98 @@ object Main
 	private def handleAction(project: Project, action: String)
 	{
 		val startTime = System.currentTimeMillis
-		project.act(action) match
+		if(project.taskNames.exists(_ == action))
 		{
-			case Some(errorMessage) =>
+			project.act(action) match
 			{
-				project.log.error(errorMessage)
-				if(!project.taskNames.exists(_ == action))
-					project.log.info("Execute 'help' to see a list of commands or " + 
-						"'actions' for a list of available project actions")
-				printTime(project, startTime, "")
+				case Some(errorMessage) => project.log.error(errorMessage)
+				case None => project.log.success("Successful.")
 			}
-			case None =>
+		}
+		else
+			reflect(project, action)
+		printTime(project, startTime, "")
+	}
+	private def showHelpHint(log: Logger)
+	{
+		log.info("Execute 'help' for a list of commands or " +
+			"'actions' for a list of available project actions")
+	}
+	private def reflect(project: Project, action: String)
+	{
+		impl.CommandParser.parse(action) match
+		{
+			case Left(errMsg) => project.log.error(errMsg)
+			case Right((name, parameters)) => reflect(project, name, parameters.toArray)
+		}
+	}
+	import java.lang.reflect.Method
+	private def reflect(project: Project, name: String, parameters: Array[String])
+	{
+		def logError(message: String) { project.log.error("Error invoking method '" + name + "': " + message) }
+		def multipleMethodsError =
+			{ project.log.error("Found multiple methods named '" + name + "' with correct return type and parameters.") }
+
+		def invoke(method: Method, args: Array[AnyRef])
+		{
+			try
 			{
-				printTime(project, startTime, "")
-				project.log.success("Successful.")
+				method.invoke(project, args: _*)  match
+				{
+					case null | None => project.log.success("Successful.") // null for void return type
+					case Some(x) => logError(x.toString)
+				}
+			}
+			catch
+			{
+				case e: Exception =>
+					project.log.trace(e)
+					logError(e.toString)
+			}
+		}
+
+		val candidates = project.getClass.getMethods.filter(_.getName == name)
+		if(candidates.isEmpty)
+		{
+			project.log.error("Action or method '" + name + "' does not exist.")
+			showHelpHint(project.log)
+		}
+		else
+		{
+			val correctReturnType = candidates.filter(method => returnTypeMatches(method.getReturnType)).toList
+			if(correctReturnType.isEmpty)
+				project.log.error("Found method(s) named '" + name + "', but none with return type Option[String] or Unit.")
+			else
+			{
+				val withStringParameters = correctReturnType.filter(method =>
+					allStringParameters(parameters.length, method.getParameterTypes))
+				withStringParameters match
+				{
+					case Nil =>
+						val withStringArray = correctReturnType.filter(m => stringArrayParameter(m.getParameterTypes))
+						withStringArray match
+						{
+							case Nil => project.log.error("Found method(s) named '" + name + "', but none with " +
+								parameters.length + " String parameters or a single Array[String] parameter.")
+							case single :: Nil => invoke(single, Array[AnyRef](parameters))
+							case _ =>
+								project.log.error("Found multiple methods named '" + name + "' with correct return type and parameters.")
+						}
+					case single :: Nil => invoke(single, parameters.toArray[AnyRef])
+					case _ =>
+						project.log.error("Found multiple methods named '" + name + "' with correct return type and parameters.")
+				}
 			}
 		}
 	}
+	private type Parameters = Array[Class[T] forSome {type T}]
+	private def allStringParameters(argCount: Int, params: Parameters) =
+		params.length == argCount && params.forall(t => t == classOf[String])
+	private def stringArrayParameter(params: Parameters) =
+		(params.length == 1 && params(0) == classOf[Array[String]])
+		
+	private def returnTypeMatches(t: Class[_]) = (t == classOf[Option[String]] || t == classOf[Unit])
+	
 	/** Toggles whether stack traces are enabled.*/
 	private def toggleTrace(project: Project)
 	{
@@ -491,39 +566,4 @@ object Main
 	private def getArgumentError(log: Logger) { log.error("Invalid arguments for 'get': expected property name.") }
 	private def setProjectError(log: Logger) { log.error("Invalid arguments for 'project': expected project name.") }
 	
-	/** This is a list of hooks to call when sbt is finished executing.*/
-	private val exitHooks = new scala.collection.mutable.HashSet[ExitHook]
-	/** Adds a hook to call before sbt exits. */
-	private[sbt] def registerExitHook(hook: ExitHook) { exitHooks += hook }
-	/** Removes a hook. */
-	private[sbt] def unregisterExitHook(hook: ExitHook) { exitHooks -= hook }
-	/** Calls each registered exit hook, trapping any exceptions so that each hook is given a chance to run. */
-	private def runExitHooks(log: Logger)
-	{
-		for(hook <- exitHooks.toList)
-		{
-			try
-			{
-				log.debug("Running exit hook '" + hook.name + "'...")
-				hook.runBeforeExiting()
-			}
-			catch
-			{
-				case e =>
-				{
-					log.trace(e);
-					log.error("Error running exit hook '" + hook.name + "': " + e.toString)
-				}
-			}
-		}
-	}
-}
-
-/** Defines a function to call as sbt exits.*/
-trait ExitHook extends NotNull
-{
-	/** Provides a name for this hook to be used to provide feedback to the user. */
-	def name: String
-	/** Subclasses should implement this method, which is called when this hook is executed. */
-	def runBeforeExiting(): Unit
 }

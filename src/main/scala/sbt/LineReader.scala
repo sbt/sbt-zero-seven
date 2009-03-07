@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009  Mark Harrah
  */
 package sbt
 
@@ -7,8 +7,14 @@ trait LineReader extends NotNull
 {
 	def readLine(prompt: String): Option[String]
 }
-class JLineReader(initialProject: Project, projectAction: String, generalCommands: Iterable[String]) extends LineReader
+trait HistoryEnabledProject extends Project
 {
+	def historyPath: Option[Path] = None
+}
+class Completors(val projectAction: String, val generalCommands: Iterable[String], val propertyActions: Iterable[String]) extends NotNull
+class JLineReader(initialProject: Project, completors: Completors) extends LineReader
+{
+	import completors._
 	import jline.{ArgumentCompletor, ConsoleReader, MultiCompletor, NullCompletor, SimpleCompletor}
 	
 	private val generalCompletor = simpleCompletor(generalCommands)
@@ -25,8 +31,14 @@ class JLineReader(initialProject: Project, projectAction: String, generalCommand
 	private val reader =
 	{
 		val cr = new ConsoleReader
+		initialProject match { case h: HistoryEnabledProject => setHistory(cr, h); case _ => () }
 		cr.addCompletor(completor)
 		cr
+	}
+	private def setHistory(cr: ConsoleReader, projectWithHistory: HistoryEnabledProject)
+	{
+		for(historyLocation <- projectWithHistory.historyPath)
+			cr.getHistory.setHistoryFile(historyLocation.asFile)
 	}
 	
 	/** Used for a single argument so that the argument can have spaces in it.*/
@@ -38,7 +50,7 @@ class JLineReader(initialProject: Project, projectAction: String, generalCommand
 	
 	private def propertyCompletor(project: Project) =
 	{
-		val startCompletor = simpleCompletor(Main.GetAction :: Main.SetAction :: Nil)
+		val startCompletor = simpleCompletor(propertyActions)
 		val nameCompletor = simpleCompletor(project.propertyNames)
 		val completors = Array(startCompletor, nameCompletor, new NullCompletor)
 		new ArgumentCompletor(completors)

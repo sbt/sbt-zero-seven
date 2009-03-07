@@ -9,7 +9,7 @@ import scala.xml.NodeSeq
 
 object JettyRun extends ExitHook
 {
-	Main.registerExitHook(this)
+	ExitHooks.register(this)
 	
 	def name = "jetty-shutdown"
 	def runBeforeExiting() { stop() }

@@ -32,6 +32,7 @@ src/main/scala/sbt/Dag.scala -text
 src/main/scala/sbt/DefaultProject.scala -text
 src/main/scala/sbt/DotGraph.scala -text
 src/main/scala/sbt/Environment.scala -text
+src/main/scala/sbt/ExitHook.scala -text
 src/main/scala/sbt/FileTask.scala -text
 src/main/scala/sbt/FileUtilities.scala -text
 src/main/scala/sbt/Hash.scala -text
@@ -59,6 +60,7 @@ src/main/scala/sbt/TrapExit.scala -text
 src/main/scala/sbt/Version.scala -text
 src/main/scala/sbt/WebApp.scala -text
 src/main/scala/sbt/Webstart.scala -text
+src/main/scala/sbt/impl/CommandParser.scala -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/project/build.properties -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/project/build/src/UpdateTestProject.scala -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/test -text

@@ -12,7 +12,7 @@ import BasicScalaProject._
 
 /** This class defines concrete instances of actions from ScalaProject using overridable paths,
 * options, and configuration. */
-abstract class BasicScalaProject extends ScalaProject with BasicDependencyProject with BasicProjectPaths
+abstract class BasicScalaProject extends ScalaProject with BasicDependencyProject with BasicProjectPaths with HistoryEnabledProject
 {
 	/** The class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
@@ -181,7 +181,9 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	protected def consoleAction = consoleTask(consoleClasspath).dependsOn(testCompile) describedAs ConsoleDescription
 	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
 	protected def docTestAction = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions).dependsOn(testCompile) describedAs TestDocDescription
-	protected def testAction = testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
+	protected def testAction = defaultTestTask(testOptions)
+	protected def defaultTestTask(testOptions: => Seq[TestOption]) =
+		testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
 	
 	protected def packageAction = packageTask(mainClasses +++ mainResources, outputPath, defaultJarName, packageOptions).dependsOn(compile) describedAs PackageDescription
 	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription
@@ -248,6 +250,12 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	lazy val cleanCache = cleanCacheAction
 	lazy val incrementVersion = incrementVersionAction
 	lazy val release = releaseAction
+
+	def testQuick(tests: Array[String]) =
+	{
+		val toRun = scala.collection.mutable.HashSet(tests: _*)
+		defaultTestTask(TestFilter(test => toRun.contains(test)) :: testOptions.toList).run
+	}
 	
 	def jarsOfProjectDependencies = Path.lazyPathFinder {
 		(topologicalSort - this) flatMap { p =>
@@ -262,6 +270,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	/** The directories to which a project writes are listed here and is used
 	* to check a project and its dependencies for collisions.*/
 	override def outputDirectories = outputPath :: managedDependencyPath :: Nil
+	override def historyPath = Some(outputPath / ".history")
 }
 abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProject with WebProjectPaths
 {
