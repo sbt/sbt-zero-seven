@@ -27,24 +27,36 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	
 	/** The tasks declared on this project. */
 	def tasks: Map[String, Task]
+	/** The task methods declared on this project */
+	def methods: Map[String, MethodTask]
 	/** The names of all available tasks that may be called through `act`.  These include
 	* the names of the Tasks in `tasks` and those of all dependencies.*/
 	def taskNames: Iterable[String] = deepTasks.keys.toList
+	/** The names of all available method tasks that may be called through `call`.  These include
+	* the names of the MethodTasks in `methods` and those of all dependencies.*/
+	def methodNames: Iterable[String] = deepMethods.keys.toList
+	/** A description of all available method tasks in this project and all dependencies.  If there
+	* are different method tasks with the same name, only one will be included. */
+	def methodList: String = descriptionList(deepMethods)
 	/** A description of all available tasks in this project and all dependencies.  If there
 	* are different tasks with the same name, only one will be included. */
-	def taskList: String =
+	def taskList: String = descriptionList(deepTasks)
+	private def descriptionList(described: Map[String, Described]): String =
 	{
 		val buffer = new StringBuilder
-		for((name, task) <- deepTasks)
-			buffer.append("\t" + name + task.description.map(x => ": " + x).getOrElse("") + "\n")
+		for((name, d) <- described)
+			buffer.append("\t" + name + d.description.map(x => ": " + x).getOrElse("") + "\n")
 		buffer.toString
 	}
+	/** Combines the method task maps of this project and all dependencies.*/
+	private[sbt] def deepMethods: Map[String, Project#MethodTask] = deep(_.methods)
 	/** Combines the task maps of this project and all dependencies.*/
-	private[sbt] def deepTasks: Map[String, Project#Task] =
+	private[sbt] def deepTasks: Map[String, Project#Task] = deep(_.tasks)
+	private def deep[T](p: Project => Map[String, T]): Map[String, T] =
 	{
-		val tasks = new jcl.TreeMap[String, Project#Task]
+		val tasks = new jcl.TreeMap[String, T]
 		for(dependentProject <- topologicalSort)
-			tasks ++= dependentProject.tasks.elements
+			tasks ++= p(dependentProject).elements
 		tasks
 	}
 	/** A map of names to projects for all subprojects of this project.  These are typically explicitly
@@ -61,6 +73,15 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 		names.toList
 	}
 	
+	// TODO: multi-project
+	def call(name: String, parameters: Array[String]): Option[String] =
+	{
+		methods.get(name) match
+		{
+			case Some(method) => method(parameters)
+			case None => Some("Method '" + name + "' does not exist.")
+		}
+	}
 	/** Executes the task with the given name.  This involves executing the task for all
 	* project dependencies (transitive) and then for this project.  Not every dependency
 	* must define a task with the given name.  If this project and all dependencies

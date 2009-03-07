@@ -125,10 +125,12 @@ object Main
 		else
 		{
 			val exitCode =
-				((None: Option[String]) /: args)( (errorMessage, arg) => errorMessage orElse project.act(arg) ) match
+				Control.lazyFold(args.toList)(handleBatchCommand(project)) match
 				{
 					case None => project.log.success("Build completed successfully."); NormalExitCode
-					case Some(errorMessage) => project.log.error("Error during build: " + errorMessage); BuildErrorExitCode
+					case Some(errorMessage) =>
+						project.log.error("Error during build" + (if(errorMessage.isEmpty) "." else ": " + errorMessage) )
+						BuildErrorExitCode
 				}
 			printTime(project, startTime, "build")
 			new Exit(exitCode)
@@ -139,6 +141,8 @@ object Main
 	val ShowCurrent = "current"
 	/** The name of the command that shows all available actions.*/
 	val ShowActions = "actions"
+	/** The name of the command that shows all available methods.*/
+	val ShowMethods = "methods"
 	/** The name of the command that sets the currently active project.*/
 	val ProjectAction = "project"
 	/** The name of the command that shows all available projects.*/
@@ -167,7 +171,7 @@ object Main
 	/** The list of logging levels.*/
 	private def logLevels: Iterable[String] = TreeSet.empty[String] ++ Level.elements.map(_.toString)
 	/** The list of all interactive commands other than logging level.*/
-	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent, HelpAction,
+	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowMethods, ShowCurrent, HelpAction,
 		ReloadAction, TraceCommand, ContinuousCompileCommand)
 	
 	/** Enters interactive mode for the given root project.  It uses JLine for tab completion and
@@ -225,7 +229,7 @@ object Main
 						else if(trimmed.startsWith(GetAction + " "))
 							getProperty(currentProject, trimmed.substring(GetAction.length + 1))
 						else
-							handleCommand(currentProject, trimmed)
+							handleInteractiveCommand(currentProject, trimmed)
 						loop(currentProject)
 					}
 				}
@@ -235,17 +239,28 @@ object Main
 		
 		loop(baseProject)
 	}
+	private def printCmd(name:String, desc:String) = Console.println("\t" + name + ": " + desc)
+	private def displayBatchHelp() = {
+		Console.println("You may execute any project action or method or one of the commands described below.")
+		Console.println("Available Commands:")
+		printCommonCommands()
+	}
+	private def printCommonCommands()
+	{
+		printCmd("<action name>", "Executes the project specified action.")
+		printCmd("<method name> <parameter>*", "Executes the project specified method.")
+		printCmd(ShowActions, "Shows all available actions.")
+		printCmd(ShowMethods, "Shows all available methods.")
+		printCmd(HelpAction, "Displays this help message.")
+	}
 	private def displayInteractiveHelp() = {
 		Console.println("You may execute any project action or one of the commands described below. Only one action " +
 			"may be executed at a time in interactive mode and is entered by name, as it would be at the command line." +
 			" Also, tab completion is available.")
 		Console.println("Available Commands:")
 
-		def printCmd(name:String, desc:String) = Console.println("\t" + name + ": " + desc)
-
-		printCmd("<action name>", "Executes the project specified action.")
+		printCommonCommands()
 		printCmd(ShowCurrent, "Shows the current project and logging level of that project.")
-		printCmd(ShowActions, "Shows all available actions.")
 		printCmd(Level.elements.mkString(", "), "Set logging for the current project to the specified level.")
 		printCmd(TraceCommand, "Toggles whether logging stack traces is enabled.")
 		printCmd(ProjectAction + " <project name>", "Sets the currently active project.")
@@ -255,7 +270,6 @@ object Main
 		printCmd(SetAction + " <property> <value>", "Sets the value of the property given as its argument.")
 		printCmd(GetAction + " <property>", "Gets the value of the property given as its argument.")
 		printCmd(ContinuousCompileCommand, "Executes 'test-compile' action on active project when source files are modified (continuous compile).")
-		printCmd(HelpAction, "Displays this help message.")
 	}
 	private def listProject(p: Project) = printProject("\t", p)
 	private def printProject(prefix: String, p: Project)
@@ -263,7 +277,20 @@ object Main
 		Console.println(prefix + p.name + " " + p.version)
 	}
 	
-	private def handleCommand(project: Project, command: String)
+	/** Handles the given command string provided by batch mode execution..*/
+	private def handleBatchCommand(project: Project)(command: String): Option[String] =
+	{
+		command.trim match
+		{
+			case HelpAction => displayBatchHelp(); None
+			case ShowActions => Console.println(project.taskList); None
+			case ShowMethods => Console.println(project.methodList); None
+			case action => if(handleAction(project, action)) None else Some("")
+		}
+	}
+	
+	/** Handles the given command string provided at the command line.*/
+	private def handleInteractiveCommand(project: Project, command: String)
 	{
 		command match
 		{
@@ -276,111 +303,55 @@ object Main
 				Console.println("Current log level is " + project.log.getLevel)
 				printTraceEnabled(project)
 			}
-			case ShowActions =>
-			{
-				for( (name, task) <- project.deepTasks)
-					Console.println("\t" + name + task.description.map(x => ": " + x).getOrElse(""))
-			}
+			case ShowActions => Console.println(project.taskList)
+			case ShowMethods => Console.println(project.methodList)
 			case TraceCommand => toggleTrace(project)
 			case Level(level) => setLevel(project, level)
 			case ContinuousCompileCommand => compileContinuously(project)
 			case action => handleAction(project, action)
 		}
 	}
-	private def handleAction(project: Project, action: String)
+	// returns true if it succeeded (needed by noninteractive handleCommand)
+	private def handleAction(project: Project, action: String): Boolean =
 	{
 		val startTime = System.currentTimeMillis
-		if(project.taskNames.exists(_ == action))
-		{
-			project.act(action) match
+		val result =
+			impl.CommandParser.parse(action) match
 			{
-				case Some(errorMessage) => project.log.error(errorMessage)
-				case None => project.log.success("Successful.")
+				case Left(errMsg) => project.log.error(errMsg); false
+				case Right((name, parameters)) => handleAction(project, name, parameters.toArray)
 			}
-		}
-		else
-			reflect(project, action)
 		printTime(project, startTime, "")
+		result
 	}
-	private def showHelpHint(log: Logger)
+	/** Runs the given method or action, returning true if it succeeded. */
+	private def handleAction(project: Project, name: String, parameters: Array[String]) =
 	{
-		log.info("Execute 'help' for a list of commands or " +
-			"'actions' for a list of available project actions")
-	}
-	private def reflect(project: Project, action: String)
-	{
-		impl.CommandParser.parse(action) match
+		def didNotExist(taskType: String) =
 		{
-			case Left(errMsg) => project.log.error(errMsg)
-			case Right((name, parameters)) => reflect(project, name, parameters.toArray)
+			project.log.error("No " + taskType + " named '" + name + "' exists.")
+			project.log.info("Execute 'help' for a list of commands,  " +
+				"'actions' for a list of available project actions, or " + 
+				"'methods' for a list of available project methods.")
+			false
 		}
-	}
-	import java.lang.reflect.Method
-	private def reflect(project: Project, name: String, parameters: Array[String])
-	{
-		def logError(message: String) { project.log.error("Error invoking method '" + name + "': " + message) }
-		def multipleMethodsError =
-			{ project.log.error("Found multiple methods named '" + name + "' with correct return type and parameters.") }
-
-		def invoke(method: Method, args: Array[AnyRef])
+		def showResult(result: Option[String]): Boolean =
 		{
-			try
+			result match
 			{
-				method.invoke(project, args: _*)  match
-				{
-					case null | None => project.log.success("Successful.") // null for void return type
-					case Some(x) => logError(x.toString)
-				}
-			}
-			catch
-			{
-				case e: Exception =>
-					project.log.trace(e)
-					logError(e.toString)
+				case Some(errorMessage) => project.log.error(errorMessage); false
+				case None => project.log.success("Successful."); true
 			}
 		}
-
-		val candidates = project.getClass.getMethods.filter(_.getName == name)
-		if(candidates.isEmpty)
-		{
-			project.log.error("Action or method '" + name + "' does not exist.")
-			showHelpHint(project.log)
-		}
+		if(project.methodNames.toSeq.contains(name))
+			showResult(project.call(name, parameters.toArray))
+		else if(!parameters.isEmpty)
+			didNotExist("method")
+		else if(project.taskNames.toSeq.contains(name))
+			showResult(project.act(name))
 		else
-		{
-			val correctReturnType = candidates.filter(method => returnTypeMatches(method.getReturnType)).toList
-			if(correctReturnType.isEmpty)
-				project.log.error("Found method(s) named '" + name + "', but none with return type Option[String] or Unit.")
-			else
-			{
-				val withStringParameters = correctReturnType.filter(method =>
-					allStringParameters(parameters.length, method.getParameterTypes))
-				withStringParameters match
-				{
-					case Nil =>
-						val withStringArray = correctReturnType.filter(m => stringArrayParameter(m.getParameterTypes))
-						withStringArray match
-						{
-							case Nil => project.log.error("Found method(s) named '" + name + "', but none with " +
-								parameters.length + " String parameters or a single Array[String] parameter.")
-							case single :: Nil => invoke(single, Array[AnyRef](parameters))
-							case _ =>
-								project.log.error("Found multiple methods named '" + name + "' with correct return type and parameters.")
-						}
-					case single :: Nil => invoke(single, parameters.toArray[AnyRef])
-					case _ =>
-						project.log.error("Found multiple methods named '" + name + "' with correct return type and parameters.")
-				}
-			}
-		}
+			didNotExist("action")
 	}
-	private type Parameters = Array[Class[T] forSome {type T}]
-	private def allStringParameters(argCount: Int, params: Parameters) =
-		params.length == argCount && params.forall(t => t == classOf[String])
-	private def stringArrayParameter(params: Parameters) =
-		(params.length == 1 && params(0) == classOf[Array[String]])
-		
-	private def returnTypeMatches(t: Class[_]) = (t == classOf[Option[String]] || t == classOf[Unit])
 	
 	/** Toggles whether stack traces are enabled.*/
 	private def toggleTrace(project: Project)

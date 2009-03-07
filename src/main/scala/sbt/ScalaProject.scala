@@ -196,6 +196,19 @@ trait ScalaProject extends Project with FileTasks
 			val listeners = (for(TestListeners(listeners) <- options) yield listeners).flatMap(x => x)
 			TestFramework.runTests(frameworks, classpath.get, tests, log, listeners)
 	}
+	
+	protected def testQuickMethod(testAnalysis: CompileAnalysis, options: => Seq[TestOption])(toRun: Seq[TestOption] => Task) =
+		task { tests =>
+			val toCheck = scala.collection.mutable.HashSet(tests: _*)
+			toCheck --= testAnalysis.allTests.map(_.testClassName)
+			if(!toCheck.isEmpty && log.atLevel(Level.Warn))
+			{
+				log.warn("Test(s) not found:")
+				toCheck.foreach(test => log.warn("\t" + test))
+			}
+			val includeTests = scala.collection.mutable.HashSet(tests: _*)
+			toRun(TestFilter(test => includeTests.contains(test)) :: options.toList).run
+		}
 }
 trait WebScalaProject extends ScalaProject
 {

@@ -59,7 +59,8 @@ class JLineReader(initialProject: Project, completors: Completors) extends LineR
 	private def simpleCompletor(completions: Iterable[String]) = new SimpleCompletor(completions.toList.toArray)
 	def changeProject(project: Project)
 	{
-		val taskCompletor = simpleCompletor(project.taskNames)
+		import scala.collection.immutable.TreeSet
+		val taskCompletor = simpleCompletor(TreeSet((project.taskNames ++ project.methodNames).toSeq : _*))
 		completor.setCompletors( Array(generalCompletor, taskCompletor, projectCompletor, propertyCompletor(project)) )
 	}
 	def readLine(prompt: String) =

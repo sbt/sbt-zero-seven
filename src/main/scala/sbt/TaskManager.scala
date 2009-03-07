@@ -3,6 +3,10 @@
  */
 package sbt
 
+trait Described extends NotNull
+{
+	def description: Option[String]
+}
 trait TaskManager{
 	/** Creates a task that executes the given action when invoked.*/
 	def task(action : => Option[String]) = 
@@ -11,9 +15,21 @@ trait TaskManager{
 	* it is called directly.  The dependencies of the task are still invoked across all dependent
 	* projects, however. */
 	def interactiveTask(action: => Option[String]) = new Task(None, Nil, true, action)
+	/** Creates a method task that executes the given action when invoked. */
+	def task(action: Array[String] => Option[String]) = new MethodTask(None, action)
+	/** A method task is an action that has parameters.  Note that it is not a Task, though,
+	* because it requires arguments to perform its work.  It therefore cannot be a dependency of
+	* a Task..*/
+	class MethodTask(val description: Option[String], action: Array[String] => Option[String]) extends Described
+	{
+		/** Creates a new method task, identical to this method task, except with the given description.*/
+		def describedAs(description : String) = new MethodTask(Some(description), action)
+		/** Invokes this method task with the given arguments.*/
+		def apply(arguments: Array[String]) = action(arguments)
+	}
 
 	class Task(val description : Option[String], val dependencies : List[Task], val interactive: Boolean,
-		action : => Option[String]) extends Dag[Task]
+		action : => Option[String]) extends Dag[Task] with Described
 	{
 		checkTaskDependencies(dependencies)
 		

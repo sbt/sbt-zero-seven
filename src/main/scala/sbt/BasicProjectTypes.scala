@@ -303,6 +303,13 @@ trait ReflectiveTasks extends Project
 	def tasks: Map[String, Task] = reflectiveTaskMappings
 	def reflectiveTaskMappings : Map[String, Task] = Reflective.reflectiveMappings[Task](this)
 }
+/** A Project that determines its method tasks by reflectively finding all vals with a type
+* that conforms to MethodTask.*/
+trait ReflectiveMethods extends Project
+{
+	def methods: Map[String, MethodTask] = reflectiveMethodMappings
+	def reflectiveMethodMappings : Map[String, MethodTask] = Reflective.reflectiveMappings[MethodTask](this)
+}
 /** A Project that determines its dependencies on other projects by reflectively
 * finding all vals with a type that conforms to Project.*/
 trait ReflectiveModules extends Project
@@ -313,7 +320,7 @@ trait ReflectiveModules extends Project
 /** A Project that determines its dependencies on other projects by reflectively
 * finding all vals with a type that conforms to Project and determines its tasks
 * by reflectively finding all vals with a type that conforms to Task.*/
-trait ReflectiveProject extends ReflectiveModules with ReflectiveTasks
+trait ReflectiveProject extends ReflectiveModules with ReflectiveTasks with ReflectiveMethods
 
 /** This Project subclass is used to contain other projects as dependencies.*/
 class ParentProject(val info: ProjectInfo) extends BasicDependencyProject with HistoryEnabledProject

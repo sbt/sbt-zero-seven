@@ -18,6 +18,7 @@ final class BuilderProject(val info: ProjectInfo, override protected val logImpl
 	
 	def compileOptions = Deprecation :: Unchecked :: Nil
 	override def tasks = Map.empty
+	override def methods = Map.empty
 	def dependencies = Nil
 	
 	def projectClasspath = compilePath +++ libraries +++

@@ -182,6 +182,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
 	protected def docTestAction = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions).dependsOn(testCompile) describedAs TestDocDescription
 	protected def testAction = defaultTestTask(testOptions)
+	protected def testQuickAction = testQuickMethod(testCompileConditional.analysis, testOptions)(options => defaultTestTask(options)) describedAs(TestQuickDescription)
 	protected def defaultTestTask(testOptions: => Seq[TestOption]) =
 		testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
 	
@@ -251,11 +252,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	lazy val incrementVersion = incrementVersionAction
 	lazy val release = releaseAction
 
-	def testQuick(tests: Array[String]) =
-	{
-		val toRun = scala.collection.mutable.HashSet(tests: _*)
-		defaultTestTask(TestFilter(test => toRun.contains(test)) :: testOptions.toList).run
-	}
+	lazy val testQuick = testQuickAction
 	
 	def jarsOfProjectDependencies = Path.lazyPathFinder {
 		(topologicalSort - this) flatMap { p =>
@@ -313,6 +310,8 @@ object BasicScalaProject
 		"Compiles test sources."
 	val TestDescription =
 		"Runs all tests detected during compilation."
+	val TestQuickDescription =
+		"Runs the tests provided as arguments."
 	val DocDescription =
 		"Generates API documentation for main Scala source files using scaladoc."
 	val TestDocDescription =
