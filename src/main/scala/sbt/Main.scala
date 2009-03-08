@@ -147,7 +147,12 @@ object Main
 	**/
 	private def interactive(baseProject: Project): RunCompleteAction =
 	{
-		val reader = new JLineReader(baseProject, new Completors(ProjectAction, interactiveCommands, List(GetAction, SetAction)))
+		val projectNames = baseProject.topologicalSort.map(_.name)
+		val completors = new Completors(ProjectAction, projectNames, interactiveCommands, List(GetAction, SetAction))
+		val reader = new JLineReader(baseProject.historyPath, completors, baseProject.log)
+		def updateTaskCompletions(project: Project)
+			{ reader.setVariableCompletions(project.taskNames ++ project.methodNames, project.propertyNames) }
+		updateTaskCompletions(baseProject)
 		
 		/** Prompts the user for the next command using 'currentProject' as context.
 		* If the command indicates that the user wishes to terminate or reload the session,
@@ -175,7 +180,7 @@ object Main
 							case Some(newProject) =>
 							{
 								printProject("Set current project to ", newProject)
-								reader.changeProject(newProject)
+								updateTaskCompletions(newProject)
 								loop(newProject)
 							}
 							case None =>

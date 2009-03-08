@@ -30,7 +30,7 @@ trait ClasspathProject extends Project
 trait BasicDependencyProject extends BasicManagedProject with UnmanagedClasspathProject with BasicDependencyPaths
 {
 	/** This returns the classpath for only this project for the given configuration.*/
-	def projectClasspath(config: Configuration) = unmanagedClasspath(config) +++ managedClasspath(config)
+	def projectClasspath(config: Configuration) = fullUnmanagedClasspath(config) +++ managedClasspath(config)
 }
 /** A project that provides a directory in which jars can be manually managed.*/
 trait UnmanagedClasspathProject extends ClasspathProject
@@ -41,7 +41,7 @@ trait UnmanagedClasspathProject extends ClasspathProject
 	def unmanagedClasspath: PathFinder = descendents(dependencyPath, "*.jar")
 	/** The classpath containing all unmanaged classpath elements for the given configuration. This typically includes
 	* at least 'unmanagedClasspath'.*/
-	def unmanagedClasspath(config: Configuration): PathFinder
+	def fullUnmanagedClasspath(config: Configuration): PathFinder
 }
 
 /** A project that provides automatic dependency management.*/
@@ -323,13 +323,13 @@ trait ReflectiveModules extends Project
 trait ReflectiveProject extends ReflectiveModules with ReflectiveTasks with ReflectiveMethods
 
 /** This Project subclass is used to contain other projects as dependencies.*/
-class ParentProject(val info: ProjectInfo) extends BasicDependencyProject with HistoryEnabledProject
+class ParentProject(val info: ProjectInfo) extends BasicDependencyProject
 {
 	def dependencies = info.dependencies ++ subProjects.values.toList
 	/** The directories to which a project writes are listed here and is used
 	* to check a project and its dependencies for collisions.*/
 	override def outputDirectories = managedDependencyPath :: Nil
-	def unmanagedClasspath(config: Configuration) = unmanagedClasspath
+	def fullUnmanagedClasspath(config: Configuration) = unmanagedClasspath
 }
 
 object Reflective

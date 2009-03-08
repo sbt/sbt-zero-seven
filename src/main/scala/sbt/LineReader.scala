@@ -7,12 +7,9 @@ trait LineReader extends NotNull
 {
 	def readLine(prompt: String): Option[String]
 }
-trait HistoryEnabledProject extends Project
-{
-	def historyPath: Option[Path] = None
-}
-class Completors(val projectAction: String, val generalCommands: Iterable[String], val propertyActions: Iterable[String]) extends NotNull
-class JLineReader(initialProject: Project, completors: Completors) extends LineReader
+class Completors(val projectAction: String, val projectNames: Iterable[String],
+	val generalCommands: Iterable[String], val propertyActions: Iterable[String]) extends NotNull
+class JLineReader(historyPath: Option[Path], completors: Completors, log: Logger) extends LineReader
 {
 	import completors._
 	import jline.{ArgumentCompletor, ConsoleReader, MultiCompletor, NullCompletor, SimpleCompletor}
@@ -21,24 +18,27 @@ class JLineReader(initialProject: Project, completors: Completors) extends LineR
 	private val projectCompletor =
 	{
 		val startCompletor = simpleCompletor(projectAction :: Nil)
-		val projectsCompletor = simpleCompletor(initialProject.topologicalSort.map(_.name))
+		val projectsCompletor = simpleCompletor(projectNames)
 		val argumentCompletors = Array(startCompletor, projectsCompletor, new NullCompletor)
 		new ArgumentCompletor(argumentCompletors, SingleArgumentDelimiter)
 	}
 	private val completor = new MultiCompletor()
-	changeProject(initialProject)
 	
 	private val reader =
 	{
 		val cr = new ConsoleReader
-		initialProject match { case h: HistoryEnabledProject => setHistory(cr, h); case _ => () }
+		cr.setBellEnabled(false)
+		for(historyLocation <- historyPath)
+		{
+			val historyFile = historyLocation.asFile
+			Control.trapAndLog(log)
+			{
+				historyFile.getParentFile.mkdirs()
+				cr.getHistory.setHistoryFile(historyFile)
+			}
+		}
 		cr.addCompletor(completor)
 		cr
-	}
-	private def setHistory(cr: ConsoleReader, projectWithHistory: HistoryEnabledProject)
-	{
-		for(historyLocation <- projectWithHistory.historyPath)
-			cr.getHistory.setHistoryFile(historyLocation.asFile)
 	}
 	
 	/** Used for a single argument so that the argument can have spaces in it.*/
@@ -48,20 +48,20 @@ class JLineReader(initialProject: Project, completors: Completors) extends LineR
 			(buffer.charAt(pos) == ' ') && buffer.substring(0, pos).trim.indexOf(' ') == -1
 	}
 	
-	private def propertyCompletor(project: Project) =
+	private def propertyCompletor(propertyNames: Iterable[String]) =
 	{
 		val startCompletor = simpleCompletor(propertyActions)
-		val nameCompletor = simpleCompletor(project.propertyNames)
+		val nameCompletor = simpleCompletor(propertyNames)
 		val completors = Array(startCompletor, nameCompletor, new NullCompletor)
 		new ArgumentCompletor(completors)
 	}
 	
 	private def simpleCompletor(completions: Iterable[String]) = new SimpleCompletor(completions.toList.toArray)
-	def changeProject(project: Project)
+	def setVariableCompletions(taskNames: Iterable[String], propertyNames: Iterable[String])
 	{
 		import scala.collection.immutable.TreeSet
-		val taskCompletor = simpleCompletor(TreeSet((project.taskNames ++ project.methodNames).toSeq : _*))
-		completor.setCompletors( Array(generalCompletor, taskCompletor, projectCompletor, propertyCompletor(project)) )
+		val taskCompletor = simpleCompletor(TreeSet(taskNames.toSeq : _*))
+		completor.setCompletors( Array(generalCompletor, taskCompletor, projectCompletor, propertyCompletor(propertyNames)) )
 	}
 	def readLine(prompt: String) =
 		reader.readLine(prompt) match

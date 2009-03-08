@@ -65,9 +65,9 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 
 	def integrationTestFrameworks = testFrameworks
 	override def useIntegrationTestConfiguration = false
-	abstract override def unmanagedClasspath(config: Configuration) =
+	abstract override def fullUnmanagedClasspath(config: Configuration) =
 	{
-		val superClasspath = super.unmanagedClasspath(config)
+		val superClasspath = super.fullUnmanagedClasspath(config)
 		if(config == integrationTestConfiguration)
 			integrationTestCompilePath +++ integrationTestResourcesPath +++ superClasspath
 		else

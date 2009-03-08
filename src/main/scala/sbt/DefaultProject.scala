@@ -12,7 +12,7 @@ import BasicScalaProject._
 
 /** This class defines concrete instances of actions from ScalaProject using overridable paths,
 * options, and configuration. */
-abstract class BasicScalaProject extends ScalaProject with BasicDependencyProject with BasicProjectPaths with HistoryEnabledProject
+abstract class BasicScalaProject extends ScalaProject with BasicDependencyProject with BasicProjectPaths
 {
 	/** The class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
@@ -118,7 +118,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	* default includes the main compiled classes for this project and the libraries in this project's
 	* unmanaged library directory (lib) and the managed directory for the specified configuration.  It
 	* also adds the resource directories appropriate to the configuration.*/
-	def unmanagedClasspath(config: Configuration) =
+	def fullUnmanagedClasspath(config: Configuration) =
 	{
 		val base =  mainCompilePath +++ mainResourcesPath +++ unmanagedClasspath
 		config match
