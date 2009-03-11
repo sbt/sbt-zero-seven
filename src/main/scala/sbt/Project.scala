@@ -34,12 +34,11 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	/** The names of all available tasks that may be called through `act`.  These include
 	* the names of the Tasks in `tasks` and those of all dependencies.*/
 	def taskNames: Iterable[String] = deepTasks.keys.toList
-	/** The names of all available method tasks that may be called through `call`.  These include
-	* the names of the MethodTasks in `methods` and those of all dependencies.*/
-	def methodNames: Iterable[String] = deepMethods.keys.toList
-	/** A description of all available method tasks in this project and all dependencies.  If there
-	* are different method tasks with the same name, only one will be included. */
-	def methodList: String = descriptionList(deepMethods)
+	/** The names of all available method tasks that may be called through `call`.  These
+	* only include the names of the MethodTasks in `methods` and not those of dependencies.*/
+	def methodNames: Iterable[String] = methods.keys.toList
+	/** A description of all available method tasks in this project, but not of dependencies. */
+	def methodList: String = descriptionList(methods)
 	/** A description of all available tasks in this project and all dependencies.  If there
 	* are different tasks with the same name, only one will be included. */
 	def taskList: String = descriptionList(deepTasks)
