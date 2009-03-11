@@ -195,6 +195,7 @@ object Path
 		else
 			None
 	}
+	def fromFile(file: File): Path = new ProjectDirectory(file)
 }
 
 /** A path finder constructs a set of paths.  The set is evaluated by a call to the <code>get</code>
