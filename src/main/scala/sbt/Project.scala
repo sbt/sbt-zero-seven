@@ -25,6 +25,8 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	/** The project organization. */
 	final def organization: String = projectOrganization.value
 	
+	final type ManagerType = Project
+	final type ManagedTask = Project#Task
 	/** The tasks declared on this project. */
 	def tasks: Map[String, Task]
 	/** The task methods declared on this project */
@@ -73,15 +75,21 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 		names.toList
 	}
 	
-	// TODO: multi-project
 	def call(name: String, parameters: Array[String]): Option[String] =
 	{
 		methods.get(name) match
 		{
-			case Some(method) => method(parameters)
+			case Some(method) =>run(method(parameters), name)
 			case None => Some("Method '" + name + "' does not exist.")
 		}
 	}
+	private def run(task: Project#Task, taskName: String): Option[String] =
+		impl.RunTask(task, taskName, parallelExecution) match
+		{
+			case Nil => None
+			case x => Some(Set(x: _*).mkString("\n"))
+		}
+		
 	/** Executes the task with the given name.  This involves executing the task for all
 	* project dependencies (transitive) and then for this project.  Not every dependency
 	* must define a task with the given name.  If this project and all dependencies
@@ -89,72 +97,29 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	def act(name: String): Option[String] =
 	{
 		val ordered = topologicalSort
-		val multiProject = ordered.length > 1
-		
-		def runSequentially =
-		{
-			if(multiProject && log.atLevel(Level.Debug))
-				showBuildOrder(ordered)
-			
-			def run(projects: List[Project]): Option[String] =
-				projects match
-				{
-					case Nil => None
-					case project :: remaining =>
-						project.tasks.get(name) match
-						{
-							case None => run(remaining)
-							case Some(task) =>
-							{
-								if(multiProject)
-									showProjectHeader(project)
-								project.runAndSaveEnvironment( if(task.interactive) task.runDependenciesOnly else task.run ) orElse run(remaining)
-							}
-						}
-				}
-			run(ordered)
-		}
-		def run =
-		{
-			if(multiProject && parallelExecution)
-			{
-				ParallelRunner.run(this, name, Runtime.getRuntime.availableProcessors) match
-				{
-					case Nil => None
-					case x => Some(Set(x: _*).mkString("\n"))
-				}
-			}
-			else
-				runSequentially
-		}
-
 		val definedTasks = ordered.flatMap(_.tasks.get(name).toList)
+		def virtualTask(name: String): Task = new Task(None, definedTasks.filter(!_.interactive), false, None)
+
 		if(definedTasks.isEmpty)
 			Some("Action '" + name + "' does not exist.")
 		else
 		{
-			// If there is an interactive task with this name,
-			//  There cannot be non-interactive tasks with the same name
-			//  There can only be one interactive task with this name or else this project must define an interactive task with that name
-			val interactiveTasks = definedTasks.filter(_.interactive)
-			val interactiveCheck: Either[String, Option[Project#Task]] =	
-				interactiveTasks match
-				{
-					case Nil => Right(None)
-					case _ if definedTasks.size != interactiveTasks.size =>
-						Left("Cannot run action '" + name + "': interactive and non-interactive actions with the same name are not allowed.")
-					case single :: Nil => Right(Some(single))
-					case multiple=>
-						tasks.get(name) match
-						{
-							case Some(task) => Right(Some(task))
-							case None =>Left("Cannot run interactive action '" + name +
-								"' defined on multiple subprojects (change to the desired project with 'project <name>').")
-						}
-				}
-			interactiveCheck.fold(err => Some(err), interactiveTask => run orElse interactiveTask.flatMap(_.invoke))
+			tasks.get(name) match
+			{
+				case None =>
+					val virtual = virtualTask(name)
+					if(virtual.dependencies.size == definedTasks.size)
+						run(virtual, name)
+					else
+					{
+						Some("Cannot run interactive action '" + name +
+							"' defined on multiple subprojects (change to the desired project with 'project <name>').")
+					}
+				case Some(task) => run(task, name)
+			}
 		}
 	}
+	
 	/** Logs the list of projects at the debug level.*/
 	private def showBuildOrder(order: Iterable[Project])
 	{
@@ -229,24 +194,6 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	
 	protected final override def parentEnvironment = info.parent
 	
-	def runAndSaveEnvironment[T](toRun: => Option[String]): Option[String] =
-	{
-		try
-		{
-			val runResult = toRun // execute the action
-			val saveResult = saveEnvironment() // always run saveEnvironment 
-			runResult orElse saveResult // precendence given to the runResult error if both have an error
-		}
-		catch
-		{
-			case e =>
-			{
-				saveEnvironment()
-				log.trace(e)
-				Some(e.toString)
-			}
-		}
-	}
 	// .* included because svn doesn't mark .svn hidden
 	def defaultExcludes: FileFilter = ".*" || HiddenFileFilter
 	/** Short for parent.descendentsExcept(include, defaultExcludes)*/

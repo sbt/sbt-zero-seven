@@ -3,6 +3,22 @@
  */
 package sbt
 
+import scala.collection.jcl.WeakHashMap
+import scala.collection.mutable.{Buffer, ListBuffer}
+
+sealed trait LogEvent extends NotNull
+final class Success(val msg: String) extends LogEvent
+final class Log(val level: Level.Value, val msg: String) extends LogEvent
+final class Trace(val exception: Throwable) extends LogEvent
+final class SetLevel(val newLevel: Level.Value) extends LogEvent
+final class SetTrace(val enabled: Boolean) extends LogEvent
+final class ControlEvent(val event: ControlEvent.Value, val msg: String) extends LogEvent
+
+object ControlEvent extends Enumeration
+{
+	val Start, Header, Finish = Value
+}
+
 abstract class Logger extends NotNull
 {
 	def getLevel: Level.Value
@@ -12,14 +28,29 @@ abstract class Logger extends NotNull
 	
 	def atLevel(level: Level.Value) = level.id >= getLevel.id
 	def trace(t: => Throwable): Unit
-	def debug(message: => String): Unit = log(Level.Debug, message)
-	def info(message: => String): Unit = log(Level.Info, message)
-	def warn(message: => String): Unit = log(Level.Warn, message)
-	def error(message: => String): Unit = log(Level.Error, message)
-	def success(message: => String): Unit = log(Level.Info, message)
+	final def debug(message: => String): Unit = log(Level.Debug, message)
+	final def info(message: => String): Unit = log(Level.Info, message)
+	final def warn(message: => String): Unit = log(Level.Warn, message)
+	final def error(message: => String): Unit = log(Level.Error, message)
+	def success(message: => String): Unit
 	def log(level: Level.Value, message: => String): Unit
+	def control(event: ControlEvent.Value, message: => String): Unit
 	
-	def doSynchronized[T](f: => T): T = synchronized { f }
+	/** Use this method to ensure calls. */
+	def logAll(events: Seq[LogEvent]): Unit
+	/** Defined in terms of other methods in Logger and should not be called from them. */
+	final def log(event: LogEvent)
+	{
+		event match
+		{
+			case s: Success => success(s.msg)
+			case l: Log => log(l.level, l.msg)
+			case t: Trace => trace(t.exception)
+			case setL: SetLevel => setLevel(setL.newLevel)
+			case setT: SetTrace => enableTrace(setT.enabled)
+			case c: ControlEvent => control(c.event, c.msg)
+		}
+	}
 }
 
 /** Implements the level-setting methods of Logger.*/
@@ -28,106 +59,158 @@ abstract class BasicLogger extends Logger
 	private var traceEnabledVar = false
 	private var level: Level.Value = Level.Info
 	def getLevel = level
-	def setLevel(newLevel: Level.Value)
-	{
-		level = newLevel
-	}
+	def setLevel(newLevel: Level.Value) { level = newLevel }
 	def enableTrace(flag: Boolean) { traceEnabledVar = flag }
 	def traceEnabled = traceEnabledVar
 }
-/** A logger that can buffer the logging done on it and then flush the buffer to the
-* delegate logger provided in the constructor.  Use 'startRecording' to start buffering
-* and then 'play' to flush the buffer to the backing logger.  The logging level set at the
+
+final class SynchronizedLogger(delegate: Logger) extends Logger
+{
+	def getLevel = { synchronized { delegate.getLevel } }
+	def setLevel(newLevel: Level.Value) { synchronized { delegate.setLevel(newLevel) } }
+	def enableTrace(enabled: Boolean) { synchronized { delegate.enableTrace(enabled) } }
+	def traceEnabled: Boolean = { synchronized { delegate.traceEnabled } }
+	
+	def trace(t: => Throwable) { synchronized { delegate.trace(t) } }
+	def log(level: Level.Value, message: => String) { synchronized { delegate.log(level, message) } }
+	def success(message: => String) { synchronized { delegate.success(message) } }
+	def control(event: ControlEvent.Value, message: => String) { synchronized { delegate.control(event, message) } }
+	def logAll(events: Seq[LogEvent]) { synchronized { delegate.logAll(events) } }
+}
+
+final class MultiLogger(delegates: List[Logger]) extends BasicLogger
+{
+	override def setLevel(newLevel: Level.Value)
+	{
+		super.setLevel(newLevel)
+		dispatch(new SetLevel(newLevel))
+	}
+	override def enableTrace(enabled: Boolean)
+	{
+		super.enableTrace(enabled)
+		dispatch(new SetTrace(enabled))
+	}
+	def trace(t: => Throwable) { dispatch(new Trace(t)) }
+	def log(level: Level.Value, message: => String) { dispatch(new Log(level, message)) }
+	def success(message: => String) { dispatch(new Success(message)) }
+	def logAll(events: Seq[LogEvent]) { delegates.foreach(_.logAll(events)) }
+	def control(event: ControlEvent.Value, message: => String) { delegates.foreach(_.control(event, message)) }
+	private def dispatch(event: LogEvent) { delegates.foreach(_.log(event)) }
+}
+
+/** Provides a frontend to a logger that provides separate buffers for different calling actors
+* Wrap this in SynchronizedLogger. */
+
+/** A logger that can buffer the logging done on it by currently executing actor and
+* then can flush the buffer to the delegate logger provided in the constructor.  Use
+* 'startRecording' to start buffering and then 'play' from to flush the buffer for the
+* current actor to the backing logger.  The logging level set at the
 * time a message is originally logged is used, not the level at the time 'play' is
 * called.
 *
 * This class assumes that it is the only client of the delegate logger.
 *
-* This logger is not thread-safe.
+* This logger is thread-safe.
 * */
 final class BufferedLogger(delegate: Logger) extends Logger
 {
-	private val buffer = new scala.collection.mutable.ListBuffer[LogEvent]
+	import scala.actors.Actor
+	private val buffers = new WeakHashMap[Actor, Buffer[LogEvent]]
 	private var recording = false
 	
-	/** Enables buffering. */
-	def startRecording()
-	{
-		recording = true
-	}
-	/** Flushes the buffer to the delegate logger.  This method executes in the
-	* doSynchronized method of the delegate so that the messages are written in order. */
-	def play()
-	{
-		delegate.doSynchronized { buffer.foreach(play) }
-	}
-	private def play(event: LogEvent)
-	{
-		event match
-		{
-			case s: Success => delegate.success(s.msg)
-			case l: Log => delegate.log(l.level, l.msg)
-			case t: Trace => delegate.trace(t.exception)
-			case setL: SetLevel => delegate.setLevel(setL.newLevel)
-			case setT: SetTrace => delegate.enableTrace(setT.enabled)
-		}
-	}
-	/** Clears all buffered messages and disables buffering. */
-	def clear()
-	{
-		buffer.clear()
-		recording = false
-	}
-	// these wrap log messages so that they can be replayed later
-	private sealed trait LogEvent extends NotNull
-	private class Success(val msg: String) extends LogEvent
-	private class Log(val level: Level.Value, val msg: String) extends LogEvent
-	private class Trace(val exception: Throwable) extends LogEvent
-	private class SetLevel(val newLevel: Level.Value) extends LogEvent
-	private class SetTrace(val enabled: Boolean) extends LogEvent
+	private def buffer = buffers.getOrElseUpdate(Actor.self, new ListBuffer[LogEvent])
 	
-	def setLevel(newLevel: Level.Value)
+	/** Enables buffering. */
+	def startRecording() { synchronized { recording = true } }
+	/** Flushes the buffer to the delegate logger for the current actor.  This method calls logAll on the delegate
+	* so that the messages are written consecutively. The buffer is cleared in the process. */
+	def play(): Unit = synchronized { delegate.logAll(buffer.readOnly) }
+	def playAll(): Unit =
+		synchronized
+		{
+			for(buffer <- buffers.values)
+				delegate.logAll(buffer.readOnly)
+		}
+	/** Clears buffered events for the current actor.  It does not disable buffering. */
+	def clear(): Unit = synchronized { buffers.removeKey(Actor.self) }
+	/** Clears buffered events for all actors and disables buffering. */
+	def clearAll(): Unit =
+		synchronized {
+			buffers.clear()
+			recording = false
+		}
+	def runAndFlush[T](f: => T): T =
 	{
-		if(recording) buffer += new SetLevel(newLevel)
-		delegate.setLevel(newLevel)
+		try { f }
+		finally { play();  clear() }
 	}
-	def getLevel = delegate.getLevel
-	def traceEnabled = delegate.traceEnabled
-	def enableTrace(flag: Boolean)
-	{
-		if(recording) buffer += new SetTrace(flag)
-		delegate.enableTrace(flag)
-	}
+	
+	def setLevel(newLevel: Level.Value): Unit =
+		synchronized {
+			if(recording) buffer += new SetLevel(newLevel)
+			delegate.setLevel(newLevel)
+		}
+	def getLevel = synchronized { delegate.getLevel }
+	def traceEnabled = synchronized { delegate.traceEnabled }
+	def enableTrace(flag: Boolean): Unit =
+		synchronized
+		{
+			if(recording) buffer += new SetTrace(flag)
+			delegate.enableTrace(flag)
+		}
 	
 	def trace(t: => Throwable): Unit =
-	{
-		if(traceEnabled)
+		synchronized
 		{
-			if(recording) buffer += new Trace(t)
-			else delegate.trace(t)
+			if(traceEnabled)
+			{
+				if(recording) buffer += new Trace(t)
+				else delegate.trace(t)
+			}
 		}
-	}
-	override def success(message: => String): Unit =
-	{
-		if(atLevel(Level.Info))
+	def success(message: => String): Unit =
+		synchronized
 		{
-			if(recording)
-				buffer += new Success(message)
-			else
-				delegate.success(message)
+			if(atLevel(Level.Info))
+			{
+				if(recording)
+					buffer += new Success(message)
+				else
+					delegate.success(message)
+			}
 		}
-	}
 	def log(level: Level.Value, message: => String): Unit =
-	{
-		if(atLevel(level))
+		synchronized
+		{
+			if(atLevel(level))
+			{
+				if(recording)
+					buffer += new Log(level, message)
+				else
+					delegate.log(level, message)
+			}
+		}
+	def logAll(events: Seq[LogEvent]): Unit =
+		synchronized
 		{
 			if(recording)
-				buffer += new Log(level, message)
+				buffer ++= events
 			else
-				delegate.log(level, message)
+				delegate.logAll(events)
 		}
-	}
+	def control(event: ControlEvent.Value, message: => String): Unit =
+		synchronized
+		{
+			if(atLevel(Level.Info))
+			{
+				if(recording)
+					buffer += new ControlEvent(event, message)
+				else
+					delegate.control(event, message)
+			}
+		}
 }
+
 /** A logger that logs to the console.  On non-windows systems, the level labels are
 * colored. 
 *
@@ -152,11 +235,12 @@ class ConsoleLogger extends BasicLogger
 		if(atLevel(Level.Info))
 			log(successLabelColor, Level.SuccessLabel, successMessageColor, message)
 	}
-	def trace(t: => Throwable)
-	{
-		if(traceEnabled)
-			t.printStackTrace
-	}
+	def trace(t: => Throwable): Unit =
+		System.out.synchronized
+		{
+			if(traceEnabled)
+				t.printStackTrace
+		}
 	def log(level: Level.Value, message: => String)
 	{
 		if(atLevel(level))
@@ -165,26 +249,29 @@ class ConsoleLogger extends BasicLogger
 	private def setColor(color: String)
 	{
 		if(!isWindows)
-			System.out.print(color)
+			System.out.synchronized { System.out.print(color) }
 	}
-	private def log(labelColor: String, label: String, messageColor: String, message: String) =
-	{
-		for(line <- message.split("""\n"""))
+	private def log(labelColor: String, label: String, messageColor: String, message: String): Unit =
+		System.out.synchronized
 		{
-			setColor(Console.RESET)
-			System.out.print('[')
-			setColor(labelColor)
-			System.out.print(label)
-			setColor(Console.RESET)
-			System.out.print("] ")
-			setColor(messageColor)
-			System.out.print(line)
-			setColor(Console.RESET)
-			System.out.println()
+			for(line <- message.split("""\n"""))
+			{
+				setColor(Console.RESET)
+				System.out.print('[')
+				setColor(labelColor)
+				System.out.print(label)
+				setColor(Console.RESET)
+				System.out.print("] ")
+				setColor(messageColor)
+				System.out.print(line)
+				setColor(Console.RESET)
+				System.out.println()
+			}
 		}
-	}
 	
-	override def doSynchronized[T](f: => T): T = synchronized { System.out.synchronized { f } }
+	def logAll(events: Seq[LogEvent]) = System.out.synchronized { events.foreach(log) }
+	def control(event: ControlEvent.Value, message: => String)
+		{ log(labelColor(Level.Info), Level.Info.toString, Console.BLUE, message) }
 }
 
 /** An enumeration defining the levels available for logging.  A level includes all of the levels
@@ -204,29 +291,4 @@ object Level extends Enumeration with NotNull
 	def apply(s: String) = elements.find(s == _.toString)
 	/** Same as apply, defined for use in pattern matching. */
 	private[sbt] def unapply(s: String) = apply(s)
-}
-
-/** Delegates all calls to the Logger provided by 'delegate'.*/
-abstract class DelegatingLogger extends Logger
-{
-	protected def delegate: Logger
-	
-	def enableTrace(flag: Boolean) { delegate.enableTrace(flag) }
-	def traceEnabled = delegate.traceEnabled
-	def getLevel = delegate.getLevel
-	def setLevel(newLevel: Level.Value)
-	{
-		delegate.setLevel(newLevel)
-	}
-	override def atLevel(level: Level.Value) = delegate.atLevel(level)
-	
-	def trace(t: => Throwable): Unit = delegate.trace(t)
-	override def debug(message: => String): Unit = delegate.debug(message)
-	override def info(message: => String): Unit = delegate.info(message)
-	override def warn(message: => String): Unit = delegate.warn(message)
-	override def error(message: => String): Unit = delegate.error(message)
-	override def success(message: => String): Unit = delegate.success(message)
-	def log(level: Level.Value, message: => String) = delegate.log(level, message)
-	
-	override def doSynchronized[T](f: => T): T = delegate.doSynchronized(f)
 }

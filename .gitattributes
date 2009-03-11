@@ -62,6 +62,7 @@ src/main/scala/sbt/Version.scala -text
 src/main/scala/sbt/WebApp.scala -text
 src/main/scala/sbt/Webstart.scala -text
 src/main/scala/sbt/impl/CommandParser.scala -text
+src/main/scala/sbt/impl/RunTask.scala -text
 src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject2.scala -text
 src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject3.scala -text
 src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject4.scala -text

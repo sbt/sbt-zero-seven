@@ -82,7 +82,13 @@ trait ScalaProject extends Project with FileTasks
 	def runTask(mainClass: Option[String], classpath: PathFinder, options: String*): Task =
 		runTask(mainClass, classpath, options)
 	def runTask(mainClass: Option[String], classpath: PathFinder, options: => Seq[String]): Task =
-		interactiveTask { Run(mainClass, classpath.get, options, log) }
+		task
+		{
+			if(mainClass.isDefined)
+				Run(mainClass, classpath.get, options, log)
+			else
+				Some("No main class specified.")
+		}
 
 	def cleanTask(paths: PathFinder, options: CleanOption*): Task =
 		cleanTask(paths, options)
@@ -207,7 +213,7 @@ trait ScalaProject extends Project with FileTasks
 				toCheck.foreach(test => log.warn("\t" + test))
 			}
 			val includeTests = scala.collection.mutable.HashSet(tests: _*)
-			toRun(TestFilter(test => includeTests.contains(test)) :: options.toList).run
+			toRun(TestFilter(test => includeTests.contains(test)) :: options.toList)
 		}
 }
 trait WebScalaProject extends ScalaProject

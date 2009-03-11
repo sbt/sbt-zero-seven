@@ -121,19 +121,14 @@ private object WebstartScalaProject
 	import FileTasks.{runOption, wrapProduct, wrapProducts}
 	/** Changes the extension of the Path of the given jar from ".jar" to newExtension.  If append is true,
 	* the new extension is simply appended to the jar's filename. */
-	private def modifyExtension(jar: Path, newExtension: String, append: Boolean) =
+	private def appendExtension(jar: Path, newExtension: String) =
 		jar match
 		{
-			case rp: RelativePath =>
-				import rp._
-				if(append || !component.endsWith(".jar"))
-					parentPath / (component + newExtension)
-				else
-					parentPath / ( component.substring(0, component.length - ".jar".length) + newExtension )
+			case rp: RelativePath => rp.parentPath / (rp.component + newExtension)
 			case x => x
 		}
-	private def gzipJarPath(jar: Path) = modifyExtension(jar, ".gz", true)
-	private def packPath(jar: Path) = modifyExtension(jar, ".pack", false)
+	private def gzipJarPath(jar: Path) = appendExtension(jar, ".gz")
+	private def packPath(jar: Path) = appendExtension(jar, ".pack")
 	private def signOnly(jar: Path, signConfiguration: SignConfiguration, targetDirectory: Path, log: Logger) =
 	{
 		import SignJar._

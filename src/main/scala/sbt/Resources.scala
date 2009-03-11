@@ -76,11 +76,11 @@ class Resources(val baseDirectory: File)
 				resultToEither(Project.loadProject(dir, Nil, None, buffered)) match
 				{
 					case Left(msg) =>
-						buffered.play()
-						buffered.clear()
+						buffered.playAll()
+						buffered.clearAll()
 						Left(reloadPrefixIfError + msg)
 					case Right(p) => 
-						buffered.clear()
+						buffered.clearAll()
 						Right(p)
 				}
 			}

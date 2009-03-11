@@ -55,9 +55,6 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	/** The options provided to the 'test-compile' action, defaulting to those for the 'compile' action.*/
 	def testCompileOptions: Seq[CompileOption] = compileOptions
 	
-	/** The options provided to the 'run' action.  These actions are passed as arguments to the main method
-	* of the class specified in 'mainClass'.*/
-	def runOptions: Seq[String] = Nil
 	/** The options provided to the 'doc' and 'docTest' actions.*/
 	def documentOptions: Seq[ScaladocOption] =
 		LinkSource ::
@@ -176,7 +173,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	protected def compileAction = task { mainCompileConditional.run } describedAs MainCompileDescription
 	protected def testCompileAction = task { testCompileConditional.run } dependsOn compile describedAs TestCompileDescription
 	protected def cleanAction = cleanTask(outputPath, cleanOptions) describedAs CleanDescription
-	protected def runAction = runTask(mainClass, runClasspath, runOptions).dependsOn(compile) describedAs RunDescription
+	protected def runAction = task { args => runTask(mainClass, runClasspath, args) dependsOn(compile) } describedAs RunDescription
 	protected def consoleQuickAction = consoleTask(consoleClasspath) describedAs ConsoleQuickDescription
 	protected def consoleAction = consoleTask(consoleClasspath).dependsOn(testCompile) describedAs ConsoleDescription
 	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
@@ -194,7 +191,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	protected def packageProjectAction = zipTask(packageProjectPaths, outputPath, defaultJarBaseName + "-project.zip") describedAs ProjectPackageDescription
 	
 	protected def docAllAction = (doc && docTest) describedAs DocAllDescription
-	protected def packageAllAction = (`package` && packageTest && packageSrc && packageTestSrc && packageDocs) describedAs PackageAllDescription
+	protected def packageAllAction = task { None } dependsOn(`package`, packageTest, packageSrc, packageTestSrc, packageDocs) describedAs PackageAllDescription
 	protected def graphAction = graphTask(graphPath, mainCompileConditional.analysis).dependsOn(compile)
 	protected def updateAction = updateTask(outputPattern, managedDependencyPath, updateOptions) describedAs UpdateDescription
 	protected def cleanLibAction = cleanLibTask(managedDependencyPath) describedAs CleanLibDescription
@@ -255,10 +252,10 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	lazy val testQuick = testQuickAction
 	
 	def jarsOfProjectDependencies = Path.lazyPathFinder {
-		(topologicalSort - this) flatMap { p =>
+		topologicalSort.dropRight(1) flatMap { p =>
 			p match
 			{
-				case bpp: BasicProjectPaths => List(bpp.outputPath / defaultJarName)
+				case bpp: BasicProjectPaths => List(bpp.outputPath / bpp.defaultJarName)
 				case _ => Nil
 			}
 		}

@@ -8,52 +8,18 @@ import scala.collection.mutable.{ArrayBuffer, Buffer, HashMap, HashSet, ListBuff
 
 object ParallelRunner
 {
-	def run(project: Project, action: String, maximumTasks: Int): List[WorkFailure[Project]] =
-	{
-		def runProject(p: Project) =
-		{
-			val bufferedLogger = p.log match { case bl: BufferedLogger => Some(bl); case _ => None }
-			for(log <- bufferedLogger)
-			{
-				log.startRecording()
-				Project.showProjectHeader(p)
-			}
-			try
-			{
-				p.runAndSaveEnvironment
-				{
-					p.tasks.get(action).flatMap( task =>
-					{
-						if(p == project || !task.interactive)
-							task.run
-						else
-							task.runDependenciesOnly
-					})
-				}
-			}
-			finally
-			{
-				for(log <- bufferedLogger)
-				{
-					log.play()
-					log.clear()
-				}
-			}
-		}
-		run(project, (p: Project) => p.name, runProject, maximumTasks, project.log)
-	}
-
-	def run[D <: Dag[D]](node: D, name: D => String, action: D => Option[String], maximumTasks: Int, log: Logger): List[WorkFailure[D]] =
+	def run[D <: Dag[D]](node: D, name: D => String, action: D => Option[String], maximumTasks: Int, log: D => Logger): List[WorkFailure[D]] =
 	{
 		val jobScheduler = new BasicDagScheduler(node, name, (d: D) => 1)
-		val distributor = new Distributor(jobScheduler, (w: Work[D]) => action(w.data), maximumTasks, log)
+		val distributor = new Distributor(jobScheduler, withWork(action), maximumTasks, withWork(log))
 		distributor.start()
 		val result = (distributor !? Start).asInstanceOf[List[WorkFailure[Work[D]]]]
 		for( WorkFailure(work, message) <- result ) yield WorkFailure(work.data, "Error running " + name(work.data) + ": " + message)
 	}
+	private def withWork[D, T](f: D => T)(w: Work[D]) = f(w.data)
 }
 private case object Start
-final class Distributor[D](scheduler: Scheduler[D], doWork: D => Option[String], workers: Int, log: Logger) extends Actor with NotNull
+final class Distributor[D](scheduler: Scheduler[D], doWork: D => Option[String], workers: Int, log: D => Logger) extends Actor with NotNull
 {
 	private val running = new HashSet[Worker]
 	private val idle: Buffer[Worker] = new ArrayBuffer[Worker]
@@ -127,7 +93,7 @@ final class Distributor[D](scheduler: Scheduler[D], doWork: D => Option[String],
 				{
 					case Run(data)  =>
 					{
-						val result = Control.trapUnit("", log)(doWork(data))
+						val result = Control.trapUnit("", log(data))(doWork(data))
 						Distributor.this ! Done(result, this, data)
 					}
 					case Shutdown => exit()
@@ -151,14 +117,10 @@ trait Scheduler[D] extends NotNull
 	def next(max: Int): Seq[D]
 	def result: Iterable[WorkFailure[D]]
 }
-trait Runner[D] extends NotNull
-{
-	def run(d: D): Option[String]
-}
 
 private sealed abstract class Work[D](val name: String, val data: D, val cost: Int) extends Ordered[Work[D]]
 {
-	def compare(o: Work[D]) = pathCost - o.pathCost
+	def compare(o: Work[D]) = pathCost compare o.pathCost
 	def pathCost: Int
 	override def toString = name + "(" + pathCost + ")"
 }
