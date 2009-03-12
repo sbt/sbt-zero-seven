@@ -212,7 +212,7 @@ trait BasicEnvironment extends Environment
 	def propertyOptional[T](defaultValue: => T, inheritFirst: Boolean)(implicit manifest: Manifest[T], format: Format[T]): Property[T] =
 		new UserProperty[T](Some(defaultValue), format, true, inheritFirst, manifest)
 	
-	private type AnyUserProperty = UserProperty[_]//T] forSome {type T}
+	private type AnyUserProperty = UserProperty[_]
 	/** Maps property name to property.  The map is populated by 'initializeEnvironment'.*/
 	private val propertyMap = new scala.collection.mutable.HashMap[String, AnyUserProperty]
 	

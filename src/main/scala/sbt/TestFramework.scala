@@ -45,7 +45,7 @@ trait TestsListener extends TestReportListener
   def doInit
 	/** called once, at end. */
   def doComplete(finalResult: Result.Value)
-	/** called once, at end, if the test framework throw an exception. */
+	/** called once, at end, if the test framework throws an exception. */
   def doComplete(t: Throwable)
 }
 
@@ -665,48 +665,4 @@ private class SpecsRunner(val log: Logger, val listeners: Seq[TestReportListener
 	{
 		ExampleReportEvent(example.description, example.errors, example.failures, example.skipped, reportExamples(example.subExamples))
 	}
-}
-
-
-/* The following implements the simple syntax for storing test definitions.
-* The syntax is:
-*
-* definition := isModule? className separator className
-* isModule := '<module>'
-* separator := '<<'
-*/
-
-import scala.util.parsing.combinator._
-
-import TestParser._
-/** Represents a test implemented by 'testClassName' of type 'superClassName'.*/
-case class TestDefinition(isModule: Boolean, testClassName: String, superClassName: String) extends NotNull
-{
-	override def toString =
-		(if(isModule) IsModuleLiteral else "") + testClassName + SubSuperSeparator + superClassName
-}
-class TestParser extends RegexParsers with NotNull
-{
-	def test: Parser[TestDefinition] =
-		( isModule ~! className ~! SubSuperSeparator ~! className ) ^^
-			{ case module ~ testName ~ SubSuperSeparator ~ superName => TestDefinition(module, testName.trim, superName.trim) }
-	def isModule: Parser[Boolean] = (IsModuleLiteral?) ^^ (_.isDefined)
-	def className: Parser[String] = ClassNameRegexString.r
-	
-	def parse(testDefinitionString: String): Either[String, TestDefinition] =
-	{
-		def parseError(msg: String) = Left("Could not parse test definition '" + testDefinitionString + "': " + msg)
-		parseAll(test, testDefinitionString) match
-		{
-			case Success(result, next) => Right(result)
-			case err: NoSuccess => parseError(err.msg)
-		}
-	}
-}
-object TestParser
-{
-	val IsModuleLiteral = "<module>"
-	val SubSuperSeparator = "<<"
-	val ClassNameRegexString = """[^<]+"""
-	def parse(testDefinitionString: String): Either[String, TestDefinition] = (new TestParser).parse(testDefinitionString)
 }

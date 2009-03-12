@@ -213,7 +213,8 @@ trait ScalaProject extends Project with FileTasks
 				toCheck.foreach(test => log.warn("\t" + test))
 			}
 			val includeTests = scala.collection.mutable.HashSet(tests: _*)
-			toRun(TestFilter(test => includeTests.contains(test)) :: options.toList)
+			val newOptions = if(includeTests.isEmpty) options else TestFilter(test => includeTests.contains(test)) :: options.toList
+			toRun(newOptions)
 		}
 }
 trait WebScalaProject extends ScalaProject

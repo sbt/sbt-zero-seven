@@ -71,6 +71,14 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		
 	def packageOptions: Seq[PackageOption] = mainClass.map(MainClass(_)).toList
 	
+	private def succeededTestPath = testAnalysisPath / "succeeded-tests"
+	private def quickOptions(failedOnly: Boolean) =
+	{
+		val path = succeededTestPath
+		val analysis = testCompileConditional.analysis
+		TestFilter(new impl.TestQuickFilter(analysis, failedOnly, path, log))  :: TestListeners(new impl.TestStatusReporter(analysis, path, log) :: Nil) :: Nil
+	}
+	
 	protected def includeTest(test: String): Boolean = true
 	
 	/** These are the directories that are created when a user makes a new project from sbt.*/
@@ -179,7 +187,9 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
 	protected def docTestAction = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions).dependsOn(testCompile) describedAs TestDocDescription
 	protected def testAction = defaultTestTask(testOptions)
-	protected def testQuickAction = testQuickMethod(testCompileConditional.analysis, testOptions)(options => defaultTestTask(options)) describedAs(TestQuickDescription)
+	protected def testQuickAction =
+		testQuickMethod(testCompileConditional.analysis, testOptions)(options =>
+			defaultTestTask(quickOptions(false) ::: options.toList)) describedAs(TestQuickDescription)
 	protected def defaultTestTask(testOptions: => Seq[TestOption]) =
 		testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
 	

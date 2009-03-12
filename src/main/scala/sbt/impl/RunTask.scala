@@ -49,7 +49,7 @@ private final class RunTask(root: Task, rootName: String, maximumTasks: Int) ext
 			flush(action, true)
 		if(parallel)
 		{
-			try { banner(ControlEvent.Start, "  ", "...") }
+			try { banner(ControlEvent.Start, "\n  ", "...") }
 			finally { flush(action) }
 		}
 		banner(ControlEvent.Header, "\n==", "==")

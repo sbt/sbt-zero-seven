@@ -167,6 +167,12 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 	
 	def allTests = all(testMap)
 	def allProjects = all(projectDefinitionMap)
+	def testSourceMap: Map[String, Path] =
+	{
+		val map = new HashMap[String, Path]
+		for( (source, tests) <- testMap; test <- tests) map(test.testClassName) = source
+		map
+	}
 	
 	def addTest(source: Path, test: TestDefinition) = add(source, test, testMap)
 	def addProjectDefinition(source: Path, className: String) = add(source, className, projectDefinitionMap)
