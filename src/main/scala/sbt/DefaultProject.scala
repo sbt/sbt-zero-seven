@@ -187,9 +187,12 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
 	protected def docTestAction = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions).dependsOn(testCompile) describedAs TestDocDescription
 	protected def testAction = defaultTestTask(testOptions)
-	protected def testQuickAction =
-		testQuickMethod(testCompileConditional.analysis, testOptions)(options =>
-			defaultTestTask(quickOptions(false) ::: options.toList)) describedAs(TestQuickDescription)
+	protected def testOnlyAction = testQuickMethod(testCompileConditional.analysis, testOptions)(options =>
+		defaultTestTask(options)) describedAs(TestOnlyDescription)
+	protected def testQuickAction = defaultTestQuickMethod(false) describedAs(TestQuickDescription)
+	protected def testFailedAction = defaultTestQuickMethod(true) describedAs(TestFailedDescription)
+	protected def defaultTestQuickMethod(failedOnly: Boolean) =
+		testQuickMethod(testCompileConditional.analysis, testOptions)(options => defaultTestTask(quickOptions(failedOnly) ::: options.toList))
 	protected def defaultTestTask(testOptions: => Seq[TestOption]) =
 		testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
 	
@@ -260,6 +263,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	lazy val release = releaseAction
 
 	lazy val testQuick = testQuickAction
+	lazy val testFailed = testFailedAction
+	lazy val testOnly = testOnlyAction
 	
 	def jarsOfProjectDependencies = Path.lazyPathFinder {
 		topologicalSort.dropRight(1) flatMap { p =>
@@ -317,8 +322,12 @@ object BasicScalaProject
 		"Compiles test sources."
 	val TestDescription =
 		"Runs all tests detected during compilation."
-	val TestQuickDescription =
+	val TestOnlyDescription =
 		"Runs the tests provided as arguments."
+	val TestFailedDescription =
+		"Runs the tests provided as arguments if they have not succeeded."
+	val TestQuickDescription =
+		"Runs the tests provided as arguments if they have not succeeded or their dependencies changed."
 	val DocDescription =
 		"Generates API documentation for main Scala source files using scaladoc."
 	val TestDocDescription =
