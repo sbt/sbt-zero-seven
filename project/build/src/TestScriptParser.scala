@@ -1,7 +1,7 @@
 /* sbt -- Simple Build Tool
  * Copyright 2009  Mark Harrah
  */
-
+/*
 import sbt._
 import java.io.{BufferedReader, File, InputStreamReader}
 
@@ -277,3 +277,4 @@ private object TestScriptParser
 				}
 		}
 }
+*/
