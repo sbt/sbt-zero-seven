@@ -128,6 +128,8 @@ object Main
 	val TraceCommand = "trace"
 	/** The name of the command that compiles all sources continuously when they are modified. */
 	val ContinuousCompileCommand = "cc"
+	/** The prefix used to identify a request to execute the remaining input on source changes.*/
+	val ContinuousExecutePrefix = "~"
 	
 	/** The number of seconds between polling by the continuous compile command.*/
 	val ContinuousCompilePollDelaySeconds = 1
@@ -280,6 +282,8 @@ object Main
 			case TraceCommand => toggleTrace(project)
 			case Level(level) => setLevel(project, level)
 			case ContinuousCompileCommand => compileContinuously(project)
+			case action if action.startsWith(ContinuousExecutePrefix) =>
+				executeContinuously(project, action.substring(ContinuousExecutePrefix.length).trim)
 			case action => handleAction(project, action)
 		}
 	}
@@ -493,11 +497,12 @@ object Main
 			setArgumentError(project.log)
 	}
 
-	private def compileContinuously(project: Project)
+	private def compileContinuously(project: Project) = executeContinuously(project, "test-compile")
+	private def executeContinuously(project: Project, action: String)
 	{
 		SourceModificationWatch.watchUntil(project, ContinuousCompilePollDelaySeconds)(System.in.available() > 0)
 		{
-			handleAction(project, "test-compile")
+			handleAction(project, action)
 			Console.println("Waiting for source changes... (press any key to interrupt)")
 		}
 
