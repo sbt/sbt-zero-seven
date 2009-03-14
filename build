@@ -1,4 +1,4 @@
 LIBS=$(find lib/ -name "*.jar" -exec echo -n {}: \;)
 mkdir -p target/classes && \
-~/computing/software/scala/scala-2.8.0.latest/bin/scalac -cp $LIBS -d target/classes/ src/main/scala/sbt/{,impl/}*.scala && \
+scalac -cp $LIBS -d target/classes/ src/main/scala/sbt/{,impl/}*.scala && \
 jar -cf target/sbt.jar licenses/* LICENSE NOTICE -C src/main/resources scalac-plugin.xml -C target/classes sbt
