@@ -84,7 +84,7 @@ object SignJar
 	def verify(jarPath: Path, options: Seq[SignOption], log: Logger): Option[String] =
 	{
 		val arguments = options.filter(!_.signOnly).toList.flatMap(_.toList) ::: VerifyOption :: jarPath.asFile.getAbsolutePath :: Nil
-		val pr = new ProcessRunner(CommandName, arguments)
+		val pr = (new ProcessRunner(CommandName, arguments)).logIO(log)
 		val exitCode = pr.run.exitValue()
 		if(exitCode == 0)
 		{

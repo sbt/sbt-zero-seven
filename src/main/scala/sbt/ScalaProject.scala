@@ -164,6 +164,7 @@ trait ScalaProject extends Project with FileTasks
 				}
 			}
 			val jarPath = outputDirectory / jarName
+			FileUtilities.clean(jarPath :: Nil, log) orElse
 			FileUtilities.jar(sources.get, jarPath, manifest, recursive, log)
 		}
 	def zipTask(sources: PathFinder, outputDirectory: Path, zipName: => String): Task =

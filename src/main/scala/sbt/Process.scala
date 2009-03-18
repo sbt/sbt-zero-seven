@@ -97,7 +97,7 @@ final class ProcessRunner(command: String, arguments: Seq[String], options: Proc
 		import io._
 		connectOutput(process.getInputStream)
 		connectInput(process.getOutputStream)
-		if(options.redirectErrorStream)
+		if(!options.redirectErrorStream)
 			connectError(process.getErrorStream)
 		new SProcess(process)
 	}

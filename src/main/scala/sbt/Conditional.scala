@@ -126,7 +126,7 @@ trait Conditional[Source, Product, External] extends NotNull
 			def removedSourcesCount = removedCount
 			override def toString =
 			{
-				"  Source analysis: " + directlyModifiedSourcesCount + " new/modifed, " +
+				"  Source analysis: " + directlyModifiedSourcesCount + " new/modified, " +
 					invalidatedSourcesCount + " indirectly invalidated, " +
 					removedSourcesCount + " removed."
 			}

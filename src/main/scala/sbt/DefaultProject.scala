@@ -227,9 +227,13 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		protected def deliveredPathPattern = outputPath / "[artifact]-[revision].[ext]"
 		def deliveredPattern = deliveredPathPattern.relativePath
 		def srcArtifactPatterns: Iterable[String] =
-			(outputPath / "[artifact]-[revision](-[type]).[ext]" ::
-			deliveredPathPattern :: 
-			Nil).map(_.relativePath)
+		{
+			val pathPatterns =
+				(outputPath / "[artifact]-[revision]-[type].[ext]") ::
+				(outputPath / "[artifact]-[revision].[ext]") ::
+				Nil
+			pathPatterns.map(_.relativePath)
+		}
 		def extraDependencies: Iterable[ModuleID] = Nil//deliverProjectDependencies
 		/**  The configurations to include in the publish/deliver action: specify none for all configurations. */
 		def configurations: Option[Iterable[Configuration]] = None

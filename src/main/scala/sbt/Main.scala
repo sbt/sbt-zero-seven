@@ -19,7 +19,9 @@ object Main
 	* mode. Call run if you need to run sbt in the same JVM.*/
 	def main(args: Array[String])
 	{
-		System.exit(run(args))
+		val exitCode = run(args)
+		if(exitCode != 0)
+			System.exit(exitCode)
 	}
 	val NormalExitCode = 0
 	val SetupErrorExitCode = 1

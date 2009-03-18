@@ -190,6 +190,9 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	final val projectName = propertyLocalF[String](NonEmptyStringFormat)
 	/** The property for the project's organization.  Defaults to the parent project's organization or the project name if there is no parent. */
 	final val projectOrganization = propertyOptional[String](name, true)
+	final val scalaVersion = propertyOptional[String]("")
+	final val sbtVersion = propertyOptional[String]("")
+	final val projectInitialize = propertyOptional[Boolean](false)
 	
 	protected final override def parentEnvironment = info.parent
 	
@@ -284,19 +287,30 @@ object Project
 	private def initialize[P <: Project](p: P, setupInfo: Option[SetupInfo], log: Logger): P =
 	{
 		p.initializeEnvironment()
-		for(setup <- setupInfo)
+		setupInfo match
 		{
-			p.projectName() = setup.name
-			for(v <- setup.version)
-				p.projectVersion() = v
-			for(org <- setup.organization)
-				p.projectOrganization() = org
-			if(!setup.initializeDirectories)
-				p.setEnvironmentModified(false)
-			for(errorMessage <- p.saveEnvironment())
-				log.error(errorMessage)
-			if(setup.initializeDirectories)
-				p.initializeDirectories()
+			case Some(setup) =>
+			{
+				p.projectName() = setup.name
+				for(v <- setup.version)
+					p.projectVersion() = v
+				for(org <- setup.organization)
+					p.projectOrganization() = org
+				if(!setup.initializeDirectories)
+					p.setEnvironmentModified(false)
+				for(errorMessage <- p.saveEnvironment())
+					log.error(errorMessage)
+				if(setup.initializeDirectories)
+					p.initializeDirectories()
+			}
+			case None =>
+				if(p.projectInitialize.value)
+				{
+					p.initializeDirectories()
+					p.projectInitialize() = false
+					for(errorMessage <- p.saveEnvironment())
+						log.error(errorMessage)
+				}
 		}
 		val useName = p.projectName.get.getOrElse("at " + p.info.projectDirectory.getCanonicalPath)
 		checkDependencies(useName, p.info.dependencies, log)
