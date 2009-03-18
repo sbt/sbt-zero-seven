@@ -1,6 +1,13 @@
 * text=auto !eol
 /LICENSE -text
 /NOTICE -text
+boot/project/build.properties -text
+boot/project/build/src/LoaderProject.scala -text
+boot/src/main/scala/Boot.scala -text
+boot/src/main/scala/BootConfiguration.scala -text
+boot/src/main/scala/FilteredLoader.scala -text
+boot/src/main/scala/ProjectProperties.scala -text
+boot/src/main/scala/Update.scala -text
 /build -text
 /clean -text
 lib/ScalaCheck-1.5.jar -text
