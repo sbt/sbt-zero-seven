@@ -3,13 +3,14 @@
  */
 package sbt
 
-import java.io.File
+import java.io.{File, FileWriter, PrintWriter, Writer}
 
 import org.apache.ivy.{core, plugins, util, Ivy}
 import core.LogOptions
 import core.event.EventManager
 import core.module.id.ModuleRevisionId
 import core.module.descriptor.{Configuration, DefaultDependencyDescriptor, DefaultModuleDescriptor, ModuleDescriptor}
+import core.report.ResolveReport
 import core.resolve.{ResolveEngine, ResolveOptions}
 import core.retrieve.{RetrieveEngine, RetrieveOptions}
 import core.sort.SortEngine
@@ -25,15 +26,39 @@ private[sbt] object UpdateTarget extends Enumeration
 }
 import UpdateTarget.{UpdateSbt, UpdateScala}
 
-/** Ensures that the Scala and sbt jars exist for the given versions or else downloads them.*/
-private[sbt] final class Update(bootDirectory: File, sbtVersion: String, scalaVersion: String)
+object Update
 {
-	//private val logWriter = new FileWriter(new File(bootDirectory, updateLogName))
-	Message.setDefaultLogger(SbtIvyLogger)
-	def update(target: UpdateTarget.Value)
+	def apply(bootDirectory: File, sbtVersion: String, scalaVersion: String, targets: UpdateTarget.Value*) =
 	{
-		/*try { doUpdate(target) }
-		catch {*/
+		val up = new Update(bootDirectory, sbtVersion, scalaVersion, targets : _*)
+		up.update()
+	}
+}
+/** Ensures that the Scala and sbt jars exist for the given versions or else downloads them.*/
+private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion: String, targets: UpdateTarget.Value*)
+{
+	private def logFile = new File(bootDirectory, UpdateLogName)
+	lazy val logWriter =
+	{
+		bootDirectory.mkdirs
+		new PrintWriter(new FileWriter(logFile))
+	}
+	
+	private def update()
+	{
+		Message.setDefaultLogger(new SbtIvyLogger(logWriter))
+		try { targets.foreach(update) }
+		catch
+		{
+			case e: Exception =>
+				e.printStackTrace(logWriter)
+				log(e.toString)
+				println("  (see " + logFile + " for complete log)")
+		}
+		finally { logWriter.close() }
+	}
+	private def update(target: UpdateTarget.Value)
+	{
 		import Configuration.Visibility.PUBLIC
 		val moduleID = new DefaultModuleDescriptor(createID(SbtOrg, "boot", "1.0"), "release", null, false)
 		moduleID.setLastModified(System.currentTimeMillis)
@@ -75,9 +100,19 @@ private[sbt] final class Update(bootDirectory: File, sbtVersion: String, scalaVe
 		val resolveReport = resolveEngine.resolve(module, resolveOptions)
 		if(resolveReport.hasError)
 		{
+			logExceptions(resolveReport)
 			println(Set(resolveReport.getAllProblemMessages.toArray: _*).mkString(System.getProperty("line.separator")))
 			throw new BootException("Error retrieving required libraries")
 		}
+	}
+	private def logExceptions(report: ResolveReport)
+	{
+		for(unresolved <- report.getUnresolvedDependencies)
+		{
+			val problem = unresolved.getProblem
+			if(problem != null)
+				problem.printStackTrace(logWriter)
+        }
 	}
 	private def retrieve(settings: IvySettings, eventManager: EventManager, module: ModuleDescriptor,  target: UpdateTarget.Value)
 	{
@@ -86,7 +121,7 @@ private[sbt] final class Update(bootDirectory: File, sbtVersion: String, scalaVe
 		val pattern =
 			target match
 			{
-				case UpdateSbt => sbtRetrievePattern(sbtVersion) 
+				case UpdateSbt => sbtRetrievePattern(sbtVersion)
 				case UpdateScala => scalaRetrievePattern
 			}
 		retrieveEngine.retrieve(module.getModuleRevisionId, pattern, retrieveOptions);
@@ -100,6 +135,7 @@ private[sbt] final class Update(bootDirectory: File, sbtVersion: String, scalaVe
 		newDefault.add(sbtResolver(scalaVersion))
 		newDefault.add(mavenResolver("Scala Tools Releases", "http://scala-tools.org/repo-releases"))
 		newDefault.add(mavenResolver("Scala Tools Snapshots", "http://scala-tools.org/repo-snapshots"))
+		newDefault.add(mavenMainResolver)
 		settings.addResolver(newDefault)
 		settings.setDefaultResolver(newDefault.getName)
 	}
@@ -120,14 +156,28 @@ private[sbt] final class Update(bootDirectory: File, sbtVersion: String, scalaVe
 		resolver.setRoot(root)
 		resolver
 	}
+	private def mavenMainResolver =
+	{
+		val resolver = new IBiblioResolver
+		resolver.setName("Maven Central")
+		resolver.setM2compatible(true)
+		resolver
+	}
+	private def log(msg: String) =
+	{
+		try { logWriter.println(msg) }
+		catch { case e: Exception => System.err.println("Error writing to update log file: " + e.toString) }
+		println(msg)
+	}
 }
 /** A custom logger for Ivy to ignore the messages about not finding classes
 * intentionally filtered using proguard. */
-private final object SbtIvyLogger extends DefaultMessageLogger(Message.MSG_VERBOSE) with NotNull
+private final class SbtIvyLogger(logWriter: PrintWriter) extends DefaultMessageLogger(Message.MSG_INFO) with NotNull
 {
 	private val ignorePrefix = "impossible to define"
 	override def log(msg: String, level: Int)
 	{
+		logWriter.println(msg)
 		if(level <= getLevel && msg != null && !msg.startsWith(ignorePrefix))
 			System.out.println(msg)
 	}

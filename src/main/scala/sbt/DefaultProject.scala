@@ -32,7 +32,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		val children = (info.projectPath ##) * (AllPassFilter -- defaultExcludes) --- packageProjectRootExcludes
 		descendents(children, "*")
 	}
-	protected def packageProjectRootExcludes: PathFinder = outputPath +++ managedDependencyPath
+	protected def packageProjectRootExcludes: PathFinder = outputPath +++ managedDependencyPath +++ bootPath
 	
 	/** A PathFinder that selects all main sources.  It excludes paths that match 'defaultExcludes'.*/
 	def mainSources = descendents(mainScalaSourcePath, "*.scala")
@@ -412,6 +412,7 @@ trait BasicProjectPaths extends Project
 	
 	def outputPath = path(outputDirectoryName)
 	def sourcePath = path(sourceDirectoryName)
+	def bootPath = path(BootDirectoryName)
 	
 	def mainSourcePath = sourcePath / mainDirectoryName
 	def mainScalaSourcePath = mainSourcePath / scalaDirectoryName
@@ -448,6 +449,7 @@ object BasicProjectPaths
 	val DefaultResourcesDirectoryName = "resources"
 	val DefaultTestDirectoryName = "test"
 	val DefaultDependencyDirectoryName = "lib"
+	val BootDirectoryName = "boot"
 }
 trait WebProjectPaths extends BasicProjectPaths
 {

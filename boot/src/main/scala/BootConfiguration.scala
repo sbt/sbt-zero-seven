@@ -25,7 +25,7 @@ private[sbt] object BootConfiguration
 	val BootDirectoryName = "boot"
 	val BuildPropertiesName ="build.properties"
 	val ScalaHomeProperty = "scala.home"
-	val updateLogName = "update.log"
+	val UpdateLogName = "update.log"
 	
 	val RebootCommand = "reboot"
 	val MainMethodName = "main"

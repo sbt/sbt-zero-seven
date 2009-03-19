@@ -89,24 +89,21 @@ private class Setup extends NotNull
 		val scalaDirectory = new File(baseDirectory, ScalaDirectoryName)
 		val sbtDirectory = new File(baseDirectory, sbtDirectoryName(sbtVersion))
 		
-		lazy val update = new Update(baseDirectory, sbtVersion, scalaVersion)
-		if(!scalaDirectory.exists)
-		{
-			update.update(UpdateScala)
-			if(!scalaDirectory.exists)
-				retrieveError("Scala", scalaDirectory)
-		}
-		if(!sbtDirectory.exists)
-		{
-			update.update(UpdateSbt)
-			if(!sbtDirectory.exists)
-				retrieveError("Sbt", sbtDirectory)
-		}
+		val targets = checkTarget(scalaDirectory, UpdateScala) ::: checkTarget(sbtDirectory, UpdateSbt)
+		Update(baseDirectory, sbtVersion, scalaVersion, targets: _*)
+		verifyUpdated("Scala", scalaDirectory)
+		verifyUpdated("Sbt", sbtDirectory)
 		getJars(scalaDirectory, sbtDirectory)
 	}
 }
 private object Setup
 {
+	private def verifyUpdated(label: String, dir: File)
+	{
+		if(!dir.exists)
+			retrieveError(label, dir)
+	}
+	private def checkTarget(dir: File, target: UpdateTarget.Value) = if(!dir.exists) target :: Nil else Nil
 	private def isYes(s: String) =
 		s != null &&
 		{

@@ -308,8 +308,8 @@ object Main
 		def didNotExist(taskType: String) =
 		{
 			project.log.error("No " + taskType + " named '" + name + "' exists.")
-			project.log.info("Execute 'help' for a list of commands,  " +
-				"'actions' for a list of available project actions, or " + 
+			project.log.info("Execute 'help' for a list of commands, " +
+				"'actions' for a list of available project actions, or " +
 				"'methods' for a list of available project methods.")
 			false
 		}

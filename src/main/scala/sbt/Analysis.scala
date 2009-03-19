@@ -73,9 +73,9 @@ sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) e
 			deps -= source
 	}
 	def removeDependencies(source: Path) = sourceDependencyMap.removeKey(source)
-	def removeExternalDependency(dep: File) = externalDependencyMap.removeKey(dep)
+	def removeExternalDependency(dep: File) = externalDependencyMap.removeKey(dep.getAbsoluteFile)
 	
-	def externalDependencies(external: File) = externalDependencyMap.get(external)
+	def externalDependencies(external: File) = externalDependencyMap.get(external.getAbsoluteFile)
 	def sourceDependencies(source: Path) = sourceDependencyMap.get(source)
 	def products(sources: Iterable[Path]): Iterable[Path] =
 	{
@@ -94,7 +94,7 @@ sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) e
 	def allDependencies = readOnlyIterable(sourceDependencyMap)
 	
 	def addSourceDependency(on: Path, from: Path) = add(on, from, sourceDependencyMap)
-	def addExternalDependency(on: File, from: Path) = add(on, from, externalDependencyMap)
+	def addExternalDependency(on: File, from: Path) = add(on.getAbsoluteFile, from, externalDependencyMap)
 	def addProduct(source: Path, file: Path) = add(source, file, productMap)
 	def addSource(source: Path) =
 	{

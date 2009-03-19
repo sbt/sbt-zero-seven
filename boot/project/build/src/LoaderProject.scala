@@ -12,6 +12,9 @@ class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 	override def mainClass = Some(mainClassName)
 	override def defaultJarBaseName = baseName + "-" + version.toString
 	
+	def extraResources = descendents(info.projectPath / "licenses", "*") +++ "LICENSE" +++ "NOTICE"
+	override def mainResources = super.mainResources +++ extraResources
+	
 	lazy val proguard = proguardTask dependsOn(`package`, writeProguardConfiguration)
 	lazy val writeProguardConfiguration = writeProguardConfigurationTask dependsOn `package`
 	
@@ -32,7 +35,7 @@ class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 				|-dontobfuscate
 				|-libraryjars %s
 				|-libraryjars scala-bug-1572-workaround.jar
-				|-injars %s(!%s,!fr/**,!**/antlib.xml,!**/*.png)
+				|-injars %s(!META-INF,!fr/**,!**/antlib.xml,!**/*.png)
 				|%s
 				|-outjars %s
 				|-ignorewarnings
@@ -44,11 +47,10 @@ class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 			val (rtJar, externalJars) = mainCompileConditional.analysis.allExternals.filter(ClasspathUtilities.isArchive).toList.partition(jar => jar.getName == "rt.jar")
 			val defaultJar = (outputPath / defaultJarName).toString
 			val (ivyJar, otherExternalJars) = externalJars.partition(jar => jar.getName.startsWith("ivy"))
-			val inJars = (defaultJar :: otherExternalJars.map( _ + "(!" + manifest + ",!*.properties)")).map("-injars " + _).mkString("\n")
+			val inJars = (defaultJar :: otherExternalJars.map( _ + "(!META-INF,!*.properties)")).map("-injars " + _).mkString("\n")
 			val ivyKeepOptions = ivyKeepResolvers.map("-keep public class " + _  + allPublic).mkString("\n")
-			val proguardConfiguration = outTemplate.stripMargin.format(rtJar.mkString, ivyJar.mkString, manifest, inJars, outputJar, ivyKeepOptions, mainClassName)
+			val proguardConfiguration = outTemplate.stripMargin.format(rtJar.mkString, ivyJar.mkString, inJars, outputJar, ivyKeepOptions, mainClassName)
 			FileUtilities.write(proguardConfigurationPath.asFile, proguardConfiguration, log)
 		}
 	private val allPublic = " {\n public * ;\n}"
-	private val manifest = "META-INF/MANIFEST.MF"
 }

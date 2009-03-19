@@ -55,22 +55,26 @@ private object ProjectProperties
 	def apply(file: File, setInitializeProject: Boolean): (String, String) =
 	{
 		val properties = new Properties
-		val in = new FileInputStream(file)
-		try { properties.load(in) } finally { in.close() }
+		if(file.exists)
+		{
+			val in = new FileInputStream(file)
+			try { properties.load(in) } finally { in.close() }
+		}
 		
-		prompt(properties)
+		prompt(properties, file.exists)
 		if(setInitializeProject)
 			properties.setProperty(InitializeProjectKey, true.toString)
 		
+		file.getParentFile.mkdirs()
 		val out = new FileOutputStream(file)
 		try { properties.store(out, "Project Properties") } finally { out.close() }
 		(properties.getProperty(ScalaVersionKey), properties.getProperty(SbtVersionKey))
 	}
-	def prompt(fill: Properties)
+	def prompt(fill: Properties, organizationOptional: Boolean)
 	{
 		val properties =
 			(NameKey, NameLabel, None, false) :: 
-			(OrganizationKey, OrganizationLabel, Some(DefaultOrganization), true) ::
+			(OrganizationKey, OrganizationLabel, Some(DefaultOrganization), organizationOptional) ::
 			(VersionKey, VersionLabel, Some(DefaultVersion), false) ::
 			(ScalaVersionKey, ScalaVersionLabel, Some(DefaultScalaVersion), false) ::
 			(SbtVersionKey, SbtVersionLabel, Some(DefaultSbtVersion), false) ::
