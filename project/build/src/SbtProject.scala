@@ -50,7 +50,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 			<conf name="optional-base"/>
 			<conf name="optional-2.7.2" extends="optional-base"/>
 			<conf name="optional-2.7.3" extends="optional-base"/>
-			<conf name="compile" extends="2.7.2" visibility="private"/>
+			<conf name="compile" extends="2.7.2,optional-2.7.2" visibility="private"/>
 			<conf name="scalac-2.7.2" visibility="private"/>
 			<conf name="scalac-2.7.3" visibility="private"/>
 		</configurations>
