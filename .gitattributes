@@ -1,6 +1,10 @@
 * text=auto !eol
 /LICENSE -text
 /NOTICE -text
+boot/LICENSE -text
+boot/NOTICE -text
+boot/licenses/LICENSE_Ivy -text
+boot/licenses/LICENSE_Scala -text
 boot/project/build.properties -text
 boot/project/build/src/LoaderProject.scala -text
 boot/src/main/scala/Boot.scala -text
