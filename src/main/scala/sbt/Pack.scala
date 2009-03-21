@@ -36,10 +36,8 @@ object Pack
 	import Pack200.Packer._
 	def defaultPackerOptions: Map[String, String] =
 		scala.collection.immutable.Map(
-			EFFORT -> "7",
 			SEGMENT_LIMIT -> "-1",
 			KEEP_FILE_ORDER -> FALSE,
-			DEFLATE_HINT -> FALSE,
 			UNKNOWN_ATTRIBUTE -> PASS
 		)
 }

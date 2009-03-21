@@ -131,13 +131,17 @@ private object WebstartScalaProject
 	private def packPath(jar: Path) = appendExtension(jar, ".pack")
 	private def signOnly(jar: Path, signConfiguration: SignConfiguration, targetDirectory: Path, log: Logger) =
 	{
-		import SignJar._
 		val targetJar = targetDirectory / jar.asFile.getName
 		runOption("sign", targetJar from jar, log) {
 			log.debug("Signing " + jar)
-			(sign(jar, signConfiguration.alias, signedJar(targetJar) :: signConfiguration.options.toList, log) orElse
-				verify(jar, signConfiguration.options, log).map(err => "Signed jar failed verification: " + err))
+			signAndVerify(jar, signConfiguration, targetJar, log)
 		}.toLeft(targetJar :: Nil)
+	}
+	private def signAndVerify(jar: Path, signConfiguration: SignConfiguration, targetJar: Path, log: Logger) =
+	{
+		import SignJar._
+		sign(jar, signConfiguration.alias, signedJar(targetJar) :: signConfiguration.options.toList, log) orElse
+			verify(jar, signConfiguration.options, log).map(err => "Signed jar failed verification: " + err)
 	}
 	private def gzipJar(jar: Path, log: Logger) =
 	{
@@ -159,7 +163,8 @@ private object WebstartScalaProject
 		
 		runOption("sign and pack200", List(packedJar, signedJar) from jar, log) {
 			log.debug("Applying pack200 compression and signing " + jar)
-			signAndPack(jar, signedJar, packedJar, alias, options, log)
+			signAndPack(jar, signedJar, packedJar, alias, options, log) orElse
+			signAndVerify(jar, signConfiguration, signedJar, log)
 		}.toLeft(packedJar :: signedJar :: Nil)
 	}
 	/** Properly performs both signing and pack200 compression and verifies the result.  See java.util.jar.Pack200 for more information.*/
