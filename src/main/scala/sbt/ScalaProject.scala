@@ -206,15 +206,19 @@ trait ScalaProject extends Project with FileTasks
 	
 	protected def testQuickMethod(testAnalysis: CompileAnalysis, options: => Seq[TestOption])(toRun: Seq[TestOption] => Task) =
 		task { tests =>
-			val toCheck = scala.collection.mutable.HashSet(tests: _*)
+			val (exactFilters, testFilters) = tests.toList.map(GlobFilter.apply).partition(_.isInstanceOf[ExactFilter])
+			val includeTests = exactFilters.map(_.asInstanceOf[ExactFilter].matchName)
+			val toCheck = scala.collection.mutable.HashSet(includeTests: _*)
 			toCheck --= testAnalysis.allTests.map(_.testClassName)
 			if(!toCheck.isEmpty && log.atLevel(Level.Warn))
 			{
 				log.warn("Test(s) not found:")
 				toCheck.foreach(test => log.warn("\t" + test))
 			}
-			val includeTests = scala.collection.mutable.HashSet(tests: _*)
-			val newOptions = if(includeTests.isEmpty) options else TestFilter(test => includeTests.contains(test)) :: options.toList
+			val includeTestsSet = scala.collection.mutable.HashSet(includeTests: _*)
+			val newOptions =
+				if(includeTests.isEmpty && testFilters.isEmpty) options
+				else TestFilter(test => includeTestsSet.contains(test) || testFilters.exists(_.accept(test))) :: options.toList
 			toRun(newOptions)
 		}
 }
