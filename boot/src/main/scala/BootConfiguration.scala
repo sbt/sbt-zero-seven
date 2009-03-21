@@ -10,15 +10,24 @@
 
 private[sbt] object BootConfiguration
 {
+	// these are the module identifiers to resolve/retrieve
 	val ScalaOrg = "org.scala-lang"
 	val SbtOrg = "sbt"
 	val CompilerModuleName = "scala-compiler"
 	val SbtModuleName = "simple-build-tool"
+	
+	/** The Ivy conflict manager to use for updating.*/
 	val ConflictManagerName = "strict"
 	val SbtMainClass = "sbt.Main"
+	/** The name of the property declaring the version of scala to use to build the project.*/
 	val ScalaVersion = "scala.version"
+	/** The name of the property declaring the version of sbt to use to build the project.*/
 	val SbtVersion = "sbt.version"
+	/** The class name prefix used to hide the Scala classes used by this loader from sbt
+	* and the project definition*/
 	val ScalaPackage = "scala."
+	/** The class name prefix used to hide the Ivy classes used by this loader from sbt
+	* and the project definition*/
 	val IvyPackage = "org.apache.ivy."
 	
 	val ProjectDirectoryName = "project"
@@ -31,12 +40,21 @@ private[sbt] object BootConfiguration
 	val MainMethodName = "main"
 	val DefaultIvyConfiguration = "default"
 	
+	/** The base URL to use to resolve sbt for download. */
 	val sbtRootBase = "http://simple-build-tool.googlecode.com/svn/artifacts/"
+	/** The name of the directory within the boot directory to retrieve scala to. */
 	val ScalaDirectoryName = "lib"
+	/** The Ivy pattern to use for retrieving the scala compiler and library.  It is relative to the directory
+	* containing all jars for the requested version of scala. */
 	val scalaRetrievePattern = ScalaDirectoryName + "/[artifact].[ext]"
 	
+	/** The Ivy pattern to use for retrieving sbt and its dependencies.  It is relative to the directory
+	* containing all jars for the requested version of scala. */
 	def sbtRetrievePattern(sbtVersion: String) = sbtDirectoryName(sbtVersion) + "/[artifact]-[revision].[ext]"
+	/** The Ivy pattern to use for resolving sbt and its dependencies from the Google code project.*/
 	def sbtResolverPattern(scalaVersion: String) = sbtRootBase + "[revision]/[type]s/[artifact].[ext]"
+	/** The name of the directory to retrieve sbt and its dependencies to.*/
 	def sbtDirectoryName(sbtVersion: String) = SbtOrg + "-" + sbtVersion
+	/** The name of the directory in the boot directory to put all jars for the given version of scala in.*/
 	def baseDirectoryName(scalaVersion: String) = "scala-" + scalaVersion
 }

@@ -15,6 +15,8 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	override def mainClass = Some("sbt.Main")
 	override def testOptions = ExcludeTests("sbt.ReflectiveSpecification" :: Nil) :: super.testOptions.toList
 	
+	// ======== Scripted testing ==========
+	
 	def sbtTestResources = testResourcesPath / "sbt-test-resources"
 	/*
 	override def testAction = super.testAction dependsOn(scripted)
@@ -42,6 +44,17 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	//override protected def includeTest(test: String): Boolean = true
 		//test == "sbt.WriteContentSpecification"
 	*/
+	
+	// =========== Cross-compilation across scala versions ===========
+	
+	// The dependencies that should go in each configuration are:
+	//   base                             Required dependencies that are the same across all scala versions.
+	//   <version>                  Required dependencies to use with Scala <version>
+	//   optional-base              Optional dependencies that are the same for all scala versions
+	//   optional-<version>   Optional dependencies to use with Scala <version>
+	//   compile                        Used for normal development, it should extend a specific <version> and optional-<version>
+	//   scalac-<version>       The scala compiler for Scala <version>
+	// There should be a jar publication for each version of scala.  The artifact should be named sbt_<version>.
 	override def ivyXML =
 		(<configurations>
 			<conf name="base"/>
@@ -59,13 +72,16 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 			<artifact name="sbt_2.7.3" conf="2.7.3"/>
 		</publications>
 		<dependencies>
+			<!-- All Scala versions -->
 			<dependency org="org.apache.ivy" name="ivy" rev="2.0.0" transitive="false" conf="base->default"/>
 			<dependency org="org.scalacheck" name="scalacheck" rev="1.5" transitive="false" conf="optional-base->default"/>
 			
+			<!-- Scala 2.7.2 -->
 			<dependency org="org.specs" name="specs" rev="1.4.0" transitive="false" conf="optional-2.7.2->default"/>
 			<dependency org="org.scalatest" name="scalatest" rev="0.9.3" transitive="false" conf="optional-2.7.2->default"/>
 			<dependency org="org.scala-lang" name="scala-compiler" rev="2.7.2" conf="scalac-2.7.2->default"/>
 			
+			<!-- Scala 2.7.3 -->
 			<dependency org="org.scala-tools.testing" name="scalatest" rev="0.9.4" transitive="false" conf="optional-2.7.3->default"/>
 			<dependency org="org.specs" name="specs" rev="1.4.3" transitive="false" conf="optional-2.7.3->default"/>
 			<dependency org="org.scala-lang" name="scala-compiler" rev="2.7.3" conf="scalac-2.7.3->default"/>
@@ -75,16 +91,22 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	private val conf_2_7_3 = config("2.7.3")
 	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: Nil
 	
+	// include the optional-<version> dependencies as well as the ones common across all scala versions
 	def optionalClasspath(version: String) = fullClasspath(config("optional-" + version)) +++ super.optionalClasspath
 	
 	private val CompilerMainClass = "scala.tools.nsc.Main"
+	// use a publish configuration that publishes the 'base' + all <version> configurations (base is required because
+	//   the <version> configurations extend it)
 	private val conf = new DefaultPublishConfiguration("local", "release")
 	{
 		override def configurations: Option[Iterable[Configuration]] = Some(config("base") :: allConfigurations)
 	}
+	// the actions for cross-version packaging and publishing
 	lazy val crossPackage = allConfigurations.map(conf => packageForScala(conf.toString))
 	lazy val crossDeliverLocal = deliverTask(conf, updateOptions) dependsOn(crossPackage : _*)
 	lazy val crossPublishLocal = publishTask(conf, updateOptions) dependsOn(crossDeliverLocal)
+	// Creates a task that produces a packaged sbt compiled against Scala scalaVersion.
+	//  The jar is named 'sbt_<scala-version>-<sbt-version>.jar'
 	private def packageForScala(scalaVersion: String) =
 	{
 		val classes = classesPath(scalaVersion) ** "*"
@@ -92,17 +114,21 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 		FileUtilities.clean((outputPath / jarName) :: Nil, log) // TODO: temporary, remove when >0.3.8 released
 		packageTask(classes +++ mainResources, outputPath, jarName, packageOptions).dependsOn(compileForScala(scalaVersion))
 	}
+	// This creates a task that compiles sbt against the given version of scala.  Classes are put in classes-<scalaVersion>.
 	private def compileForScala(version: String)=
 		task
 		{
 			val classes = classesPath(version)
 			FileUtilities.createDirectory(classes, log)
+			// the classpath containing the scalac compiler
 			val compilerClasspath = concatPaths(fullClasspath(config("scalac-" + version)))
 			
+			// The libraries to compile sbt against
 			val classpath = fullClasspath(config(version)) +++ optionalClasspath(version)
 			val sources: List[String] = pathListStrings(mainSources.get)
 			val compilerArguments: List[String] = List("-cp", concatPaths(classpath), "-d", classes.toString) ::: sources
 			
+			// the compiler classpath has to be appended to the boot classpath to work properly
 			val allArguments = "-Xmx256M" :: ("-Xbootclasspath/a:" + compilerClasspath) :: CompilerMainClass :: compilerArguments
 			val process = (new ProcessRunner("java", allArguments)).mergeErrorStream.logIO(log)
 			val exitValue = process.run.exitValue
@@ -116,6 +142,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	private def concatPaths(p: PathFinder): String = pathListStrings(p.get).mkString(File.pathSeparator)
 	private def pathListStrings(p: Iterable[Path]): List[String] = p.map(_.asFile.getAbsolutePath).toList
 	private def classesPath(scalaVersion: String) = "target"  / ("classes-" + scalaVersion) ##
+	// enable parallel execution so that building against multiple versions of scala runs in parallel
 	override def parallelExecution = true
 }
 package sbt { // need access to LoaderBase, which is private in package sbt

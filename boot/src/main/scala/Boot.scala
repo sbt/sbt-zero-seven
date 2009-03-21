@@ -3,13 +3,25 @@
  */
  package sbt
 
+// This is the main class for the sbt launcher.  Its purpose is to ensure the appropriate
+// versions of sbt and scala are downloaded to the projects 'project/boot' directory.
+// Then, the downloaded version of sbt is started as usual using the right version of
+// scala.
+
+// Artifact names must be consistent between the main sbt build and this build.
+
 import java.io.{File, FileFilter}
 import java.net.{URL, URLClassLoader}
 
+// contains constants and paths
 import BootConfiguration._
 import UpdateTarget.{UpdateScala, UpdateSbt}
 
+// The exception to use when an error occurs at the launcher level (and not a nested exception).
+// This indicates overrides toString because the exception class name is not needed to understand
+// the error message.
 private class BootException(override val toString: String) extends RuntimeException
+// The entry point to the launcher
 object Boot
 {
 	def main(args: Array[String])
@@ -30,11 +42,13 @@ object Boot
 	}
 	private def boot(args: Array[String])
 	{
+		 // prompt to create project if it doesn't exist.
+		 // will not return if user declines
 		(new Setup).checkProject()
 		if(args.length == 0)
-			load(args)
+			load(args) // interactive mode, which can only use one version of scala for a run
 		else
-			runBatch(args.toList, Nil)
+			runBatch(args.toList, Nil)  // batch mode, which can reboot with a different scala version
 	}
 	private def runBatch(args: List[String], accumulateReversed: List[String])
 	{
@@ -48,6 +62,9 @@ object Boot
 			case notReload :: tail => runBatch(tail, notReload :: accumulateReversed)
 		}
 	}
+	/** Loads the project in the current working directory using the version of scala and sbt
+	* declared in the build. The class loader used prevents the Scala and Ivy classes used by
+	* this loader from being seen by the loaded sbt/project.*/
 	private def load(args: Array[String])
 	{
 		val classpath = (new Setup).classpath()
@@ -58,6 +75,8 @@ object Boot
 	}
 }
 
+/** A class to handle setting up the properties and classpath of the project
+* before it is loaded. */
 private class Setup extends NotNull
 {
 	import Setup._
@@ -82,6 +101,10 @@ private class Setup extends NotNull
 		val (scalaVersion, sbtVersion) = ProjectProperties(PropertiesFile, false)
 		updateVersions(scalaVersion, sbtVersion).toArray
 	}
+	/** Checks that the requested version of sbt and scala have been downloaded.
+	* It performs a simple check that the appropriate directories exist.  It does
+	* not actually verify that appropriate classes are resolvable.  It uses Ivy
+	* to resolve and retrieve any necessary libraries. The classpath to use is returned.*/
 	private def updateVersions(scalaVersion: String, sbtVersion: String) =
 	{
 		val baseDirectory = new File(BootDirectory, baseDirectoryName(scalaVersion))
