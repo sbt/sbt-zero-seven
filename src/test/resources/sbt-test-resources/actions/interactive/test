@@ -22,9 +22,7 @@ $ delete ran [success]
 # Multi-project, single interactive task on child project
 $ copy-file changes/TestProject4.scala project/build/src/TestProject.scala [success]
 $ reload [success]
-> interactive-test [success]
-$ exists a/ran [success]
-$ delete a/ran [success]
+> interactive-test [failure]
 
 # Multi-project, two interactive tasks with same name, which is allowed because it is defined on parent
 $ copy-file changes/TestProject5.scala project/build/src/TestProject.scala [success]
