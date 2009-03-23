@@ -210,7 +210,7 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 		{
 			val pathA = fromString(a, project)
 			val pathB = fromString(b, project)
-			pathA.exists && (!pathA.exists || pathA.lastModified > pathB.lastModified)
+			pathA.exists && (!pathB.exists || pathA.lastModified > pathB.lastModified)
 		}
 	private def exists(paths: List[String], project: Project) =
 		fromStrings(paths, project).filter(!_.exists) match
