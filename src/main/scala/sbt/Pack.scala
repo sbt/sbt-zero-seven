@@ -32,14 +32,7 @@ object Pack
 				{ jarOut.close() }
 		}
 	}
-
-	import Pack200.Packer._
-	def defaultPackerOptions: Map[String, String] =
-		scala.collection.immutable.Map(
-			SEGMENT_LIMIT -> "-1",
-			KEEP_FILE_ORDER -> FALSE,
-			UNKNOWN_ATTRIBUTE -> PASS
-		)
+	def defaultPackerOptions: Map[String, String] = scala.collection.immutable.Map()
 }
 
 import java.net.URL

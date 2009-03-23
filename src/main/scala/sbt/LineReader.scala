@@ -8,20 +8,16 @@ trait LineReader extends NotNull
 	def readLine(prompt: String): Option[String]
 }
 class Completors(val projectAction: String, val projectNames: Iterable[String],
-	val generalCommands: Iterable[String], val propertyActions: Iterable[String]) extends NotNull
+	val generalCommands: Iterable[String], val propertyActions: Iterable[String],
+	val prefixes: Iterable[String]) extends NotNull
 class JLineReader(historyPath: Option[Path], completors: Completors, log: Logger) extends LineReader
 {
 	import completors._
-	import jline.{ArgumentCompletor, ConsoleReader, MultiCompletor, NullCompletor, SimpleCompletor}
+	import jline.{ArgumentCompletor, Completor, ConsoleReader, MultiCompletor, NullCompletor, SimpleCompletor}
 	
 	private val generalCompletor = simpleCompletor(generalCommands)
-	private val projectCompletor =
-	{
-		val startCompletor = simpleCompletor(projectAction :: Nil)
-		val projectsCompletor = simpleCompletor(projectNames)
-		val argumentCompletors = Array(startCompletor, projectsCompletor, new NullCompletor)
-		new ArgumentCompletor(argumentCompletors, SingleArgumentDelimiter)
-	}
+	private val projectCompletor = simpleArgumentCompletor(projectAction :: Nil, projectNames)
+		
 	private val completor = new MultiCompletor()
 	
 	private val reader =
@@ -48,20 +44,35 @@ class JLineReader(historyPath: Option[Path], completors: Completors, log: Logger
 			(buffer.charAt(pos) == ' ') && buffer.substring(0, pos).trim.indexOf(' ') == -1
 	}
 	
-	private def propertyCompletor(propertyNames: Iterable[String]) =
+	private def simpleCompletor(completions: Iterable[String]) = new SimpleCompletor(completions.toList.toArray)
+	private def simpleArgumentCompletor(first: Iterable[String], second: Iterable[String]) =
+		singleArgumentCompletor(simpleCompletor(first), simpleCompletor(second))
+	private def singleArgumentCompletor(first: Completor, second: Completor) =
 	{
-		val startCompletor = simpleCompletor(propertyActions)
-		val nameCompletor = simpleCompletor(propertyNames)
-		val completors = Array(startCompletor, nameCompletor, new NullCompletor)
-		new ArgumentCompletor(completors)
+		val completors = Array(first, second, new NullCompletor)
+		val c = new ArgumentCompletor(completors, SingleArgumentDelimiter)
+		c.setStrict(true)
+		c
+	}
+	private def repeatedArgumentCompletor(first: Completor, repeat: Completor) =
+	{
+		val c = new ArgumentCompletor(Array(first, repeat))
+		c.setStrict(true)
+		c
 	}
 	
-	private def simpleCompletor(completions: Iterable[String]) = new SimpleCompletor(completions.toList.toArray)
-	def setVariableCompletions(taskNames: Iterable[String], propertyNames: Iterable[String])
+	private def propertyCompletor(propertyNames: Iterable[String]) =
+		simpleArgumentCompletor(propertyActions, propertyNames)
+	private def prefixedCompletor(baseCompletor: Completor) =
+		singleArgumentCompletor(simpleCompletor(prefixes.toList.toArray), baseCompletor)
+	def setVariableCompletions(taskNames: Iterable[String], propertyNames: Iterable[String], extra: Iterable[(String, Iterable[String])] )
 	{
 		import scala.collection.immutable.TreeSet
 		val taskCompletor = simpleCompletor(TreeSet(taskNames.toSeq : _*))
-		completor.setCompletors( Array(generalCompletor, taskCompletor, projectCompletor, propertyCompletor(propertyNames)) )
+		val extraCompletors = for( (first, repeat) <- extra) yield repeatedArgumentCompletor(simpleCompletor(first :: Nil), simpleCompletor(repeat))
+		val baseCompletors = generalCompletor :: taskCompletor :: projectCompletor :: propertyCompletor(propertyNames) :: extraCompletors.toList
+		val baseCompletor = new MultiCompletor(baseCompletors.toArray)
+		completor.setCompletors( Array(baseCompletor, prefixedCompletor(baseCompletor)) )
 	}
 	def readLine(prompt: String) =
 		reader.readLine(prompt) match

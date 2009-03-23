@@ -220,7 +220,7 @@ trait ScalaProject extends Project with FileTasks
 				if(includeTests.isEmpty && testFilters.isEmpty) options
 				else TestFilter(test => includeTestsSet.contains(test) || testFilters.exists(_.accept(test))) :: options.toList
 			toRun(newOptions)
-		}
+		} completeWith testAnalysis.allTests.map(_.testClassName)
 }
 trait WebScalaProject extends ScalaProject
 {

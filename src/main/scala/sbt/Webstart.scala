@@ -79,14 +79,15 @@ trait WebstartScalaProject extends ScalaProject
 								if(webstartPack200)
 									pack200Only(jar, targetDirectory, log)
 								else
-									copyJar(jar, targetDirectory, log)
+									copyJar(jar, targetDirectory, log).right.map(jars => new Jars(jars, Nil))
 						}
+					val deleteOriginal = webstartPack200
 					signPackResult.right flatMap { addJars =>
 						if(webstartGzip)
-							Control.lazyFold(addJars, addJars ::: allJars)
-								{ (accumulate, jar) => gzipJar(jar, log).right.map(_ ::: accumulate) }
+							Control.lazyFold(addJars.gzippable, addJars.allJars ::: allJars)
+								{ (accumulate, jar) => gzipJar(jar, deleteOriginal, log).right.map(_ ::: accumulate) }
 						else
-							Right(addJars ::: allJars)
+							Right(addJars.allJars ::: allJars)
 					}
 				}
 			}
@@ -116,6 +117,10 @@ trait WebstartScalaProject extends ScalaProject
 		<jar href={resource.href} main={resource.isMain.toString}/>
 		
 }
+private class Jars(val gzippable: List[Path], val nonGzippable: List[Path]) extends NotNull
+{
+	def allJars = gzippable ::: nonGzippable
+}
 private object WebstartScalaProject
 {
 	import FileTasks.{runOption, wrapProduct, wrapProducts}
@@ -135,7 +140,7 @@ private object WebstartScalaProject
 		runOption("sign", targetJar from jar, log) {
 			log.debug("Signing " + jar)
 			signAndVerify(jar, signConfiguration, targetJar, log)
-		}.toLeft(targetJar :: Nil)
+		}.toLeft(new Jars(targetJar :: Nil, Nil))
 	}
 	private def signAndVerify(jar: Path, signConfiguration: SignConfiguration, targetJar: Path, log: Logger) =
 	{
@@ -143,13 +148,14 @@ private object WebstartScalaProject
 		sign(jar, signConfiguration.alias, signedJar(targetJar) :: signConfiguration.options.toList, log) orElse
 			verify(jar, signConfiguration.options, log).map(err => "Signed jar failed verification: " + err)
 	}
-	private def gzipJar(jar: Path, log: Logger) =
+	private def gzipJar(jar: Path, deleteOriginal: Boolean, log: Logger) =
 	{
 		val gzipJar = gzipJarPath(jar)
 		runOption("gzip", gzipJar from jar, log)
 		{
 			log.debug("Gzipping " + jar)
-			FileUtilities.gzip(jar, gzipJar, log)
+			FileUtilities.gzip(jar, gzipJar, log) orElse
+				(if(deleteOriginal) FileUtilities.clean(jar :: Nil, true, log) else None)
 		}.toLeft(gzipJar :: Nil)
 	}
 	/** Properly performs both signing and pack200 compression and verifies the result.  This method only does anything if
@@ -165,7 +171,7 @@ private object WebstartScalaProject
 			log.debug("Applying pack200 compression and signing " + jar)
 			signAndPack(jar, signedJar, packedJar, alias, options, log) orElse
 			signAndVerify(jar, signConfiguration, signedJar, log)
-		}.toLeft(packedJar :: signedJar :: Nil)
+		}.toLeft(new Jars(packedJar :: Nil, signedJar :: Nil))
 	}
 	/** Properly performs both signing and pack200 compression and verifies the result.  See java.util.jar.Pack200 for more information.*/
 	private def signAndPack(jarPath: Path, signedPath: Path, out: Path, alias: String, options: Seq[SignJar.SignOption], log: Logger): Option[String] =
@@ -192,7 +198,7 @@ private object WebstartScalaProject
 		packResult match
 		{
 			case Some(err) => Left(err)
-			case None => copyJar(jar, targetDirectory, log).right.map(jars => packedJar :: jars)
+			case None => copyJar(jar, targetDirectory, log).right.map(jars => new Jars(packedJar :: Nil, jars))
 		}
 	}
 	private def copyJar(jar: Path, targetDirectory: Path, log: Logger) =

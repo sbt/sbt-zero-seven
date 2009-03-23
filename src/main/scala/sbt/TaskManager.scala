@@ -17,18 +17,19 @@ trait TaskManager{
 	* projects, however. */
 	def interactiveTask(action: => Option[String]) = new Task(None, Nil, true, action)
 	/** Creates a method task that executes the given action when invoked. */
-	def task(action: Array[String] => ManagedTask) = new MethodTask(None, action)
+	def task(action: Array[String] => ManagedTask) = new MethodTask(None, action, Nil)
 	
 	/** A method task is an action that has parameters.  Note that it is not a Task, though,
 	* because it requires arguments to perform its work.  It therefore cannot be a dependency of
 	* a Task..*/
-	final class MethodTask(val description: Option[String], action: Array[String] => ManagedTask) extends Described
+	final class MethodTask(val description: Option[String], action: Array[String] => ManagedTask, val completions: List[String]) extends Described
 	{
 		/** Creates a new method task, identical to this method task, except with thE[String]e given description.*/
-		def describedAs(description : String) = new MethodTask(Some(description), action)
+		def describedAs(description : String) = new MethodTask(Some(description), action, completions)
 		/** Invokes this method task with the given arguments.*/
 		def apply(arguments: Array[String]) = action(arguments)
 		def manager: ManagerType = TaskManager.this
+		def completeWith(add: Iterable[String]) = new MethodTask(description, action, (add ++ completions).toList)
 	}
 	
 	class Task(val description : Option[String], val dependencies : List[ManagedTask], val interactive: Boolean,

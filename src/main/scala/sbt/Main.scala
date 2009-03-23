@@ -152,10 +152,14 @@ object Main
 	private def interactive(baseProject: Project): RunCompleteAction =
 	{
 		val projectNames = baseProject.topologicalSort.map(_.name)
-		val completors = new Completors(ProjectAction, projectNames, interactiveCommands, List(GetAction, SetAction))
+		val prefixes = "~" :: Nil
+		val completors = new Completors(ProjectAction, projectNames, interactiveCommands, List(GetAction, SetAction), prefixes)
 		val reader = new JLineReader(baseProject.historyPath, completors, baseProject.log)
 		def updateTaskCompletions(project: Project)
-			{ reader.setVariableCompletions(project.taskNames ++ project.methodNames, project.propertyNames) }
+		{
+			val methodCompletions = for( (name, method) <- project.methods) yield (name, method.completions)
+			reader.setVariableCompletions(project.taskNames, project.propertyNames, methodCompletions)
+		}
 		updateTaskCompletions(baseProject)
 		
 		/** Prompts the user for the next command using 'currentProject' as context.
@@ -292,27 +296,6 @@ object Main
 	// returns true if it succeeded (needed by noninteractive handleCommand)
 	private def handleAction(project: Project, action: String): Boolean =
 	{
-		val startTime = System.currentTimeMillis
-		val result =
-			impl.CommandParser.parse(action) match
-			{
-				case Left(errMsg) => project.log.error(errMsg); false
-				case Right((name, parameters)) => handleAction(project, name, parameters.toArray)
-			}
-		printTime(project, startTime, "")
-		result
-	}
-	/** Runs the given method or action, returning true if it succeeded. */
-	private def handleAction(project: Project, name: String, parameters: Array[String]) =
-	{
-		def didNotExist(taskType: String) =
-		{
-			project.log.error("No " + taskType + " named '" + name + "' exists.")
-			project.log.info("Execute 'help' for a list of commands, " +
-				"'actions' for a list of available project actions, or " +
-				"'methods' for a list of available project methods.")
-			false
-		}
 		def showResult(result: Option[String]): Boolean =
 		{
 			result match
@@ -321,14 +304,37 @@ object Main
 				case None => project.log.success("Successful."); true
 			}
 		}
-		if(project.methodNames.toSeq.contains(name))
-			showResult(project.call(name, parameters.toArray))
-		else if(!parameters.isEmpty)
-			didNotExist("method")
-		else if(project.taskNames.toSeq.contains(name))
-			showResult(project.act(name))
-		else
-			didNotExist("action")
+		val startTime = System.currentTimeMillis
+		val result = withAction(project, action)( (name, params) => showResult(project.call(name, params)))( name => showResult(project.act(name)))
+		printTime(project, startTime, "")
+		result
+	}
+	// true if the action exists
+	private def checkAction(project: Project, actionString: String): Boolean =
+		withAction(project, actionString)(  (n,p) => true)( n => true)
+	private def withAction(project: Project, actionString: String)(ifMethod: (String, Array[String]) => Boolean)(ifAction: String => Boolean): Boolean =
+	{
+		def didNotExist(taskType: String, name: String) =
+		{
+			project.log.error("No " + taskType + " named '" + name + "' exists.")
+			project.log.info("Execute 'help' for a list of commands, " +
+				"'actions' for a list of available project actions, or " +
+				"'methods' for a list of available project methods.")
+			false
+		}
+		impl.CommandParser.parse(actionString) match
+		{
+			case Left(errMsg) => project.log.error(errMsg); false
+			case Right((name, parameters)) =>
+				if(project.methodNames.toSeq.contains(name))
+					ifMethod(name, parameters.toArray)
+				else if(!parameters.isEmpty)
+					didNotExist("method", name)
+				else if(project.taskNames.toSeq.contains(name))
+					ifAction(name)
+				else
+					didNotExist("action", name)
+		}
 	}
 	
 	/** Toggles whether stack traces are enabled.*/
@@ -502,13 +508,15 @@ object Main
 	private def compileContinuously(project: Project) = executeContinuously(project, "test-compile")
 	private def executeContinuously(project: Project, action: String)
 	{
-		SourceModificationWatch.watchUntil(project, ContinuousCompilePollDelaySeconds)(System.in.available() > 0)
+		if(checkAction(project, action))
 		{
-			handleAction(project, action)
-			Console.println("Waiting for source changes... (press any key to interrupt)")
+			SourceModificationWatch.watchUntil(project, ContinuousCompilePollDelaySeconds)(System.in.available() > 0)
+			{
+				handleAction(project, action)
+				Console.println("Waiting for source changes... (press any key to interrupt)")
+			}
+			while (System.in.available() > 0) System.in.read()
 		}
-
-		while (System.in.available() > 0) System.in.read()
 	}
 
 	private def isTerminateAction(s: String) = TerminateActions.elements.contains(s.toLowerCase)
