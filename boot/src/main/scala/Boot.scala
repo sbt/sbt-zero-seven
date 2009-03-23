@@ -114,8 +114,8 @@ private class Setup extends NotNull
 		
 		val targets = checkTarget(scalaDirectory, UpdateScala) ::: checkTarget(sbtDirectory, UpdateSbt)
 		Update(baseDirectory, sbtVersion, scalaVersion, targets: _*)
-		verifyUpdated("Scala", scalaDirectory)
-		verifyUpdated("Sbt", sbtDirectory)
+		verifyUpdated("Scala " + scalaVersion, scalaDirectory)
+		verifyUpdated("Sbt " + sbtVersion, sbtDirectory)
 		getJars(scalaDirectory, sbtDirectory)
 	}
 }
@@ -134,7 +134,7 @@ private object Setup
 			trimmed == "y" || trimmed == "yes"
 		}
 	private def retrieveError(name: String, directory: File) =
-		throw new BootException(name + " was not properly retrieved (expected directory " + directory + " to exist).")
+		throw new BootException(name + " was not properly retrieved.  (Check that the version is valid.)")
 	private def getJars(directories: File*) = directories.flatMap(file => wrapNull(file.listFiles(JarFilter))).map(_.toURI.toURL)
 	private def wrapNull(a: Array[File]): Array[File] = if(a == null) Array() else a
 }
