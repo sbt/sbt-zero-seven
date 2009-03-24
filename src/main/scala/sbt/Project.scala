@@ -328,7 +328,7 @@ object Project
 				builderProject.projectDefinition.right.map {
 					case Some(definition) =>
 					{
-						val compileClassPath = Array(builderProject.compilePath.asURL)
+						val compileClassPath = builderProject.projectClasspath.get.map(_.asURL).toSeq.toArray
 						import java.net.URLClassLoader
 						val loader = new URLClassLoader(compileClassPath, getClass.getClassLoader)
 						val builderClass = Class.forName(definition, false, loader)
