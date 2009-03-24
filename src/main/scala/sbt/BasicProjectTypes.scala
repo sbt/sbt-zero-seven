@@ -240,14 +240,19 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject
 			LibraryManager(m) :: baseUpdateOptions
 	}
 	def includeProvidedWithCompile = true
+	def defaultConfigurationExtensions = true
 	/** Includes the Provided configuration on the Compile classpath.  This can be overridden by setting
 	* includeProvidedWithCompile to false.*/
 	override def managedClasspath(config: Configuration, useDefaultFallback: Boolean) =
 	{
-		import Configurations.{Compile, Provided}
+		import Configurations.{Compile, Provided, Runtime, Test}
 		val superClasspath = super.managedClasspath(config, useDefaultFallback)
 		if(config == Compile && includeProvidedWithCompile)
 			superClasspath +++ super.managedClasspath(Provided, false)
+		else if(defaultConfigurationExtensions && config == Runtime)
+			superClasspath +++ super.managedClasspath(Compile, false)
+		else if(defaultConfigurationExtensions && config == Test)
+			superClasspath +++ super.managedClasspath(Compile, false) +++ super.managedClasspath(Runtime, false)
 		else
 			superClasspath
 	}

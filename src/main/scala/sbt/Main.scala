@@ -20,16 +20,21 @@ object Main
 	def main(args: Array[String])
 	{
 		val exitCode = run(args)
-		if(exitCode != 0)
-			System.exit(exitCode)
+		if(exitCode == RebootExitCode)
+		{
+			println("Rebooting is not supported when the sbt loader is not used.")
+			println("Please manually restart sbt.")
+		}
+		System.exit(exitCode)
 	}
+	val RebootExitCode = -1
 	val NormalExitCode = 0
 	val SetupErrorExitCode = 1
 	val SetupDeclinedExitCode = 2
 	val LoadErrorExitCode = 3
 	val UsageErrorExitCode = 4
 	val BuildErrorExitCode = 5
-	private def run(args: Array[String]): Int =
+	def run(args: Array[String]): Int =
 	{
 		val startTime = System.currentTimeMillis
 		Project.loadProject match
@@ -124,6 +129,8 @@ object Main
 	val GetAction = "get"
 	/** The name of the command that displays the help message. */
 	val HelpAction = "help"
+	/** The command for rebooting sbt. Requires sbt to have been launched by the loader.*/
+	val RebootCommand = "reboot"
 	/** The name of the command that reloads a project.  This is useful for when the project definition has changed. */
 	val ReloadAction = "reload"
 	/** The name of the command that toggles logging stacktraces. */
@@ -143,7 +150,7 @@ object Main
 	private def logLevels: Iterable[String] = TreeSet.empty[String] ++ Level.elements.map(_.toString)
 	/** The list of all interactive commands other than logging level.*/
 	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowMethods, ShowCurrent, HelpAction,
-		ReloadAction, TraceCommand, ContinuousCompileCommand)
+		RebootCommand, ReloadAction, TraceCommand, ContinuousCompileCommand)
 	
 	/** Enters interactive mode for the given root project.  It uses JLine for tab completion and
 	* history.  It returns normally when the user terminates or reloads the interactive session.  That is,
@@ -180,6 +187,8 @@ object Main
 						new Exit(NormalExitCode)
 					else if(ReloadAction == trimmed)
 						Reload
+					else if(RebootCommand == trimmed)
+						new Exit(RebootExitCode)
 					else if(trimmed.startsWith(ProjectAction + " "))
 					{
 						val projectName = trimmed.substring(ProjectAction.length + 1)
@@ -231,6 +240,7 @@ object Main
 		printCmd("<method name> <parameter>*", "Executes the project specified method.")
 		printCmd(ShowActions, "Shows all available actions.")
 		printCmd(ShowMethods, "Shows all available methods.")
+		printCmd(RebootCommand, "Changes to scala.version or sbt.version are processed and the project definition is reloaded.")
 		printCmd(HelpAction, "Displays this help message.")
 	}
 	private def displayInteractiveHelp() = {

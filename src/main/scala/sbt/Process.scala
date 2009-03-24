@@ -37,9 +37,9 @@ object ProcessIO
 			if(i.read(buffer) >= 0)
 				readFully()
 		}
-		thread(readFully())
+		newThread(readFully())
 	}
-	private def thread(action: => Unit)
+	private def newThread(action: => Unit)
 	{
 		val runnable = new Runnable { def run() { action } }
 		(new Thread(runnable)).start()
@@ -58,8 +58,9 @@ object ProcessIO
 				readFully()
 			}
 		}
-		thread(readFully())
+		newThread(readFully())
 	}
+	def standard = new ProcessIO(close, processFully(System.out.println), processFully(System.err.println))
 }
 final class ProcessRunner(command: String, arguments: Seq[String], options: ProcessOptions, io: ProcessIO) extends NotNull
 {
