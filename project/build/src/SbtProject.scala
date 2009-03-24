@@ -18,7 +18,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	// ======== Scripted testing ==========
 	
 	def sbtTestResources = testResourcesPath / "sbt-test-resources"
-	
+	/*
 	override def testAction = super.testAction dependsOn(scripted)
 	lazy val scripted = scriptedTask dependsOn testCompile
 	def scriptedTask =
@@ -38,12 +38,12 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	
 	val filter = new ScriptedTestFilter
 	{
-		def accept(group: String, name: String) = //true
-			group == "project" && name == "lib"
+		def accept(group: String, name: String) = true
+			//group == "tests" && name == "specs-nested"
 	}
 	//override protected def includeTest(test: String): Boolean = true
 		//test == "sbt.WriteContentSpecification"
-
+	*/
 	val scalaToolsSnapshots = "Scala Tools Snapshots" at "http://scala-tools.org/repo-snapshots"
 	
 	// =========== Cross-compilation across scala versions ===========
@@ -128,16 +128,20 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	private def packageForScala(scalaVersion: String) =
 	{
 		val classes = classesPath(scalaVersion) ** "*"
-		val jarName = "sbt_" + scalaVersion + "-" + version.toString +  ".jar"
-		FileUtilities.clean((outputPath / jarName) :: Nil, log) // TODO: temporary, remove when >0.3.8 released
+		val jarName = crossJarName(scalaVersion)
 		packageTask(classes +++ mainResources, outputPath, jarName, packageOptions).dependsOn(compileForScala(scalaVersion))
 	}
+	private def crossJarName(scalaVersion: String) = "sbt_" + scalaVersion + "-" + version.toString +  ".jar"
 	// This creates a task that compiles sbt against the given version of scala.  Classes are put in classes-<scalaVersion>.
 	private def compileForScala(version: String)=
 		task
 		{
 			val classes = classesPath(version)
-			FileUtilities.createDirectory(classes, log)
+			val toClean = (outputPath / crossJarName(version)) +++ (classes ** "*")
+			val setupResult =
+				FileUtilities.clean(toClean.get, false, log) orElse
+				FileUtilities.createDirectory(classes, log)
+			for(err <- setupResult) log.error(err)
 			// the classpath containing the scalac compiler
 			val compilerClasspath = concatPaths(fullClasspath(config("scalac-" + version)))
 			
@@ -158,7 +162,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 		}
 	private def concatPaths(p: PathFinder): String = pathListStrings(p.get).mkString(File.pathSeparator)
 	private def pathListStrings(p: Iterable[Path]): List[String] = p.map(_.asFile.getAbsolutePath).toList
-	private def classesPath(scalaVersion: String) = "target"  / ("classes-" + scalaVersion) ##
+	private def classesPath(scalaVersion: String) = ("target"  / ("classes-" + scalaVersion)) ##
 	// enable parallel execution so that cross-compiling runs in parallel
 	override def parallelExecution = true
 }
