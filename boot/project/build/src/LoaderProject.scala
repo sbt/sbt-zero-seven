@@ -2,12 +2,13 @@ package sbt
 
 import sbt._
 
+import LoaderProject._
 // a project for the sbt launcher
 // the main content of this project definition is setting up and running proguard
 //   to combine and compact all dependencies into a single jar
 class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 {
-	val mainClassName = "sbt.Boot"
+	val mainClassName = "sbt.boot.Boot"
 	val baseName = "sbt-loader"
 	val proguardConfigurationPath: Path = "proguard.pro"
 	val outputJar: Path = baseName + ".jar"

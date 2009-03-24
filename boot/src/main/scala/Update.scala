@@ -1,7 +1,7 @@
 /* sbt -- Simple Build Tool
  * Copyright 2009 Mark Harrah
  */
-package sbt
+package sbt.boot
 
 import java.io.{File, FileWriter, PrintWriter, Writer}
 
@@ -20,7 +20,7 @@ import util.{DefaultMessageLogger, Message}
 
 import BootConfiguration._
 
-private[sbt] object UpdateTarget extends Enumeration
+private[boot] object UpdateTarget extends Enumeration
 {
 	val UpdateScala, UpdateSbt = Value
 }

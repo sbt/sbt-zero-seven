@@ -1,7 +1,7 @@
 /* sbt -- Simple Build Tool
  * Copyright 2009 Mark Harrah
  */
- package sbt
+ package sbt.boot
 
 // This is the main class for the sbt launcher.  Its purpose is to ensure the appropriate
 // versions of sbt and scala are downloaded to the projects 'project/boot' directory.
@@ -34,13 +34,14 @@ object Boot
 				e.printStackTrace
 				errorAndExit(e)
 		}
+		System.exit(0)
 	}
 	private def errorAndExit(e: Throwable)
 	{
 		System.out.println("Error during sbt execution: " + e.toString)
 		System.exit(1)
 	}
-	private def boot(args: Array[String])
+	def boot(args: Array[String])
 	{
 		 // prompt to create project if it doesn't exist.
 		 // will not return if user declines
@@ -68,10 +69,16 @@ object Boot
 	private def load(args: Array[String])
 	{
 		val classpath = (new Setup).classpath()
-		val loader = new URLClassLoader(classpath, new FilteredLoader)
+		val loader = new URLClassLoader(classpath, new BootFilteredLoader)
 		val sbtMain = Class.forName(SbtMainClass, true, loader)
-		val mainMethod = sbtMain.getMethod(MainMethodName, classOf[Array[String]])
-		mainMethod.invoke(null, Array(args) : _*)
+		val runMethod = sbtMain.getMethod(MainMethodName, classOf[Array[String]])
+		val exitCode = runMethod.invoke(null, Array(args) : _*).asInstanceOf[Int]
+		if(exitCode == NormalExitCode)
+			()
+		else if(exitCode == RebootExitCode)
+			load(args)
+		else
+			System.exit(exitCode)
 	}
 }
 

@@ -1,15 +1,18 @@
 /* sbt -- Simple Build Tool
  * Copyright 2009 Mark Harrah
  */
- package sbt
+ package sbt.boot
 
 // project/boot/                [BootDirectoryName]
 //     scala-<version>/    [baseDirectoryName]
 //          lib/                      [ScalaDirectoryName]
 //          sbt-<version>/  [sbtDirectoryName]
 
-private[sbt] object BootConfiguration
+private[boot] object BootConfiguration
 {
+	val SbtMainClass = "sbt.Main"
+	val MainMethodName = "run"
+	
 	// these are the module identifiers to resolve/retrieve
 	val ScalaOrg = "org.scala-lang"
 	val SbtOrg = "sbt"
@@ -18,7 +21,6 @@ private[sbt] object BootConfiguration
 	
 	/** The Ivy conflict manager to use for updating.*/
 	val ConflictManagerName = "strict"
-	val SbtMainClass = "sbt.Main"
 	/** The name of the property declaring the version of scala to use to build the project.*/
 	val ScalaVersion = "scala.version"
 	/** The name of the property declaring the version of sbt to use to build the project.*/
@@ -37,7 +39,8 @@ private[sbt] object BootConfiguration
 	val UpdateLogName = "update.log"
 	
 	val RebootCommand = "reboot"
-	val MainMethodName = "main"
+	val RebootExitCode = -1
+	val NormalExitCode = 0
 	val DefaultIvyConfiguration = "default"
 	
 	/** The base URL to use to resolve sbt for download. */

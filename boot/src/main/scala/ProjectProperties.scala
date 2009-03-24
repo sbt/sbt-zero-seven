@@ -1,7 +1,7 @@
 /* sbt -- Simple Build Tool
  * Copyright 2009 Mark Harrah
  */
-package sbt
+package sbt.boot
 
 /*
 Project does not exist, create new project? [y/N] y
