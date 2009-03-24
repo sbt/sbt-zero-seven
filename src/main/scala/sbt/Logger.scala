@@ -211,15 +211,21 @@ final class BufferedLogger(delegate: Logger) extends Logger
 		}
 }
 
+object ConsoleLogger
+{
+	private def os = System.getProperty("os.name")
+	private def isWindows = os.toLowerCase.indexOf("windows") >= 0
+	private def formatExplicitlyDisabled = java.lang.Boolean.getBoolean("sbt.log.noformat")
+	private val formatEnabled = !(formatExplicitlyDisabled || isWindows)
+}
+
 /** A logger that logs to the console.  On non-windows systems, the level labels are
 * colored. 
 *
 * This logger is not thread-safe.*/
 class ConsoleLogger extends BasicLogger
 {
-	private val os = System.getProperty("os.name")
-	private val isWindows = os.toLowerCase.indexOf("windows") >= 0
-
+	import ConsoleLogger.formatEnabled
 	def messageColor(level: Level.Value) = Console.RESET
 	def labelColor(level: Level.Value) =
 		level match
@@ -248,7 +254,7 @@ class ConsoleLogger extends BasicLogger
 	}
 	private def setColor(color: String)
 	{
-		if(!isWindows)
+		if(formatEnabled)
 			System.out.synchronized { System.out.print(color) }
 	}
 	private def log(labelColor: String, label: String, messageColor: String, message: String): Unit =
