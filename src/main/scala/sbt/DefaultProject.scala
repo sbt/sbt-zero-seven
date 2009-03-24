@@ -76,7 +76,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	{
 		val path = succeededTestPath
 		val analysis = testCompileConditional.analysis
-		TestFilter(new impl.TestQuickFilter(analysis, failedOnly, path, log))  :: TestListeners(new impl.TestStatusReporter(analysis, path, log) :: Nil) :: Nil
+		TestFilter(new impl.TestQuickFilter(analysis, failedOnly, path, log))  :: TestListeners(new impl.TestStatusReporter(path, log) :: Nil) :: Nil
 	}
 	
 	protected def includeTest(test: String): Boolean = true

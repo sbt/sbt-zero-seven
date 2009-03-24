@@ -7,24 +7,18 @@ import java.io.File
 import scala.collection.mutable.{HashMap, Map}
 
 /** Only intended to be used once per instance. */
-private[sbt] class TestStatusReporter(testAnalysis: CompileAnalysis, path: Path, log: Logger) extends TestsListener
+private[sbt] class TestStatusReporter(path: Path, log: Logger) extends TestsListener
 {
-	private lazy val testSource = testAnalysis.testSourceMap
 	private lazy val succeeded: Map[String, Long] = TestStatus.read(path, log)
-	private var currentGroup: String = ""
 
 	def doInit {}
-	def startGroup(name: String)
-	{
-		currentGroup = name
-		succeeded removeKey name
-	}
+	def startGroup(name: String) { succeeded removeKey name }
 	def testEvent(event: TestEvent) {}
 	def endGroup(name: String, t: Throwable) {}
 	def endGroup(name: String, result: Result.Value)
 	{
 		if(result == Result.Passed)
-			succeeded(currentGroup) = System.currentTimeMillis
+			succeeded(name) = System.currentTimeMillis
 	}
 	def doComplete(finalResult: Result.Value) { complete() }
 	def doComplete(t: Throwable) { complete() }
