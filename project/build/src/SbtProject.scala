@@ -74,11 +74,13 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 		<publications>
 			<artifact name="sbt_2.7.2" conf="2.7.2"/>
 			<artifact name="sbt_2.7.3" conf="2.7.3"/>
+			<artifact name="sbt_2.8.0" conf="2.8.0"/>
 		</publications>
 		<dependencies>
 			<!-- All Scala versions -->
 			<dependency org="org.apache.ivy" name="ivy" rev="2.0.0" transitive="false" conf="base->default"/>
 			<dependency org="org.scalacheck" name="scalacheck" rev="1.5" transitive="false" conf="optional-base->default"/>
+			<dependency org="org.mortbay.jetty" name="jetty" rev="6.1.14" transitive="true" conf="optional-base->default"/>
 			
 			<!-- Scala 2.7.2 -->
 			<dependency org="org.specs" name="specs" rev="1.4.0" transitive="false" conf="optional-2.7.2->default"/>
@@ -102,12 +104,14 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	// the list of all configurations to cross-compile against
 	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_8_0 :: Nil
 	
+	/** The lib directory is now only for building using the 'build' script.*/
+	override def unmanagedClasspath = path("ignore_lib_directory")
 	/** When cross-compiling, replace mainCompilePath with the classes directory for the version being compiled.*/
 	override def fullUnmanagedClasspath(config: Configuration) =
 		if( (Configurations.Default :: Configurations.defaultMavenConfigurations) contains config)
 			super.fullUnmanagedClasspath(config)
 		else
-			classesPath(config.toString) +++ mainResourcesPath +++ unmanagedClasspath
+			classesPath(config.toString) +++ mainResourcesPath
 	
 	// include the optional-<version> dependencies as well as the ones common across all scala versions
 	def optionalClasspath(version: String) = fullClasspath(config("optional-" + version)) +++ super.optionalClasspath
@@ -139,7 +143,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 			val classes = classesPath(version)
 			val toClean = (outputPath / crossJarName(version)) +++ (classes ** "*")
 			val setupResult =
-				FileUtilities.clean(toClean.get, false, log) orElse
+				FileUtilities.clean(toClean.get, true, log) orElse
 				FileUtilities.createDirectory(classes, log)
 			for(err <- setupResult) log.error(err)
 			// the classpath containing the scalac compiler
