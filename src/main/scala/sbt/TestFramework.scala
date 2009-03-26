@@ -362,6 +362,8 @@ object TestFramework
 	private def doRunTests(classpath: Iterable[Path], tests: Map[TestFramework, Set[String]], log: Logger, listeners: Iterable[TestReportListener]): Option[String] =
 	{
 		val loader: ClassLoader = new IntermediateLoader(classpath.map(_.asURL).toSeq.toArray, getClass.getClassLoader)
+		val oldLoader = Thread.currentThread.getContextClassLoader
+		Thread.currentThread.setContextClassLoader(loader)
 		val testsListeners = listeners.filter(_.isInstanceOf[TestsListener]).map(_.asInstanceOf[TestsListener])
 		import Result._
 		var result: Value = Passed
@@ -396,6 +398,9 @@ object TestFramework
 				testsListeners.foreach(l => Control.trapAndLog(log){ l.doComplete(t) })
 				throw t
 			}
+		}
+		finally {
+			Thread.currentThread.setContextClassLoader(loader)
 		}
 		result match
 		{

@@ -8,4 +8,8 @@ object TestSpecification extends Specification
      val a: AnyRef = lib.Test.other
      a must notBe(null)
   }
+  "Class.forName using Thread.getContextLoader must work in libraries used in tests" in {
+     val a: AnyRef = lib.Test.otherThread
+     a must notBe(null)
+  }
 }
