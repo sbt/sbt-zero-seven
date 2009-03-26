@@ -238,6 +238,7 @@ object Main
 	{
 		printCmd("<action name>", "Executes the project specified action.")
 		printCmd("<method name> <parameter>*", "Executes the project specified method.")
+		printCmd("~ <command>", "Executes the project specified action or method whenever source files change.")
 		printCmd(ShowActions, "Shows all available actions.")
 		printCmd(ShowMethods, "Shows all available methods.")
 		printCmd(RebootCommand, "Changes to scala.version or sbt.version are processed and the project definition is reloaded.")
@@ -250,16 +251,15 @@ object Main
 		Console.println("Available Commands:")
 
 		printCommonCommands()
+		printCmd(ReloadAction, "Reloads sbt, recompiling modified project definitions if necessary.")
 		printCmd(ShowCurrent, "Shows the current project and logging level of that project.")
 		printCmd(Level.elements.mkString(", "), "Set logging for the current project to the specified level.")
 		printCmd(TraceCommand, "Toggles whether logging stack traces is enabled.")
 		printCmd(ProjectAction + " <project name>", "Sets the currently active project.")
 		printCmd(ShowProjectsAction, "Shows all available projects.")
 		printCmd(TerminateActions.elements.mkString(", "), "Terminates the program.")
-		printCmd(ReloadAction, "Reloads sbt, recompiling modified project definitions if necessary.")
 		printCmd(SetAction + " <property> <value>", "Sets the value of the property given as its argument.")
 		printCmd(GetAction + " <property>", "Gets the value of the property given as its argument.")
-		printCmd(ContinuousCompileCommand, "Executes 'test-compile' action on active project when source files are modified (continuous compile).")
 	}
 	private def listProject(p: Project) = printProject("\t", p)
 	private def printProject(prefix: String, p: Project)
