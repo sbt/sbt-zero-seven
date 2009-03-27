@@ -12,6 +12,7 @@ private[boot] object BootConfiguration
 {
 	val SbtMainClass = "sbt.Main"
 	val MainMethodName = "run"
+	val OldMainMethodName = "main"
 	
 	// these are the module identifiers to resolve/retrieve
 	val ScalaOrg = "org.scala-lang"

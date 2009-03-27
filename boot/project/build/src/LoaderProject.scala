@@ -59,7 +59,7 @@ class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 			// exclude properties files and manifests from scala-library jar
 			val inJars = (defaultJar :: otherExternalJars.map( _ + "(!META-INF,!*.properties)")).map("-injars " + _).mkString("\n")
 			val ivyKeepOptions = ivyKeepResolvers.map("-keep public class " + _  + allPublic).mkString("\n")
-			val proguardConfiguration = outTemplate.stripMargin.format(rtJar.mkString, ivyJar.mkString, inJars, outputJar, ivyKeepOptions, mainClassName)
+			val proguardConfiguration = outTemplate.stripMargin.format(rtJar.mkString, ivyJar.first, inJars, outputJar, ivyKeepOptions, mainClassName)
 			FileUtilities.write(proguardConfigurationPath.asFile, proguardConfiguration, log)
 		}
 	// class body declaration for proguard that keeps all public members

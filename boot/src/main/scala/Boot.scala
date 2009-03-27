@@ -71,14 +71,30 @@ object Boot
 		val classpath = (new Setup).classpath()
 		val loader = new URLClassLoader(classpath, new BootFilteredLoader)
 		val sbtMain = Class.forName(SbtMainClass, true, loader)
-		val runMethod = sbtMain.getMethod(MainMethodName, classOf[Array[String]])
-		val exitCode = runMethod.invoke(null, Array(args) : _*).asInstanceOf[Int]
+		val exitCode = run(sbtMain, args)
 		if(exitCode == NormalExitCode)
 			()
 		else if(exitCode == RebootExitCode)
 			load(args)
 		else
 			System.exit(exitCode)
+	}
+	private def run(sbtMain: Class[_], args: Array[String]): Int =
+	{
+		try {
+			// Versions newer than 0.3.8 enter through the run method, which does not call System.exit
+			val runMethod = sbtMain.getMethod(MainMethodName, classOf[Array[String]])
+			runMethod.invoke(null, Array(args) : _*).asInstanceOf[Int]
+		} catch {
+			case e: NoSuchMethodException => runOld(sbtMain, args)
+		}
+	}
+	/** The entry point for version 0.3.8 was the main method. */
+	private def runOld(sbtMain: Class[_], args: Array[String]): Int =
+	{
+		val runMethod = sbtMain.getMethod(OldMainMethodName, classOf[Array[String]])
+		runMethod.invoke(null, Array(args) : _*)
+		NormalExitCode
 	}
 }
 
