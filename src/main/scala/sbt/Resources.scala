@@ -77,10 +77,10 @@ class Resources(val baseDirectory: File)
 				{
 					case Left(msg) =>
 						buffered.playAll()
-						buffered.clearAll()
+						buffered.stop()
 						Left(reloadPrefixIfError + msg)
 					case Right(p) => 
-						buffered.clearAll()
+						buffered.stop()
 						Right(p)
 				}
 			}

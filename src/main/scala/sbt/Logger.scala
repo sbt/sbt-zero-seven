@@ -98,9 +98,6 @@ final class MultiLogger(delegates: List[Logger]) extends BasicLogger
 	private def dispatch(event: LogEvent) { delegates.foreach(_.log(event)) }
 }
 
-/** Provides a frontend to a logger that provides separate buffers for different calling actors
-* Wrap this in SynchronizedLogger. */
-
 /** A logger that can buffer the logging done on it by currently executing actor and
 * then can flush the buffer to the delegate logger provided in the constructor.  Use
 * 'startRecording' to start buffering and then 'play' from to flush the buffer for the
@@ -115,29 +112,67 @@ final class MultiLogger(delegates: List[Logger]) extends BasicLogger
 final class BufferedLogger(delegate: Logger) extends Logger
 {
 	import scala.actors.Actor
-	private val buffers = new WeakHashMap[Actor, Buffer[LogEvent]]
-	private var recording = false
+	private[this] val buffers = new WeakHashMap[Actor, Buffer[LogEvent]]
+	/* The recording depth part is to enable a weak nesting of recording calls.  When recording is
+	*  nested (recordingDepth >= 2), calls to play/playAll add the buffers for actors to the serial buffer
+	*  (no actor) and calls to clear/clearAll clear actor buffers only. */
+	private[this] def recording = recordingDepth > 0
+	private[this] var recordingDepth = 0
 	
-	private def buffer = buffers.getOrElseUpdate(Actor.self, new ListBuffer[LogEvent])
+	private[this] def bufferForActor(a: Actor) = buffers.getOrElseUpdate(a, new ListBuffer[LogEvent])
+	private[this] def buffer = bufferForActor(Actor.self)
+	private[this] def serialBuffer = bufferForActor(null)
+
+	private[this] def inActor = Actor.self != null
 	
 	/** Enables buffering. */
-	def startRecording() { synchronized { recording = true } }
+	def startRecording() { synchronized { recordingDepth += 1 } }
 	/** Flushes the buffer to the delegate logger for the current actor.  This method calls logAll on the delegate
 	* so that the messages are written consecutively. The buffer is cleared in the process. */
-	def play(): Unit = synchronized { delegate.logAll(buffer.readOnly) }
+	def play(): Unit =
+ 		synchronized
+		{
+			if(recordingDepth == 1)
+				delegate.logAll(buffer.readOnly)
+			else if(recordingDepth > 1 && inActor)
+				serialBuffer ++= buffer
+		}
 	def playAll(): Unit =
 		synchronized
 		{
-			for(buffer <- buffers.values)
-				delegate.logAll(buffer.readOnly)
+			if(recordingDepth == 1)
+			{
+				for(buffer <- buffers.values)
+					delegate.logAll(buffer.readOnly)
+			}
+			else if(recordingDepth > 1)
+			{
+				for((key, buffer) <- buffers if key != null)
+					serialBuffer ++= buffer
+			}
 		}
 	/** Clears buffered events for the current actor.  It does not disable buffering. */
-	def clear(): Unit = synchronized { buffers.removeKey(Actor.self) }
+	def clear(): Unit = synchronized { if(recordingDepth == 1 || inActor) buffers.removeKey(Actor.self) }
 	/** Clears buffered events for all actors and disables buffering. */
+	def stop(): Unit =
+		synchronized
+		{
+			clearAll()
+			if(recordingDepth > 0)
+				recordingDepth -= 1
+		}
+	/** Clears buffered events for all actors. */
 	def clearAll(): Unit =
-		synchronized {
-			buffers.clear()
-			recording = false
+		synchronized
+		{
+			if(recordingDepth <= 1)
+				buffers.clear()
+			else
+			{
+				val serial = serialBuffer
+				buffers.clear()
+				buffers(null) = serial
+			}
 		}
 	def runAndFlush[T](f: => T): T =
 	{

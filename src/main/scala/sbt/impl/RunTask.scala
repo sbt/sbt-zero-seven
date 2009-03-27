@@ -24,29 +24,52 @@ private final class RunTask(root: Task, rootName: String, maximumTasks: Int) ext
 	def multiProject = allProjects.size >= 2
 	def run(): List[WorkFailure[Task]]  =
 	{
-		withBuffered(_.startRecording())
-		try { ParallelRunner.run(expandedRoot, expandedTaskName, runImpl, maximumTasks, _.manager.log) }
+		try
+		{
+			runTasksExceptRoot() match
+			{
+				case Nil =>
+					val result = runTask(root, rootName)
+					result.map( errorMessage => WorkFailure(root, "Error running " + rootName + ": " + errorMessage) ).toList
+				case failures => failures
+			}
+		}
 		finally
 		{
-			withBuffered(_.clearAll())
-			for(project <- allProjects; saveError <- project.saveEnvironment) project.log.warn("Could not save properties for project " + project.name + ": " + saveError)
+			for(project <- allProjects; saveError <- project.saveEnvironment)
+				project.log.warn("Could not save properties for project " + project.name + ": " + saveError)
 		}
+	}
+	// This runs all tasks except the root.task.
+	// It uses a buffered logger in record mode to ensure that all output for a given task is consecutive
+	// it ignores the root task so that the root task may be run with buffering disabled so that the output
+	// occurs without delay.
+	private def runTasksExceptRoot() =
+	{
+		withBuffered(_.startRecording())
+		try { ParallelRunner.run(expandedRoot, expandedTaskName, runIfNotRoot, maximumTasks, (t: Task) => t.manager.log) }
+		finally { withBuffered(_.stop()) }
 	}
 	private def withBuffered(f: BufferedLogger => Unit)
 	{
 		for(buffered <- bufferedLoggers)
 			Control.trap(f(buffered))
 	}
-	/** Will be called in its own actor. */
-	private def runImpl(action: Task): Option[String] =
+	/** Will be called in its own actor. Runs the given task if it is not the root task.*/
+	private def runIfNotRoot(action: Task): Option[String] =
 	{
-		val isRoot = action == expandedRoot
-		val actionName = if(isRoot) rootName else expandedTaskName(action)
+		if(isRoot(action))
+			None
+		else
+			runTask(action, expandedTaskName(action))
+	}
+	private def isRoot(t: Task) = t == expandedRoot
+	/** Will be called in its own actor except for the root task. */
+	private def runTask(action: Task, actionName: String): Option[String] =
+	{
 		val label = if(multiProject) (action.manager.name + " / " + actionName) else actionName
 		def banner(event: ControlEvent.Value, firstSeparator: String, secondSeparator: String) =
 			Control.trap(action.manager.log.control(event, firstSeparator + " " + label + " " + secondSeparator))
-		if(isRoot)
-			flush(action, true)
 		if(parallel)
 		{
 			try { banner(ControlEvent.Start, "\n  ", "...") }
@@ -67,24 +90,15 @@ private final class RunTask(root: Task, rootName: String, maximumTasks: Int) ext
 		catch { case e: Exception => () }
 		finally { try { runFinally } catch { case e: Exception => () } }
 	}
-	private def flush(action: Task) { flush(action, false) }
-	private def flush(action: Task, all: Boolean)
+	private def flush(action: Task)
 	{
 		for(buffered <- bufferedLogger(action.manager))
-			Control.trap(flush(buffered, all))
+			Control.trap(flush(buffered))
 	}
-	private def flush(buffered: BufferedLogger, all: Boolean)
+	private def flush(buffered: BufferedLogger)
 	{
-		if(all)
-		{
-			buffered.playAll()
-			buffered.clearAll()
-		}
-		else
-		{
-			buffered.play()
-			buffered.clear()
-		}
+		buffered.play()
+		buffered.clear()
 	}
 
 	/* Most of the following is for implicitly adding dependencies (see the expand method)*/
