@@ -19,6 +19,8 @@ class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 	def extraResources = descendents(info.projectPath / "licenses", "*") +++ "LICENSE" +++ "NOTICE"
 	override def mainResources = super.mainResources +++ extraResources
 	
+	val ivy = "org.apache.ivy" % "ivy" % "2.0.0"
+	
 	lazy val proguard = proguardTask dependsOn(`package`, writeProguardConfiguration) describedAs(ProguardDescription)
 	lazy val writeProguardConfiguration = writeProguardConfigurationTask dependsOn `package` describedAs WriteProguardDescription
 	
