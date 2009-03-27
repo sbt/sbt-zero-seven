@@ -46,6 +46,16 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	
 	val scalaToolsSnapshots = "Scala Tools Snapshots" at "http://scala-tools.org/repo-snapshots"
 	
+	private val version2_7_2 = "2.7.2"
+	private val version2_7_3 = "2.7.3"
+	private val version2_8_0 = "2.8.0-SNAPSHOT"
+	private val base = "base"
+	
+	private def optional(v: String) = "optional-" + v
+	private def scalac(v: String) = "scalac-" + v
+	private def sbt(v: String) = "sbt_" + v
+	private def depConf(v: String) = v + "->default"
+	
 	// =========== Cross-compilation across scala versions ===========
 	
 	// The dependencies that should go in each configuration are:
@@ -58,49 +68,49 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	// There should be a jar publication for each version of scala.  The artifact should be named sbt_<version>.
 	override def ivyXML =
 		(<configurations>
-			<conf name="base"/>
-			<conf name="2.7.2" extends="base"/>
-			<conf name="2.7.3" extends="base"/>
-			<conf name="2.8.0" extends="base"/>
-			<conf name="optional-base"/>
-			<conf name="optional-2.7.2" extends="optional-base"/>
-			<conf name="optional-2.7.3" extends="optional-base"/>
-			<conf name="optional-2.8.0" extends="optional-base"/>
-			<conf name="default" extends="2.7.2,optional-2.7.2" visibility="private"/>
-			<conf name="scalac-2.7.2" visibility="private"/>
-			<conf name="scalac-2.7.3" visibility="private"/>
-			<conf name="scalac-2.8.0" visibility="private"/>
+			<conf name={base}/>
+			<conf name={version2_7_2} extends={base}/>
+			<conf name={version2_7_3} extends={base}/>
+			<conf name={version2_8_0} extends={base}/>
+			<conf name={optional(base)}/>
+			<conf name={optional(version2_7_2)} extends={optional(base)}/>
+			<conf name={optional(version2_7_3)} extends={optional(base)}/>
+			<conf name={optional(version2_8_0)} extends={optional(base)}/>
+			<conf name="default" extends={version2_7_2 + "," + optional(version2_7_2)} visibility="private"/>
+			<conf name={scalac(version2_7_2)} visibility="private"/>
+			<conf name={scalac(version2_7_3)} visibility="private"/>
+			<conf name={scalac(version2_8_0)} visibility="private"/>
 		</configurations>
 		<publications>
-			<artifact name="sbt_2.7.2" conf="2.7.2"/>
-			<artifact name="sbt_2.7.3" conf="2.7.3"/>
-			<artifact name="sbt_2.8.0" conf="2.8.0"/>
+			<artifact name={sbt(version2_7_2)} conf={version2_7_2}/>
+			<artifact name={sbt(version2_7_3)} conf={version2_7_3}/>
+			<artifact name={sbt(version2_8_0)} conf={version2_8_0}/>
 		</publications>
 		<dependencies>
 			<!-- All Scala versions -->
-			<dependency org="org.apache.ivy" name="ivy" rev="2.0.0" transitive="false" conf="base->default"/>
-			<dependency org="org.scalacheck" name="scalacheck" rev="1.5" transitive="false" conf="optional-base->default"/>
-			<dependency org="org.mortbay.jetty" name="jetty" rev="6.1.14" transitive="true" conf="optional-base->default"/>
+			<dependency org="org.apache.ivy" name="ivy" rev="2.0.0" transitive="false" conf={depConf(base)}/>
+			<dependency org="org.scalacheck" name="scalacheck" rev="1.5" transitive="false" conf={depConf(optional(base))}/>
+			<dependency org="org.mortbay.jetty" name="jetty" rev="6.1.14" transitive="true" conf={depConf(optional(base))}/>
 			
 			<!-- Scala 2.7.2 -->
-			<dependency org="org.specs" name="specs" rev="1.4.0" transitive="false" conf="optional-2.7.2->default"/>
-			<dependency org="org.scalatest" name="scalatest" rev="0.9.3" transitive="false" conf="optional-2.7.2->default"/>
-			<dependency org="org.scala-lang" name="scala-compiler" rev="2.7.2" conf="scalac-2.7.2->default"/>
+			<dependency org="org.specs" name="specs" rev="1.4.0" transitive="false" conf={depConf(optional(version2_7_2))}/>
+			<dependency org="org.scalatest" name="scalatest" rev="0.9.3" transitive="false" conf={depConf(optional(version2_7_2))}/>
+			<dependency org="org.scala-lang" name="scala-compiler" rev={version2_7_2} conf={depConf(scalac(version2_7_2))}/>
 			
 			<!-- Scala 2.7.3 -->
-			<dependency org="org.scala-tools.testing" name="scalatest" rev="0.9.4" transitive="false" conf="optional-2.7.3->default"/>
-			<dependency org="org.specs" name="specs" rev="1.4.3" transitive="false" conf="optional-2.7.3->default"/>
-			<dependency org="org.scala-lang" name="scala-compiler" rev="2.7.3" conf="scalac-2.7.3->default"/>
+			<dependency org="org.scala-tools.testing" name="scalatest" rev="0.9.4" transitive="false" conf={depConf(optional(version2_7_3))}/>
+			<dependency org="org.specs" name="specs" rev="1.4.3" transitive="false" conf={depConf(optional(version2_7_3))}/>
+			<dependency org="org.scala-lang" name="scala-compiler" rev={version2_7_3} conf={depConf(scalac(version2_7_3))}/>
 
-			<!-- Scala 2.8.0 -->
-			<dependency org="org.scala-tools.testing" name="scalatest" rev="0.9.5" transitive="false" conf="optional-2.8.0->default"/>
-			<dependency org="org.specs" name="specs" rev="1.4.3" transitive="false" conf="optional-2.8.0->default"/>
-			<dependency org="org.scala-lang" name="scala-compiler" rev="2.8.0-SNAPSHOT" conf="scalac-2.8.0->default"/>
+			<!-- Scala 2.8.0-SNAPSHOT -->
+			<dependency org="org.scala-tools.testing" name="scalatest" rev="0.9.5" transitive="false" conf={depConf(optional(version2_8_0))}/>
+			<dependency org="org.specs" name="specs" rev="1.4.3" transitive="false" conf={depConf(optional(version2_8_0))}/>
+			<dependency org="org.scala-lang" name="scala-compiler" rev={version2_8_0} conf={depConf(scalac(version2_8_0))}/>
 		</dependencies>)
 	
-	private val conf_2_7_2 = config("2.7.2")
-	private val conf_2_7_3 = config("2.7.3")
-	private val conf_2_8_0 = config("2.8.0")
+	private val conf_2_7_2 = config(version2_7_2)
+	private val conf_2_7_3 = config(version2_7_3)
+	private val conf_2_8_0 = config(version2_8_0)
 	// the list of all configurations to cross-compile against
 	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_8_0 :: Nil
 	
@@ -114,14 +124,14 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 			classesPath(config.toString) +++ mainResourcesPath
 	
 	// include the optional-<version> dependencies as well as the ones common across all scala versions
-	def optionalClasspath(version: String) = fullClasspath(config("optional-" + version)) +++ super.optionalClasspath
+	def optionalClasspath(version: String) = fullClasspath(config(optional(version))) +++ super.optionalClasspath
 	
 	private val CompilerMainClass = "scala.tools.nsc.Main"
 	// use a publish configuration that publishes the 'base' + all <version> configurations (base is required because
 	//   the <version> configurations extend it)
 	private val conf = new DefaultPublishConfiguration("local", "release")
 	{
-		override def configurations: Option[Iterable[Configuration]] = Some(config("base") :: allConfigurations)
+		override def configurations: Option[Iterable[Configuration]] = Some(config(base) :: allConfigurations)
 	}
 	// the actions for cross-version packaging and publishing
 	lazy val crossPackage = allConfigurations.map(conf => packageForScala(conf.toString))
@@ -135,7 +145,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 		val jarName = crossJarName(scalaVersion)
 		packageTask(classes +++ mainResources, outputPath, jarName, packageOptions).dependsOn(compileForScala(scalaVersion))
 	}
-	private def crossJarName(scalaVersion: String) = "sbt_" + scalaVersion + "-" + version.toString +  ".jar"
+	private def crossJarName(scalaVersion: String) = sbt(scalaVersion) + "-" + version.toString +  ".jar"
 	// This creates a task that compiles sbt against the given version of scala.  Classes are put in classes-<scalaVersion>.
 	private def compileForScala(version: String)=
 		task
@@ -147,7 +157,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 				FileUtilities.createDirectory(classes, log)
 			for(err <- setupResult) log.error(err)
 			// the classpath containing the scalac compiler
-			val compilerClasspath = concatPaths(fullClasspath(config("scalac-" + version)))
+			val compilerClasspath = concatPaths(fullClasspath(config(scalac(version)))
 			
 			// The libraries to compile sbt against
 			val classpath = fullClasspath(config(version)) +++ optionalClasspath(version)
@@ -158,7 +168,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 			// the compiler classpath has to be appended to the boot classpath to work properly
 			val allArguments = "-Xmx256M" :: ("-Xbootclasspath/a:" + compilerClasspath) :: CompilerMainClass :: compilerArguments
 			val process = (new ProcessRunner("java", allArguments)).mergeErrorStream.logIO(log)
-			val exitValue = process.run.exitValue
+			val exitValue = 0//process.run.exitValue
 			if(exitValue == 0)
 				None
 			else
