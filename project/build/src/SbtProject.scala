@@ -157,7 +157,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 				FileUtilities.createDirectory(classes, log)
 			for(err <- setupResult) log.error(err)
 			// the classpath containing the scalac compiler
-			val compilerClasspath = concatPaths(fullClasspath(config(scalac(version)))
+			val compilerClasspath = concatPaths(fullClasspath(config(scalac(version))))
 			
 			// The libraries to compile sbt against
 			val classpath = fullClasspath(config(version)) +++ optionalClasspath(version)
@@ -168,7 +168,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 			// the compiler classpath has to be appended to the boot classpath to work properly
 			val allArguments = "-Xmx256M" :: ("-Xbootclasspath/a:" + compilerClasspath) :: CompilerMainClass :: compilerArguments
 			val process = (new ProcessRunner("java", allArguments)).mergeErrorStream.logIO(log)
-			val exitValue = 0//process.run.exitValue
+			val exitValue = process.run.exitValue
 			if(exitValue == 0)
 				None
 			else
