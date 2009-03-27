@@ -1,7 +1,7 @@
 /* sbt -- Simple Build Tool
  * Copyright 2009  Mark Harrah
  */
-/*
+
 import sbt._
 import java.io.{BufferedReader, File, InputStreamReader}
 
@@ -133,8 +133,8 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 	private def evaluate(successExpected: Boolean, label: String, project: Project)(body: => Option[String]): Option[String] =
 	{
 		def startRecordingLog() { foreachBufferedLogger(project)(_.startRecording()) }
-		def playLog() { foreachBufferedLogger(project)(_.play()) }
-		def clearLog() { foreachBufferedLogger(project)(_.clear()) }
+		def playLog() { foreachBufferedLogger(project)(_.playAll()) }
+		def stopLog() { foreachBufferedLogger(project)(_.stop()) }
 		
 		startRecordingLog()
 		val result =
@@ -155,7 +155,7 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 					}
 					else None
 			}
-		clearLog()
+		stopLog()
 		result
 	}
 	private def evaluateAction(action: List[String], successExpected: Boolean)(project: Project): Option[String] =
@@ -277,4 +277,3 @@ private object TestScriptParser
 				}
 		}
 }
-*/

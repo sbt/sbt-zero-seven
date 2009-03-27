@@ -1,7 +1,7 @@
 /* sbt -- Simple Build Tool
  * Copyright 2009  Mark Harrah
  */
- /*
+ 
 import sbt._
 import java.io.File
 
@@ -64,4 +64,3 @@ class ScriptedTests(testResources: Resources, filter: ScriptedTestFilter) extend
 		yield u).left.toOption
 	}
 }
-*/

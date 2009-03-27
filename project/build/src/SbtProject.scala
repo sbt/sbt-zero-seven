@@ -18,7 +18,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	// ======== Scripted testing ==========
 	
 	def sbtTestResources = testResourcesPath / "sbt-test-resources"
-	/*
+	
 	override def testAction = super.testAction dependsOn(scripted)
 	lazy val scripted = scriptedTask dependsOn testCompile
 	def scriptedTask =
@@ -43,7 +43,7 @@ class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 	}
 	//override protected def includeTest(test: String): Boolean = true
 		//test == "sbt.WriteContentSpecification"
-	*/
+	
 	val scalaToolsSnapshots = "Scala Tools Snapshots" at "http://scala-tools.org/repo-snapshots"
 	
 	// =========== Cross-compilation across scala versions ===========
@@ -175,7 +175,7 @@ package sbt { // need access to LoaderBase, which is private in package sbt
 	{
 		def apply(paths: Array[URL]): ClassLoader = new ScriptedLoader(paths)
 	}
-	private class ScriptedLoader(paths: Array[URL]) extends LoaderBase(paths, ScriptedLoader.getClass.getClassLoader)
+	private class ScriptedLoader(paths: Array[URL]) extends LoaderBase(paths, classOf[ScriptedLoader].getClassLoader)
 	{
 		def doLoadClass(className: String): Class[_] =
 		{
