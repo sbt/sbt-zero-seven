@@ -9,7 +9,7 @@ import LoaderProject._
 class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 {
 	val mainClassName = "sbt.boot.Boot"
-	val baseName = "sbt-loader"
+	val baseName = "sbt-launcher"
 	val proguardConfigurationPath: Path = "proguard.pro"
 	val outputJar: Path = baseName + ".jar"
 	
