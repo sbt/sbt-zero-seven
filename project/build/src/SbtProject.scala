@@ -8,7 +8,7 @@ import java.io.File
 
 class SbtProject(info: ProjectInfo) extends DefaultProject(info)
 {
-	override def defaultJarBaseName = "sbt-" + version.toString
+	override def defaultJarBaseName = "sbt_" + version.toString
 	/** Additional resources to include in the produced jar.*/
 	def extraResources = descendents(info.projectPath / "licenses", "*") +++ "LICENSE" +++ "NOTICE"
 	override def mainResources = super.mainResources +++ extraResources
