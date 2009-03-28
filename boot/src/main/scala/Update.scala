@@ -15,7 +15,7 @@ import core.resolve.{ResolveEngine, ResolveOptions}
 import core.retrieve.{RetrieveEngine, RetrieveOptions}
 import core.sort.SortEngine
 import core.settings.IvySettings
-import plugins.resolver.{ChainResolver, IBiblioResolver, URLResolver}
+import plugins.resolver.{ChainResolver, FileSystemResolver, IBiblioResolver, URLResolver}
 import util.{DefaultMessageLogger, Message}
 
 import BootConfiguration._
@@ -141,8 +141,7 @@ private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion
 	{
 		val newDefault = new ChainResolver
 		newDefault.setName("redefined-public")
-		val previousDefault = settings.getDefaultResolver
-		if(previousDefault != null) newDefault.add(previousDefault)
+		newDefault.add(localResolver(settings.getDefaultIvyUserDir.getAbsolutePath))
 		newDefault.add(sbtResolver(scalaVersion))
 		newDefault.add(mavenResolver("Scala Tools Releases", "http://scala-tools.org/repo-releases"))
 		newDefault.add(mavenResolver("Scala Tools Snapshots", "http://scala-tools.org/repo-snapshots"))
@@ -175,6 +174,17 @@ private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion
 		val resolver = new IBiblioResolver
 		resolver.setName("Maven Central")
 		resolver.setM2compatible(true)
+		resolver
+	}
+	private def localResolver(ivyUserDirectory: String) =
+	{
+		val localIvyRoot = ivyUserDirectory + "/local"
+		val artifactPattern = localIvyRoot + "/" + LocalArtifactPattern
+		val ivyPattern = localIvyRoot + "/" + LocalIvyPattern
+		val resolver = new FileSystemResolver
+		resolver.setName(LocalIvyName)
+		resolver.addIvyPattern(ivyPattern)
+		resolver.addArtifactPattern(artifactPattern)
 		resolver
 	}
 	/** Logs the given message to a file and to the console. */

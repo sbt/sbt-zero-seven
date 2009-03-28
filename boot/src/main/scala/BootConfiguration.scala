@@ -7,8 +7,9 @@
 //     scala-<version>/    [baseDirectoryName]
 //          lib/                      [ScalaDirectoryName]
 //          sbt-<version>/  [sbtDirectoryName]
-
-private[boot] object BootConfiguration
+//
+// see also ProjectProperties for the set of constants that apply to the build.properties file in a project
+private object BootConfiguration
 {
 	val SbtMainClass = "sbt.Main"
 	val MainMethodName = "run"
@@ -22,6 +23,15 @@ private[boot] object BootConfiguration
 	
 	/** The Ivy conflict manager to use for updating.*/
 	val ConflictManagerName = "strict"
+	/** The name of the local Ivy repository, which is used when compiling sbt from source.*/
+	val LocalIvyName = "local"
+	/** The pattern used for the local Ivy repository, which is used when compiling sbt from source.*/
+	val LocalPattern = "[organisation]/[module]/[revision]/[type]s/[artifact].[ext]"
+	/** The artifact pattern used for the local Ivy repository.*/
+	def LocalArtifactPattern = LocalPattern
+	/** The Ivy pattern used for the local Ivy repository.*/
+	def LocalIvyPattern = LocalPattern
+		
 	/** The name of the property declaring the version of scala to use to build the project.*/
 	val ScalaVersion = "scala.version"
 	/** The name of the property declaring the version of sbt to use to build the project.*/
