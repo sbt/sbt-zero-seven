@@ -19,7 +19,10 @@ class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 	def extraResources = descendents(info.projectPath / "licenses", "*") +++ "LICENSE" +++ "NOTICE"
 	override def mainResources = super.mainResources +++ extraResources
 	
+	val defaultConfig = config("default")
+	val toolsConfig = config("tools")
 	val ivy = "org.apache.ivy" % "ivy" % "2.0.0"
+	val proguardJar = "net.sf.proguard" % "proguard" % "4.3" % "tools->default"
 	
 	lazy val proguard = proguardTask dependsOn(`package`, writeProguardConfiguration) describedAs(ProguardDescription)
 	lazy val writeProguardConfiguration = writeProguardConfigurationTask dependsOn `package` describedAs WriteProguardDescription
@@ -28,7 +31,9 @@ class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 		task
 		{
 			FileUtilities.clean(outputJar :: Nil, log)
-			val p = new ProcessRunner("java", "-Xmx128M", "-jar", "proguard.jar", "@" + proguardConfigurationPath).logIO(log)
+			val proguardClasspath = managedClasspath(toolsConfig)
+			val proguardClasspathString = Path.makeString(proguardClasspath.get)
+			val p = new ProcessRunner("java", "-Xmx128M", "-cp", proguardClasspathString, "proguard.ProGuard", "@" + proguardConfigurationPath).logIO(log)
 			val exitValue = p.run.exitValue
 			if(exitValue == 0) None else Some("Proguard failed with nonzero exit code (" + exitValue + ")")
 		}
@@ -41,8 +46,9 @@ class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 			val outTemplate = """
 				|-dontoptimize
 				|-dontobfuscate
+				|-dontnote
+				|-dontwarn
 				|-libraryjars %s
-				|-libraryjars scala-bug-1572-workaround.jar
 				|-injars %s(!META-INF/**,!fr/**,!**/antlib.xml,!**/*.png)
 				|%s
 				|-outjars %s
@@ -59,7 +65,7 @@ class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 			// pull out Ivy in order to exclude resources inside
 			val (ivyJar, otherExternalJars) = externalJars.partition(jar => jar.getName.startsWith("ivy"))
 			// exclude properties files and manifests from scala-library jar
-			val inJars = (defaultJar :: otherExternalJars.map( _ + "(!META-INF,!*.properties)")).map("-injars " + _).mkString("\n")
+			val inJars = (defaultJar :: otherExternalJars.map( _ + "(!META-INF/**,!*.properties)")).map("-injars " + _).mkString("\n")
 			val ivyKeepOptions = ivyKeepResolvers.map("-keep public class " + _  + allPublic).mkString("\n")
 			val proguardConfiguration = outTemplate.stripMargin.format(rtJar.mkString, ivyJar.first, inJars, outputJar, ivyKeepOptions, mainClassName)
 			FileUtilities.write(proguardConfigurationPath.asFile, proguardConfiguration, log)
