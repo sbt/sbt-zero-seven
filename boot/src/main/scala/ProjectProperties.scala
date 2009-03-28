@@ -8,11 +8,12 @@ Project does not exist, create new project? [y/N] y
 Name: 
 Organization [empty]:
 Version [1.0]: 
-Scala version [2.7.2]: 
-sbt version [ 0.3.8 ]: 
+Scala version [2.7.3]: 
+sbt version [0.4.1]: 
 */
-
-/** The constants used by the loader.*/
+import java.io.File
+/** Constants related to reading/writing the build.properties file in a project.
+* See BootConfiguration for general constants used by the loader. */
 private object ProjectProperties
 {
 	/** The properties key for storing the name of the project.*/
@@ -45,32 +46,23 @@ private object ProjectProperties
 	/** The default version of the new user project when the user doesn't explicitly specify a version when prompted.*/
 	val DefaultVersion = "1.0"
 	/** The default version of sbt when the user doesn't explicitly specify a version when prompted.*/
-	val DefaultSbtVersion = "0.3.8"
+	val DefaultSbtVersion = "0.4.1"
 	/** The default version of Scala when the user doesn't explicitly specify a version when prompted.*/
 	val DefaultScalaVersion = "2.7.3"
 
-	import java.io.{File, FileInputStream, FileOutputStream}
-	import java.util.Properties
 	// (scala version, sbt version)
 	def apply(file: File, setInitializeProject: Boolean): (String, String) =
 	{
-		val properties = new Properties
-		if(file.exists)
-		{
-			val in = new FileInputStream(file)
-			try { properties.load(in) } finally { in.close() }
-		}
+		val organizationOptional = file.exists
+		val properties = new ProjectProperties(file)
 		
-		prompt(properties, file.exists)
+		prompt(properties, organizationOptional)
 		if(setInitializeProject)
-			properties.setProperty(InitializeProjectKey, true.toString)
-		
-		file.getParentFile.mkdirs()
-		val out = new FileOutputStream(file)
-		try { properties.store(out, "Project Properties") } finally { out.close() }
-		(properties.getProperty(ScalaVersionKey), properties.getProperty(SbtVersionKey))
+			properties(InitializeProjectKey) = true.toString
+		properties.save
+		(properties(ScalaVersionKey), properties(SbtVersionKey))
 	}
-	def prompt(fill: Properties, organizationOptional: Boolean)
+	def prompt(fill: ProjectProperties, organizationOptional: Boolean)
 	{
 		val properties =
 			(NameKey, NameLabel, None, false) :: 
@@ -81,9 +73,9 @@ private object ProjectProperties
 			Nil
 		for( (key, label, default, optional) <- properties)
 		{
-			val value = fill.getProperty(key)
+			val value = fill(key)
 			if(value == null && !optional)
-				fill.setProperty(key, readLine(label, default))
+				fill(key) = readLine(label, default)
 		}
 	}
 	private def readLine(label: String, default: Option[String]): String =
@@ -113,4 +105,34 @@ private object ProjectProperties
 			else
 				Some(trimmed)
 		}
+}
+
+import java.io.{FileInputStream, FileOutputStream}
+import java.util.Properties
+private class ProjectProperties(file: File) extends NotNull
+{
+	private[this] var modified = false
+	private[this] val properties = new Properties
+	if(file.exists)
+	{
+		val in = new FileInputStream(file)
+		try { properties.load(in) } finally { in.close() }
+	}
+	
+	def update(key: String, value: String)
+	{
+		modified = true
+		properties.setProperty(key, value)
+	}
+	def apply(key: String) = properties.getProperty(key)
+	def save()
+	{
+		if(modified)
+		{
+			file.getParentFile.mkdirs()
+			val out = new FileOutputStream(file)
+			try { properties.store(out, "Project Properties") } finally { out.close() }
+			modified = false
+		}
+	}
 }
