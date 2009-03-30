@@ -133,13 +133,10 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		}
 	}
 	
-	
-	// not ready for external use yet
-	protected[sbt] def scalaJars: Iterable[java.io.File] =
+	protected def scalaJars: Iterable[java.io.File] =
 	{
 		val externalJars = mainCompileConditional.analysis.allExternals.filter(ClasspathUtilities.isArchive)
-		//For now, just include scala-library.jar
-		externalJars.filter(_.getName == "scala-library.jar")
+		externalJars.filter(BasicScalaProject.ScalaJarNames contains _.getName)
 	}
 		
 	/** The list of test frameworks to use for testing.  Note that adding frameworks to this list
@@ -195,6 +192,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		testQuickMethod(testCompileConditional.analysis, testOptions)(options => defaultTestTask(quickOptions(failedOnly) ::: options.toList))
 	protected def defaultTestTask(testOptions: => Seq[TestOption]) =
 		testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
+		
+	override protected def publishLocalAction = super.publishLocalAction dependsOn(`package`)
 	
 	protected def packageAction = packageTask(mainClasses +++ mainResources, outputPath, defaultJarName, packageOptions).dependsOn(compile) describedAs PackageDescription
 	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription
@@ -206,38 +205,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	protected def docAllAction = (doc && docTest) describedAs DocAllDescription
 	protected def packageAllAction = task { None } dependsOn(`package`, packageTest, packageSrc, packageTestSrc, packageDocs) describedAs PackageAllDescription
 	protected def graphAction = graphTask(graphPath, mainCompileConditional.analysis).dependsOn(compile)
-	protected def updateAction = updateTask(outputPattern, managedDependencyPath, updateOptions) describedAs UpdateDescription
-	protected def cleanLibAction = cleanLibTask(managedDependencyPath) describedAs CleanLibDescription
-	protected def cleanCacheAction = cleanCacheTask(managedDependencyPath, updateOptions) describedAs CleanCacheDescription
 	protected def incrementVersionAction = task { incrementVersionNumber(); None } describedAs IncrementVersionDescription
 	protected def releaseAction = (test && packageAll && incrementVersion) describedAs ReleaseDescription
-	
-	protected def deliverProjectDependencies =
-	{
-		val interDependencies = new scala.collection.mutable.ListBuffer[ModuleID]
-		dependencies.foreach(dep => dep match { case mp: ManagedProject => interDependencies += mp.projectID; case _ => () })
-		interDependencies.readOnly
-	}
-	protected def makePomAction = makePomTask(outputPath / "pom.xml", deliverProjectDependencies, updateOptions)
-	protected def deliverLocalAction = deliverTask(publishLocalConfiguration, updateOptions)
-	protected def publishLocalAction = publishTask(publishLocalConfiguration, updateOptions) dependsOn(`package`, deliverLocal)
-	protected def publishLocalConfiguration = new DefaultPublishConfiguration("local", "release")
-	protected class DefaultPublishConfiguration(val resolverName: String, val status: String) extends PublishConfiguration
-	{
-		protected def deliveredPathPattern = outputPath / "[artifact]-[revision].[ext]"
-		def deliveredPattern = deliveredPathPattern.relativePath
-		def srcArtifactPatterns: Iterable[String] =
-		{
-			val pathPatterns =
-				(outputPath / "[artifact]-[revision]-[type].[ext]") ::
-				(outputPath / "[artifact]-[revision].[ext]") ::
-				Nil
-			pathPatterns.map(_.relativePath)
-		}
-		def extraDependencies: Iterable[ModuleID] = Nil//deliverProjectDependencies
-		/**  The configurations to include in the publish/deliver action: specify none for all configurations. */
-		def configurations: Option[Iterable[Configuration]] = None
-	}
 	
 	lazy val compile = compileAction
 	lazy val testCompile = testCompileAction
@@ -257,12 +226,6 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	lazy val docAll = docAllAction
 	lazy val packageAll = packageAllAction
 	lazy val graph = graphAction
-	lazy val update = updateAction
-	lazy val makePom = makePomAction
-	lazy val deliverLocal = deliverLocalAction
-	lazy val publishLocal = publishLocalAction
-	lazy val cleanLib = cleanLibAction
-	lazy val cleanCache = cleanCacheAction
 	lazy val incrementVersion = incrementVersionAction
 	lazy val release = releaseAction
 
@@ -283,7 +246,6 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	/** The directories to which a project writes are listed here and is used
 	* to check a project and its dependencies for collisions.*/
 	override def outputDirectories = outputPath :: managedDependencyPath :: Nil
-	override def historyPath = Some(outputPath / ".history")
 }
 abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProject with WebProjectPaths
 {
@@ -358,16 +320,12 @@ object BasicScalaProject
 		"Executes all package tasks except package-project."
 	val DocAllDescription =
 		"Generates both main and test documentation."
-	val UpdateDescription =
-		"Resolves and retrieves automatically managed dependencies."
-	val CleanLibDescription =
-		"Deletes the managed library directory."
-	val CleanCacheDescription =
-		"Deletes the cache of artifacts downloaded for automatically managed dependencies."
 	val IncrementVersionDescription =
 		"Increments the micro part of the version (the third number) by one. (This is only valid for versions of the form #.#.#-*)"
 	val ReleaseDescription =
 		"Compiles, tests, generates documentation, packages, and increments the version."
+		
+	lazy val ScalaJarNames = Set("scala-library.jar", "scala-compiler.jar")
 }
 object BasicWebScalaProject
 {
@@ -378,25 +336,14 @@ object BasicWebScalaProject
 	val JettyRunDescription =
 		"Starts the Jetty server and serves this project as a web application."
 }
-trait BasicDependencyPaths extends Project
-{
-	import BasicProjectPaths._
-	def dependencyDirectoryName = DefaultDependencyDirectoryName
-	def managedDirectoryName = DefaultManagedDirectoryName
-	def dependencyPath = path(dependencyDirectoryName)
-	def managedDependencyPath = path(managedDirectoryName)
-}
 trait BasicProjectPaths extends Project
 {
 	import BasicProjectPaths._
-	
-	//////////// Paths ///////////
 	
 	def defaultJarBaseName = name + "-" + version.toString
 	def defaultJarName = defaultJarBaseName + ".jar"
 	def defaultWarName = defaultJarBaseName + ".war"
 	
-	def outputDirectoryName = DefaultOutputDirectoryName
 	def sourceDirectoryName = DefaultSourceDirectoryName
 	def mainDirectoryName = DefaultMainDirectoryName
 	def scalaDirectoryName = DefaultScalaDirectoryName
@@ -410,7 +357,6 @@ trait BasicProjectPaths extends Project
 	def mainAnalysisDirectoryName = DefaultMainAnalysisDirectoryName
 	def testAnalysisDirectoryName = DefaultTestAnalysisDirectoryName
 	
-	def outputPath = path(outputDirectoryName)
 	def sourcePath = path(sourceDirectoryName)
 	def bootPath = path(BootDirectoryName)
 	
@@ -434,13 +380,11 @@ trait BasicProjectPaths extends Project
 object BasicProjectPaths
 {
 	val DefaultSourceDirectoryName = "src"
-	val DefaultOutputDirectoryName = "target"
 	val DefaultMainCompileDirectoryName = "classes"
 	val DefaultTestCompileDirectoryName = "test-classes"
 	val DefaultDocDirectoryName = "doc"
 	val DefaultAPIDirectoryName = "api"
 	val DefaultGraphDirectoryName = "graph"
-	val DefaultManagedDirectoryName = "lib_managed"
 	val DefaultMainAnalysisDirectoryName = "analysis"
 	val DefaultTestAnalysisDirectoryName = "test-analysis"
 	
@@ -448,8 +392,11 @@ object BasicProjectPaths
 	val DefaultScalaDirectoryName = "scala"
 	val DefaultResourcesDirectoryName = "resources"
 	val DefaultTestDirectoryName = "test"
-	val DefaultDependencyDirectoryName = "lib"
-	val BootDirectoryName = "boot"
+	
+	// forwarders to new locations
+	def BootDirectoryName = Project.BootDirectoryName
+	def DefaultManagedDirectoryName = BasicDependencyPaths.DefaultManagedDirectoryName
+	def DefaultDependencyDirectoryName = BasicDependencyPaths.DefaultDependencyDirectoryName
 }
 trait WebProjectPaths extends BasicProjectPaths
 {

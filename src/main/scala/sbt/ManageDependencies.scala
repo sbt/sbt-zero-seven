@@ -5,17 +5,19 @@ package sbt
 
 import java.io.File
 import java.net.URL
+import java.util.Collections
 
 import org.apache.ivy.{core, plugins, util, Ivy}
 import core.LogOptions
 import core.deliver.DeliverOptions
 import core.module.descriptor.{DefaultArtifact, DefaultDependencyDescriptor, DefaultModuleDescriptor, MDArtifact, ModuleDescriptor}
-import core.module.id.ModuleRevisionId
+import core.module.descriptor.{DefaultExcludeRule, ExcludeRule}
+import core.module.id.{ArtifactId,ModuleId, ModuleRevisionId}
 import core.publish.PublishOptions
 import core.resolve.ResolveOptions
 import core.retrieve.RetrieveOptions
 import core.settings.IvySettings
-import plugins.matcher.PatternMatcher
+import plugins.matcher.{ExactPatternMatcher, PatternMatcher}
 import plugins.parser.ModuleDescriptorParser
 import plugins.parser.m2.{PomModuleDescriptorParser,PomModuleDescriptorWriter}
 import plugins.parser.xml.XmlModuleDescriptorParser
@@ -26,13 +28,16 @@ import util.{Message, MessageLogger}
 
 final class IvyPaths(val projectDirectory: Path, val managedLibDirectory: Path, val cacheDirectory: Option[Path]) extends NotNull
 final class IvyFlags(val validate: Boolean, val addScalaTools: Boolean, val errorIfNoConfiguration: Boolean) extends NotNull
-final class IvyConfiguration(val paths: IvyPaths, val manager: Manager, val flags: IvyFlags, val log: Logger) extends NotNull
+final class IvyConfiguration(val paths: IvyPaths, val manager: Manager, val flags: IvyFlags, val scalaVersion: Option[String], val log: Logger) extends NotNull
 final class UpdateConfiguration(val outputPattern: String, val synchronize: Boolean, val quiet: Boolean) extends NotNull
 object ManageDependencies
 {
 	val DefaultIvyConfigFilename = "ivysettings.xml"
 	val DefaultIvyFilename = "ivy.xml"
 	val DefaultMavenFilename = "pom.xml"
+	val ScalaOrganization = "org.scala-lang"
+	val ScalaLibraryID = "scala-library"
+	val ScalaCompilerID = "scala-compiler"
 	
 	private def defaultIvyFile(project: Path) = project / DefaultIvyFilename
 	private def defaultIvyConfiguration(project: Path) = project / DefaultIvyConfigFilename
@@ -155,7 +160,7 @@ object ManageDependencies
 		}
 		/** Creates an Ivy module descriptor according the manager configured.  The default configuration for dependencies
 		* is also returned.*/
-		def moduleDescriptor =
+		def moduleDescriptor: Either[String, (ModuleDescriptor, String)] =
 			config.manager match
 			{
 				case mm: MavenManager =>
@@ -219,13 +224,66 @@ object ManageDependencies
 				{dependencies}
 			</ivy-module>
 		}
+		def checkModule(moduleAndConf: (ModuleDescriptor, String)): Either[String, (ModuleDescriptor, String)] =
+			scalaVersion match
+			{
+				case None => Right(moduleAndConf)
+				case Some(checkScalaVersion) =>
+					val (module, conf) = moduleAndConf
+					checkDependencies(module, checkScalaVersion) match
+					{
+						case None =>
+							val asDefault = toDefaultModuleDescriptor(module)
+							excludeScalaJars(asDefault)
+							Right( (asDefault, conf) )
+						case Some(err) => Left(err)
+					}
+			}
 		
 		this.synchronized // Ivy is not thread-safe.  In particular, it uses a static DocumentBuilder, which is not thread-safe
 		{
 			ivy.pushContext()
-			try { moduleDescriptor.right.flatMap(mdAndConf => doWithIvy(ivy, mdAndConf._1, mdAndConf._2)) }
+			try
+			{
+				moduleDescriptor.right.flatMap(checkModule).right.flatMap { mdAndConf =>
+					doWithIvy(ivy, mdAndConf._1, mdAndConf._2)
+				}
+			}
 			finally { ivy.popContext() }
 		}
+	}
+	/** Checks the immediate dependencies of module for dependencies on scala jars and verifies that the version on the
+	* dependencies matches the version on the project. */
+	private def checkDependencies(module: ModuleDescriptor, scalaVersion: String): Option[String] =
+	{
+		Control.lazyFold(module.getDependencies.toList)
+		{ dep =>
+			val id = dep.getDependencyRevisionId
+			if(id.getOrganisation == ScalaOrganization && id.getRevision != scalaVersion)
+				Some("Different Scala version specified in dependency ("+ id.getRevision + ") than in project (" + scalaVersion + ").")
+			else
+				None
+		}
+	}
+	/** Adds exclusions for the scala library and compiler jars so that they are not downloaded.  This is
+	* done because these jars are already on the classpath and cannot/should not be overridden.  The version
+	* of Scala to use is done by setting scala.version in the project definition. */
+	private def excludeScalaJars(module: DefaultModuleDescriptor)
+	{
+		val configurationNames = module.getConfigurationsNames
+		def excludeScalaJar(name: String)
+			{ module.addExcludeRule(excludeRule(ScalaOrganization, name, configurationNames)) }
+		excludeScalaJar(ScalaLibraryID)
+		excludeScalaJar(ScalaCompilerID)
+	}
+	/** Creates an ExcludeRule that excludes artifacts with the given module organization and name for
+	* the given configurations. */
+	private def excludeRule(organization: String, name: String, configurationNames: Iterable[String]): ExcludeRule =
+	{
+		val artifact = new ArtifactId(ModuleId.newInstance(organization, name), "*", "*", "*")
+		val rule = new DefaultExcludeRule(artifact, ExactPatternMatcher.INSTANCE, Collections.emptyMap[AnyRef,AnyRef])
+		configurationNames.foreach(rule.addConfiguration)
+		rule
 	}
 	/** Clears the Ivy cache, as configured by 'config'. */
 	def cleanCache(config: IvyConfiguration) =

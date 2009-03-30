@@ -27,7 +27,7 @@ trait ClasspathProject extends Project
 			set.toList
 		}
 }
-trait BasicDependencyProject extends BasicManagedProject with UnmanagedClasspathProject with BasicDependencyPaths
+trait BasicDependencyProject extends BasicManagedProject with UnmanagedClasspathProject
 {
 	/** This returns the classpath for only this project for the given configuration.*/
 	def projectClasspath(config: Configuration) = fullUnmanagedClasspath(config) +++ managedClasspath(config)
@@ -94,9 +94,15 @@ trait ManagedProject extends ClasspathProject
 		}
 		val ivyPaths = new IvyPaths(info.projectPath, managedDependencyPath, cacheDirectory)
 		val ivyFlags = new IvyFlags(validate, addScalaTools, errorIfNoConfiguration)
-		val ivyConfiguration = new IvyConfiguration(ivyPaths, manager, ivyFlags, log)
+		val ivyConfiguration = new IvyConfiguration(ivyPaths, manager, ivyFlags, getScalaVersion, log)
 		val updateConfiguration = new UpdateConfiguration(outputPattern, synchronize, quiet)
 		doWith(ivyConfiguration, updateConfiguration)
+	}
+	private def getScalaVersion =
+	{
+		val v = scalaVersion.value
+		if(v.isEmpty) None
+		else Some(v)
 	}
 	private def withIvyTask(doTask: => Option[String]) =
 		task
@@ -194,8 +200,9 @@ trait PublishConfiguration extends NotNull
 	def configurations: Option[Iterable[Configuration]]
 }
 	
-trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject
+trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject with BasicDependencyPaths
 {
+	import BasicManagedProject._
 	/** The dependency manager that represents inline declarations.  The default manager packages the information
 	* from 'ivyXML', 'projectID', 'repositories', and 'libraryDependencies' and does not typically need to be
 	* be overridden. */
@@ -256,6 +263,68 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject
 		else
 			superClasspath
 	}
+	
+	protected def updateAction = updateTask(outputPattern, managedDependencyPath, updateOptions) describedAs UpdateDescription
+	protected def cleanLibAction = cleanLibTask(managedDependencyPath) describedAs CleanLibDescription
+	protected def cleanCacheAction = cleanCacheTask(managedDependencyPath, updateOptions) describedAs CleanCacheDescription
+	
+	protected def deliverProjectDependencies =
+	{
+		val interDependencies = new scala.collection.mutable.ListBuffer[ModuleID]
+		dependencies.foreach(dep => dep match { case mp: ManagedProject => interDependencies += mp.projectID; case _ => () })
+		interDependencies.readOnly
+	}
+	protected def makePomAction = makePomTask(outputPath / "pom.xml", deliverProjectDependencies, updateOptions)
+	protected def deliverLocalAction = deliverTask(publishLocalConfiguration, updateOptions)
+	protected def publishLocalAction = publishTask(publishLocalConfiguration, updateOptions) dependsOn(deliverLocal)
+	protected def publishLocalConfiguration = new DefaultPublishConfiguration("local", "release")
+	protected class DefaultPublishConfiguration(val resolverName: String, val status: String) extends PublishConfiguration
+	{
+		protected def deliveredPathPattern = outputPath / "[artifact]-[revision].[ext]"
+		def deliveredPattern = deliveredPathPattern.relativePath
+		def srcArtifactPatterns: Iterable[String] =
+		{
+			val pathPatterns =
+				(outputPath / "[artifact]-[revision]-[type].[ext]") ::
+				(outputPath / "[artifact]-[revision].[ext]") ::
+				Nil
+			pathPatterns.map(_.relativePath)
+		}
+		def extraDependencies: Iterable[ModuleID] = Nil//deliverProjectDependencies
+		/**  The configurations to include in the publish/deliver action: specify none for all configurations. */
+		def configurations: Option[Iterable[Configuration]] = None
+	}
+	
+	lazy val update = updateAction
+	lazy val makePom = makePomAction
+	lazy val deliverLocal = deliverLocalAction
+	lazy val publishLocal = publishLocalAction
+	lazy val cleanLib = cleanLibAction
+	lazy val cleanCache = cleanCacheAction
+}
+
+object BasicManagedProject
+{
+	val UpdateDescription =
+		"Resolves and retrieves automatically managed dependencies."
+	val CleanLibDescription =
+		"Deletes the managed library directory."
+	val CleanCacheDescription =
+		"Deletes the cache of artifacts downloaded for automatically managed dependencies."
+}
+
+trait BasicDependencyPaths extends Project
+{
+	import BasicDependencyPaths._
+	def dependencyDirectoryName = DefaultDependencyDirectoryName
+	def managedDirectoryName = DefaultManagedDirectoryName
+	def dependencyPath = path(dependencyDirectoryName)
+	def managedDependencyPath = path(managedDirectoryName)
+}
+object BasicDependencyPaths
+{
+	val DefaultManagedDirectoryName = "lib_managed"
+	val DefaultDependencyDirectoryName = "lib"
 }
 
 object StringUtilities
@@ -333,7 +402,7 @@ class ParentProject(val info: ProjectInfo) extends BasicDependencyProject
 	def dependencies = info.dependencies ++ subProjects.values.toList
 	/** The directories to which a project writes are listed here and is used
 	* to check a project and its dependencies for collisions.*/
-	override def outputDirectories = managedDependencyPath :: Nil
+	override def outputDirectories = managedDependencyPath :: outputPath :: Nil
 	def fullUnmanagedClasspath(config: Configuration) = unmanagedClasspath
 }
 

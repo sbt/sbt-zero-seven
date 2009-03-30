@@ -8,7 +8,6 @@ final class BuilderProject(val info: ProjectInfo, override protected val logImpl
 {	
 	import BasicProjectPaths._
 	
-	def outputPath = path(DefaultOutputDirectoryName)
 	def compilePath = outputPath / DefaultMainCompileDirectoryName
 	def sourcePath = path(DefaultSourceDirectoryName)
 	def mainResourcesPath = path(DefaultResourcesDirectoryName)

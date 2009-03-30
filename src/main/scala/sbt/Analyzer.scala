@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
@@ -40,7 +40,7 @@ class Analyzer(val global: Global) extends Plugin
 			error("Callback ID not specified.")
 	}
 
-	override val optionsHelp: Option[String] = 
+	override val optionsHelp: Option[String] =
 	{
 		val prefix = "  -P:" + name + ":"
 		Some(prefix + CallbackIDOptionName + "<callback-id>            Set the callback id.\n")
@@ -60,7 +60,7 @@ class Analyzer(val global: Global) extends Plugin
 	private object runsBefore { def :: (s: String) = s }
 	private abstract class CompatiblePluginComponent(afterPhase: String) extends PluginComponent
 	{
-		val runsAfter = afterPhase :: runsBefore
+		override val runsAfter = afterPhase :: runsBefore
 	}
 	/* ================================================== */
 	

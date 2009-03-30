@@ -89,6 +89,8 @@ object Main
 	private def startProject(project: Project, args: Array[String], startTime: Long): RunCompleteAction =
 	{
 		project.log.info("Building project " + project.name + " " + project.version.toString + " using " + project.getClass.getName)
+		for(sbtVersion <- project.sbtVersion.get; scalaVersion <- project.scalaVersion.get if !sbtVersion.isEmpty  && !scalaVersion.isEmpty)
+			project.log.info("   with sbt " + sbtVersion + " and Scala " + scalaVersion)
 		if(args.length == 0)
 		{
 			project.log.info("No actions specified, interactive session started. Execute 'help' for more information.")
@@ -499,7 +501,15 @@ object Main
 						try
 						{
 							property.setStringValue(newValue)
-							Console.println(" Set property '" + name + "' = '" + newValue + "'")
+							val isScalaVersion = property == project.scalaVersion
+							val isSbtVersion = property == project.sbtVersion
+							if(isScalaVersion || isSbtVersion)
+							{
+								val changed = if(isSbtVersion) "sbt " else "Scala "
+								Console.println(" Build will use " + changed + newValue + " after running 'reboot' command or restarting sbt.")
+							}
+							else
+								Console.println(" Set property '" + name + "' = '" + newValue + "'")
 						}
 						catch { case e => project.log.error("Error setting property '" + name + "' in " + project.environmentLabel + ": " + e.toString) }
 					project.saveEnvironment()

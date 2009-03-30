@@ -168,12 +168,14 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	
 	/** The list of directories to which this project writes.  This is used to verify that multiple
 	* projects have not been defined with the same output directories. */
-	def outputDirectories: Iterable[Path] = Nil
+	def outputDirectories: Iterable[Path] = outputPath :: Nil
 	
 	/** The path to the file that provides persistence for properties.*/
 	final def envBackingPath = info.builderPath / Project.DefaultEnvBackingName
 	/** The path to the file that provides persistence for history. */
-	def historyPath: Option[Path] = None
+	def historyPath = Some(outputPath / ".history")
+	def outputPath = path(outputDirectoryName)
+	def outputDirectoryName = DefaultOutputDirectoryName
 	
 	private def getProject(result: LoadResult, path: Path): Project =
 		result match
@@ -212,6 +214,8 @@ private[sbt] final class LoadSetupError(val message: String) extends LoadResult
 
 object Project
 {
+	val BootDirectoryName = "boot"
+	val DefaultOutputDirectoryName = "target"
 	val DefaultEnvBackingName = "build.properties"
 	val DefaultBuilderClassName = "sbt.DefaultProject"
 	val DefaultBuilderClass = Class.forName(DefaultBuilderClassName).asSubclass(classOf[Project])
