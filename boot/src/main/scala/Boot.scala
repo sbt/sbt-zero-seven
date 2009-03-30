@@ -119,17 +119,15 @@ private class Setup extends NotNull
 		}
 	}
 	
-	final def classpath(): Array[URL] =
-	{
-		val (scalaVersion, sbtVersion) = ProjectProperties(PropertiesFile, false)
-		updateVersions(scalaVersion, sbtVersion).toArray
-	}
 	/** Checks that the requested version of sbt and scala have been downloaded.
 	* It performs a simple check that the appropriate directories exist.  It does
 	* not actually verify that appropriate classes are resolvable.  It uses Ivy
 	* to resolve and retrieve any necessary libraries. The classpath to use is returned.*/
-	private def updateVersions(scalaVersion: String, sbtVersion: String) =
+	final def classpath(): Array[URL] = classpath(Nil)
+	private final def classpath(forcePrompt: Seq[String]): Array[URL] =
 	{
+		val (scalaVersion, sbtVersion) = ProjectProperties.forcePrompt(PropertiesFile, forcePrompt : _*)
+		
 		val baseDirectory = new File(BootDirectory, baseDirectoryName(scalaVersion))
 		System.setProperty(ScalaHomeProperty, baseDirectory.getAbsolutePath)
 		val scalaDirectory = new File(baseDirectory, ScalaDirectoryName)
@@ -137,18 +135,27 @@ private class Setup extends NotNull
 		
 		val targets = checkTarget(scalaDirectory, UpdateScala) ::: checkTarget(sbtDirectory, UpdateSbt)
 		Update(baseDirectory, sbtVersion, scalaVersion, targets: _*)
-		verifyUpdated("Scala " + scalaVersion, scalaDirectory)
-		verifyUpdated("Sbt " + sbtVersion, sbtDirectory)
-		getJars(scalaDirectory, sbtDirectory)
+		
+		
+		def checkFailure(dir: File, label: String, key: String) = if(dir.exists) Success else new Failure(label, List(key) )
+		import ProjectProperties.{ScalaVersionKey, SbtVersionKey}
+		val sbtFailed = checkFailure(sbtDirectory, "sbt " + sbtVersion, SbtVersionKey)
+		val scalaFailed = checkFailure(scalaDirectory, "Scala " + scalaVersion, ScalaVersionKey)
+		(scalaFailed ++ sbtFailed) match
+		{
+			case Success => getJars(scalaDirectory, sbtDirectory).toArray
+			case f: Failure =>
+				val noRetrieveMessage = "Could not retrieve " + f.label + "."
+				val getNewVersions = Console.readLine(noRetrieveMessage + " Select different version? (y/N) : ")
+				if(isYes(getNewVersions))
+					classpath(f.keys)
+				else
+					throw new BootException(noRetrieveMessage)
+		}
 	}
 }
 private object Setup
 {
-	private def verifyUpdated(label: String, dir: File)
-	{
-		if(!dir.exists)
-			retrieveError(label, dir)
-	}
 	private def checkTarget(dir: File, target: UpdateTarget.Value) = if(!dir.exists) target :: Nil else Nil
 	private def isYes(s: String) =
 		s != null &&
@@ -156,8 +163,6 @@ private object Setup
 			val trimmed = s.trim.toLowerCase
 			trimmed == "y" || trimmed == "yes"
 		}
-	private def retrieveError(name: String, directory: File) =
-		throw new BootException(name + " was not properly retrieved.  (Check that the version is valid.)")
 	private def getJars(directories: File*) = directories.flatMap(file => wrapNull(file.listFiles(JarFilter))).map(_.toURI.toURL)
 	private def wrapNull(a: Array[File]): Array[File] = if(a == null) Array() else a
 }
@@ -165,4 +170,16 @@ private object Setup
 private object JarFilter extends FileFilter
 {
 	def accept(file: File) = !file.isDirectory && file.getName.endsWith(".jar")
+}
+
+private sealed trait Checked extends NotNull { def ++(o: Checked): Checked }
+private final object Success extends Checked { def ++(o: Checked) = o }
+private final class Failure(val label: String, val keys: List[String]) extends Checked
+{
+	def ++(o: Checked) =
+		o match
+		{
+			case Success => this
+			case f: Failure => new Failure(label + " and " + f.label, keys ::: f.keys)
+		}
 }

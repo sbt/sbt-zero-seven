@@ -51,10 +51,13 @@ private object ProjectProperties
 	val DefaultScalaVersion = "2.7.3"
 
 	// (scala version, sbt version)
-	def apply(file: File, setInitializeProject: Boolean): (String, String) =
+	def apply(file: File, setInitializeProject: Boolean): (String, String) = applyImpl(file, setInitializeProject, Nil)
+	def forcePrompt(file: File, propertyKeys: String*) = applyImpl(file, false, propertyKeys)
+	private def applyImpl(file: File, setInitializeProject: Boolean, propertyKeys: Iterable[String]): (String, String) =
 	{
 		val organizationOptional = file.exists
 		val properties = new ProjectProperties(file)
+		properties -= propertyKeys
 		
 		prompt(properties, organizationOptional)
 		if(setInitializeProject)
@@ -62,7 +65,7 @@ private object ProjectProperties
 		properties.save
 		(properties(ScalaVersionKey), properties(SbtVersionKey))
 	}
-	def prompt(fill: ProjectProperties, organizationOptional: Boolean)
+	private def prompt(fill: ProjectProperties, organizationOptional: Boolean)
 	{
 		val properties =
 			(NameKey, NameLabel, None, false) :: 
@@ -135,4 +138,5 @@ private class ProjectProperties(file: File) extends NotNull
 			modified = false
 		}
 	}
+	def -= (keys: Iterable[String]) {  for(key <- keys) properties.remove(key)  }
 }
