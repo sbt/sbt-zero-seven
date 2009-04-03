@@ -76,7 +76,7 @@ protected/* protected required until sbt 0.4.1, which will properly ignore abstr
 	private val conf_2_7_3 = config(version2_7_3)
 	private val conf_2_8_0 = config(version2_8_0)
 	// the list of all configurations to cross-compile against
-	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 ::/* conf_2_8_0 ::*/ Nil
+	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_8_0 :: Nil
 	
 	/** The lib directory is now only for building using the 'build' script.*/
 	override def unmanagedClasspath = path("ignore_lib_directory")
