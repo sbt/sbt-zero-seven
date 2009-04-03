@@ -119,6 +119,12 @@ src/test/resources/sbt-test-resources/project/lib/changes/LibTestProject.scala -
 src/test/resources/sbt-test-resources/project/lib/project/build.properties -text
 src/test/resources/sbt-test-resources/project/lib/src/main/scala/Test.scala -text
 src/test/resources/sbt-test-resources/project/lib/test -text
+src/test/resources/sbt-test-resources/project/multi/changes/MultiProject.scala -text
+src/test/resources/sbt-test-resources/project/multi/changes/SingleAndTraitProject.scala -text
+src/test/resources/sbt-test-resources/project/multi/changes/SingleProject.scala -text
+src/test/resources/sbt-test-resources/project/multi/changes/SinglePublicProject.scala -text
+src/test/resources/sbt-test-resources/project/multi/project/build.properties -text
+src/test/resources/sbt-test-resources/project/multi/test -text
 src/test/resources/sbt-test-resources/properties/multi-project-a/project/build.properties -text
 src/test/resources/sbt-test-resources/properties/multi-project-a/project/build/src/TestProject.scala -text
 src/test/resources/sbt-test-resources/properties/multi-project-a/test -text
