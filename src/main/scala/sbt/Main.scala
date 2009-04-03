@@ -338,11 +338,11 @@ object Main
 		{
 			case Left(errMsg) => project.log.error(errMsg); false
 			case Right((name, parameters)) =>
-				if(project.methodNames.toSeq.contains(name))
+				if(project.methods.contains(name))
 					ifMethod(name, parameters.toArray)
 				else if(!parameters.isEmpty)
 					didNotExist("method", name)
-				else if(project.taskNames.toSeq.contains(name))
+				else if(project.deepTasks.contains(name))
 					ifAction(name)
 				else
 					didNotExist("action", name)
