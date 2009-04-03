@@ -55,7 +55,4 @@ protected class MainProject(val info: ProjectInfo) extends CrossCompileProject
 	{
 		def accept(group: String, name: String) = name == "multi"
 	}
-	
-	// enable parallel execution so that cross-compiling runs in parallel
-	override def parallelExecution = true
 }
