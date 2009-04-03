@@ -79,7 +79,7 @@ final class BuilderProject(val info: ProjectInfo, override protected val logImpl
 				log.debug("No project definitions detected using default project.")
 				Right(None)
 			case singleDefinition :: Nil => Right(Some(singleDefinition))
-			case _ =>Left("Multiple project definitions detected: expecting explicit configuration.")
+			case multipleDefinitions =>Left(multipleDefinitions.mkString("Multiple project definitions detected: \n\t","\n\t","\n"))
 		}
 	}
 }
