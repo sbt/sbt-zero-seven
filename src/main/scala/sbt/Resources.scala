@@ -54,7 +54,7 @@ class Resources(val baseDirectory: File)
 		def readWrite(readOnly: File)(temporary: File): Either[String, T] =
 		{
 			val readWriteDirectory = new File(temporary, readOnly.getName)
-			FileUtilities.copyDirectory(readOnly, readWriteDirectory, log).toLeft(()).right flatMap { x => 
+			FileUtilities.copyDirectory(readOnly, readWriteDirectory, log).toLeft(()).right flatMap { x =>
 				withDirectory(readWriteDirectory)
 			}
 		}
@@ -66,22 +66,44 @@ class Resources(val baseDirectory: File)
 	def withProject[T](group: String, name: String, log: Logger)(f: Project => WithProjectResult[T]): Either[String, T] =
 		readWriteResourceDirectory(group, name, log)(withProject(log)(f))
 	def withProject[T](log: Logger)(f: Project => WithProjectResult[T])(dir: File): Either[String, T] =
-		withProject(log, Left(LoadErrorPrefix), dir )(f)
-	private def withProject[T](log: Logger, useProject: Either[String,Project], dir: File)(f: Project => WithProjectResult[T]): Either[String, T] =
+		withProject(log, None, new ReloadSuccessExpected(LoadErrorPrefix), dir )(f)
+	private def withProject[T](log: Logger, previousProject: Option[Project], reload: ReloadProject, dir: File)
+		(f: Project => WithProjectResult[T]): Either[String, T] =
 	{
+		require(previousProject.isDefined || reload != NoReload, "Previous project undefined and reload not requested.")
 		val loadResult =
-			useProject.left.flatMap { reloadPrefixIfError =>
+			if(reload == NoReload && previousProject.isDefined)
+				Right(previousProject.get)
+			else
+			{
 				val buffered = new BufferedLogger(log)
+				def error(msg: String) =
+				{
+					buffered.playAll()
+					buffered.stop()
+					Left(msg)
+				}
+				
 				buffered.startRecording()
 				resultToEither(Project.loadProject(dir, Nil, None, buffered)) match
 				{
 					case Left(msg) =>
-						buffered.playAll()
-						buffered.stop()
-						Left(reloadPrefixIfError + msg)
-					case Right(p) => 
-						buffered.stop()
-						Right(p)
+						reload match
+						{
+							case ReloadErrorExpected =>
+								buffered.stop()
+								previousProject.toRight("Initial project load failed.")
+							case s: ReloadSuccessExpected => error(s.prefixIfError + msg)
+							case NoReload /* shouldn't happen */=> error(msg)
+						}
+					case Right(p) =>
+						reload match
+						{
+							case ReloadErrorExpected => error("Expected project load failure, but it succeeded.")
+							case _ =>
+								buffered.stop()
+								Right(p)
+						}
 				}
 			}
 		loadResult match
@@ -89,7 +111,7 @@ class Resources(val baseDirectory: File)
 			case Right(project) =>
 				f(project) match
 				{
-					case ContinueResult(newF, reloadAndPrefixIfError) => withProject(log, reloadAndPrefixIfError.toLeft(project), dir)(newF)
+					case ContinueResult(newF, newReload) => withProject(log, Some(project), newReload, dir)(newF)
 					case ValueResult(value) => Right(value)
 					case err: ErrorResult => Left(err.message)
 				}
@@ -106,7 +128,20 @@ class Resources(val baseDirectory: File)
 			case LoadSetupDeclined => Left("Setup declined")
 		}
 }
+sealed trait ReloadProject extends NotNull
+final object ReloadErrorExpected extends ReloadProject
+final class ReloadSuccessExpected(val prefixIfError: String) extends ReloadProject
+final object NoReload extends ReloadProject
+
 sealed trait WithProjectResult[+T] extends NotNull
-final case class ContinueResult[T](f: Project => WithProjectResult[T], reloadAndPrefixIfError: Option[String]) extends WithProjectResult[T]
+final case class ContinueResult[T](f: Project => WithProjectResult[T], reload: ReloadProject) extends WithProjectResult[T]
 final case class ValueResult[T](value: T) extends WithProjectResult[T]
 final class ErrorResult(val message: String) extends WithProjectResult[Nothing]
+object ContinueResult
+{
+	def apply[T](f: Project => WithProjectResult[T], prefixIfError: Option[String]) =
+	{
+		val reload = prefixIfError match { case None => NoReload; case Some(p) => new ReloadSuccessExpected(p) }
+		new ContinueResult[T](f, reload)
+	}
+}
