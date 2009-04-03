@@ -17,7 +17,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	/** The class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
 	def mainClass: Option[String] = None
-	def dependencies = info.dependencies
+	def dependencies = info.dependencies ++ subProjects.values.toList
 
 	val mainCompileConditional = new CompileConditional(mainCompileConfiguration)
 	val testCompileConditional = new CompileConditional(testCompileConfiguration)
