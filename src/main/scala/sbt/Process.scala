@@ -37,7 +37,7 @@ object ProcessIO
 			if(i.read(buffer) >= 0)
 				readFully()
 		}
-		newThread(readFully())
+		newThread(try { readFully() } finally { i.close() })
 	}
 	private def newThread(action: => Unit)
 	{
@@ -48,21 +48,33 @@ object ProcessIO
 	// processLine will be called from a new thread
 	def processFully(processLine: String => Unit)(i: InputStream)
 	{
-		val reader = new BufferedReader(new InputStreamReader(i))
-		def readFully()
+		def readFully(reader: BufferedReader)
 		{
 			val line = reader.readLine()
 			if(line != null)
 			{
 				processLine(line)
-				readFully()
+				readFully(reader)
 			}
 		}
-		newThread(readFully())
+		withReader(i)(readFully)
 	}
-	def standard = new ProcessIO(close, processFully(System.out.println), processFully(System.err.println))
+	def fold[T](process: (T,String) => T, initial: T)(i: InputStream): T =
+	{
+		var v = initial
+		processFully( line => v = process(v, line)  )(i)
+		v
+	}
+	def standard: ProcessIO = standard(close)
+	def standard(toProcessInput: OutputStream => Unit): ProcessIO =
+		 new ProcessIO(toProcessInput, processFully(System.out.println), processFully(System.err.println))
+	private def withReader(i: InputStream)(f: BufferedReader =>Unit) =
+	{
+		val reader = new BufferedReader(new InputStreamReader(i))
+		newThread(try { f(reader) } finally { reader.close() })
+	}
 }
-final class ProcessRunner(command: String, arguments: Seq[String], options: ProcessOptions, io: ProcessIO) extends NotNull
+final class ProcessRunner(val command: String, val arguments: Seq[String], val options: ProcessOptions, val io: ProcessIO) extends NotNull
 {
 	require(!command.trim.isEmpty, "Command cannot be empty.")
 	def this(command: String, arguments: Seq[String], workingDirectory: File, redirectErrorStream: Boolean) =
@@ -96,8 +108,8 @@ final class ProcessRunner(command: String, arguments: Seq[String], options: Proc
 			
 		val process = builder.start()
 		import io._
-		connectOutput(process.getInputStream)
 		connectInput(process.getOutputStream)
+		connectOutput(process.getInputStream)
 		if(!options.redirectErrorStream)
 			connectError(process.getErrorStream)
 		new SProcess(process)
@@ -106,10 +118,6 @@ final class ProcessRunner(command: String, arguments: Seq[String], options: Proc
 }
 final class SProcess(p: Process) extends NotNull
 {
-	def exitValue(): Int =
-	{
-		p.waitFor()
-		p.exitValue
-	}
+	def exitValue(): Int = p.waitFor()
 	def destroy() { p.destroy }
 }
