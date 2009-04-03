@@ -49,6 +49,7 @@ sealed abstract class Path extends PathFinder with NotNull
 	/** The string representation of this path relative to the base directory.  The project directory is the
 	* default base directory if one is not specified explicitly using the <code>##</code> operator.*/
 	def relativePath: String
+	def absolutePath: String = asFile.getAbsolutePath
 	private[sbt] def prependTo(s: String): String
 	
 	/** Equality of Paths is defined in terms of the underlying <code>File</code>.*/
@@ -96,7 +97,7 @@ object Path
 	
 	/** Constructs a String representation of <code>Path</code>s.  The absolute path String of each <code>Path</code> is
 	* separated by the platform's path separator.*/
-	def makeString(paths: Iterable[Path]): String = paths.map(_.asFile.getAbsolutePath).mkString(pathSeparator)
+	def makeString(paths: Iterable[Path]): String = paths.map(_.absolutePath).mkString(pathSeparator)
 	
 	/** Constructs a String representation of <code>Path</code>s.  The relative path String of each <code>Path</code> is
 	* separated by the platform's path separator.*/
