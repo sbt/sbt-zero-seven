@@ -28,7 +28,7 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 				head(p) match
 				{
 					case Left(msg) => new ErrorResult(msg)
-					case Right(reload) => ContinueResult(evaluateList(tail), if(reload) Some(linePrefix(head)) else None)
+					case Right(reload) => ContinueResult(p =>evaluateList(tail)(p), if(reload) Some(linePrefix(head)) else None)
 				}
 		}
 
@@ -164,8 +164,10 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 		action match
 		{
 			case Nil => scriptError("No action specified.")
-			case head :: Nil => evaluate(successExpected, "Action '" + actionToString + "'", project)(project.act(head))
-			case head :: tail => evaluate(successExpected, "Method '" + actionToString + "'", project)(project.call(head, tail.toArray))
+			case head :: Nil if project.taskNames.toSeq.contains(head)=>
+					evaluate(successExpected, "Action '" + actionToString + "'", project)(project.act(head))
+			case head :: tail =>
+				evaluate(successExpected, "Method '" + actionToString + "'", project)(project.call(head, tail.toArray))
 		}
 	}
 	private def spacedString[T](l: Seq[T]) = l.mkString(" ")

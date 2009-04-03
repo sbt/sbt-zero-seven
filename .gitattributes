@@ -5,8 +5,6 @@ boot/LICENSE -text
 boot/NOTICE -text
 boot/licenses/LICENSE_Ivy -text
 boot/licenses/LICENSE_Scala -text
-boot/project/build.properties -text
-boot/project/build/src/LoaderProject.scala -text
 boot/src/main/scala/Boot.scala -text
 boot/src/main/scala/BootConfiguration.scala -text
 boot/src/main/scala/FilteredLoader.scala -text
@@ -27,7 +25,10 @@ licenses/LICENSE_ScalaCheck -text
 licenses/LICENSE_sbt -text
 licenses/LICENSE_specs -text
 project/build.properties -text
+project/build/src/CrossCompileProject.scala -text
+project/build/src/LoaderProject.scala -text
 project/build/src/SbtProject.scala -text
+project/build/src/ScriptedLoader.scala -text
 project/build/src/ScriptedTests.scala -text
 project/build/src/TestScriptParser.scala -text
 src/main/resources/scalac-plugin.xml -text

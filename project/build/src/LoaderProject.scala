@@ -1,12 +1,12 @@
-package sbt
-
 import sbt._
 
 import LoaderProject._
+
 // a project for the sbt launcher
 // the main content of this project definition is setting up and running proguard
 //   to combine and compact all dependencies into a single jar
-class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
+protected/* removes the ambiguity as to which project is the entry point by making this class non-public*/
+	class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 {
 	val mainClassName = "sbt.boot.Boot"
 	val baseName = "sbt-launcher"
@@ -33,7 +33,8 @@ class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 			FileUtilities.clean(outputJar :: Nil, log)
 			val proguardClasspath = managedClasspath(toolsConfig)
 			val proguardClasspathString = Path.makeString(proguardClasspath.get)
-			val p = new ProcessRunner("java", "-Xmx128M", "-cp", proguardClasspathString, "proguard.ProGuard", "@" + proguardConfigurationPath).logIO(log)
+			val configFile = proguardConfigurationPath.asFile.getAbsolutePath
+			val p = new ProcessRunner("java", "-Xmx128M", "-cp", proguardClasspathString, "proguard.ProGuard", "@" + configFile).logIO(log)
 			val exitValue = p.run.exitValue
 			if(exitValue == 0) None else Some("Proguard failed with nonzero exit code (" + exitValue + ")")
 		}
@@ -57,18 +58,24 @@ class LoaderProject(info: ProjectInfo) extends DefaultProject(info)
 				|-keep public class %s {
 				|    public static void main(java.lang.String[]);
 				|}"""
-			val scalaWorkaround = "scala-bug-1572-workaround.jar".asFile
 			
-			val defaultJar = (outputPath / defaultJarName).toString
+			val defaultJar = (outputPath / defaultJarName).asFile.getAbsolutePath
+			val ivyKeepOptions = ivyKeepResolvers.map("-keep public class " + _  + allPublic).mkString("\n")
+			val externalDependencies = mainCompileConditional.analysis.allExternals.map(_.getAbsoluteFile).filter(_.getName.endsWith(".jar"))
 			// pull out the Java rt.jar from the external jar dependencies of this project to put it in libraryjars
-			val (rtJar, externalJars) = mainCompileConditional.analysis.allExternals.filter(ClasspathUtilities.isArchive).toList.partition(jar => jar.getName == "rt.jar")
+			val (rtJar, externalJars) = externalDependencies.toList.partition(_.getName == "rt.jar")
 			// pull out Ivy in order to exclude resources inside
-			val (ivyJar, otherExternalJars) = externalJars.partition(jar => jar.getName.startsWith("ivy"))
+			val (ivyJars, otherExternalJars) = externalJars.partition(_.getName.startsWith("ivy"))
 			// exclude properties files and manifests from scala-library jar
 			val inJars = (defaultJar :: otherExternalJars.map( _ + "(!META-INF/**,!*.properties)")).map("-injars " + _).mkString("\n")
-			val ivyKeepOptions = ivyKeepResolvers.map("-keep public class " + _  + allPublic).mkString("\n")
-			val proguardConfiguration = outTemplate.stripMargin.format(rtJar.mkString, ivyJar.first, inJars, outputJar, ivyKeepOptions, mainClassName)
-			FileUtilities.write(proguardConfigurationPath.asFile, proguardConfiguration, log)
+			ivyJars match
+			{
+				case Nil => Some("Ivy not present (try running update)")
+				case ivyJar :: _ =>
+					val proguardConfiguration =
+						outTemplate.stripMargin.format(rtJar.mkString, ivyJar.getAbsolutePath, inJars, outputJar, ivyKeepOptions, mainClassName)
+					FileUtilities.write(proguardConfigurationPath.asFile, proguardConfiguration, log)
+			}
 		}
 	// class body declaration for proguard that keeps all public members
 	private val allPublic = " {\n public * ;\n}"
