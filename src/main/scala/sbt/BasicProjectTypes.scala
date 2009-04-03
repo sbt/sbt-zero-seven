@@ -67,6 +67,7 @@ trait ManagedProject extends ClasspathProject
 	final case class LibraryManager(m: Manager) extends ManagedOption
 	/** An update option that overrides the default Ivy cache location. */
 	final case class CacheDirectory(dir: Path) extends ManagedOption
+	final case class CheckScalaVersion(configs: Iterable[Configuration], checkExplicit: Boolean, filterImplicit: Boolean) extends ManagedOption
 	
 	private def withConfigurations(outputPattern: String, managedDependencyPath: Path, options: Seq[ManagedOption])
 		(doWith: (IvyConfiguration, UpdateConfiguration) => Option[String]) =
@@ -78,6 +79,7 @@ trait ManagedProject extends ClasspathProject
 		var errorIfNoConfiguration = false
 		var manager: Manager = new AutoDetectManager(projectID)
 		var cacheDirectory: Option[Path] = None
+		var checkScalaVersion: Option[IvyScala] = None
 		for(option <- options)
 		{
 			option match
@@ -89,12 +91,14 @@ trait ManagedProject extends ClasspathProject
 				case AddScalaToolsReleases => addScalaTools = true
 				case ErrorIfNoConfiguration => errorIfNoConfiguration = true
 				case CacheDirectory(dir) => cacheDirectory = Some(dir)
+				case CheckScalaVersion(configs, checkExplicit, filterImplicit) =>
+					checkScalaVersion = getScalaVersion.map(version => new IvyScala(version, configs, checkExplicit, filterImplicit))
 				case _ => log.warn("Ignored unknown managed option " + option)
 			}
 		}
 		val ivyPaths = new IvyPaths(info.projectPath, managedDependencyPath, cacheDirectory)
 		val ivyFlags = new IvyFlags(validate, addScalaTools, errorIfNoConfiguration)
-		val ivyConfiguration = new IvyConfiguration(ivyPaths, manager, ivyFlags, getScalaVersion, log)
+		val ivyConfiguration = new IvyConfiguration(ivyPaths, manager, ivyFlags, checkScalaVersion, log)
 		val updateConfiguration = new UpdateConfiguration(outputPattern, synchronize, quiet)
 		doWith(ivyConfiguration, updateConfiguration)
 	}
@@ -215,7 +219,7 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	* See http://code.google.com/p/simple-build-tool/wiki/LibraryManagement for details.*/
 	def ivyXML: scala.xml.NodeSeq = scala.xml.NodeSeq.Empty
 	/** The base options passed to the 'update' action. */
-	def baseUpdateOptions = Validate :: Synchronize :: QuietUpdate :: AddScalaToolsReleases :: Nil
+	def baseUpdateOptions = checkScalaVersion :: Validate :: Synchronize :: QuietUpdate :: AddScalaToolsReleases :: Nil
 	override def ivyConfigurations: Iterable[Configuration] =
 	{
 		val reflective = reflectiveIvyConfigurations
@@ -246,8 +250,19 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 		else
 			LibraryManager(m) :: baseUpdateOptions
 	}
+	/** True if the 'provided' configuration should be included on the 'compile' classpath.  The default value is true.*/
 	def includeProvidedWithCompile = true
+	/** True if the default implicit extensions should be used when determining classpaths.  The default value is true. */
 	def defaultConfigurationExtensions = true
+	/** If true, verify that explicit dependencies on Scala libraries use the same version as scala.version. */
+	def checkExplicitScalaDependencies = true
+	/** If true, filter dependencies on scala-library and scala-compiler. This is true by default to avoid conflicts with
+	* the jars provided by sbt.  You can set this to false to download these jars.  Overriding checkScalaInConfigurations might
+	* be more appropriate, however.*/
+	def filterScalaJars = true
+	/** The configurations to check/filter.*/
+	def checkScalaInConfigurations: Iterable[Configuration] = ivyConfigurations
+	def checkScalaVersion = CheckScalaVersion(checkScalaInConfigurations, checkExplicitScalaDependencies, filterScalaJars)
 	/** Includes the Provided configuration on the Compile classpath.  This can be overridden by setting
 	* includeProvidedWithCompile to false.*/
 	override def managedClasspath(config: Configuration, useDefaultFallback: Boolean) =

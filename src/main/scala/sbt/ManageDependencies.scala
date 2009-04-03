@@ -6,6 +6,7 @@ package sbt
 import java.io.File
 import java.net.URL
 import java.util.Collections
+import scala.collection.mutable.HashSet
 
 import org.apache.ivy.{core, plugins, util, Ivy}
 import core.LogOptions
@@ -26,9 +27,10 @@ import plugins.repository.url.URLResource
 import plugins.resolver.{DependencyResolver, ChainResolver, IBiblioResolver}
 import util.{Message, MessageLogger}
 
+final class IvyScala(val scalaVersion: String, val configurations: Iterable[Configuration], val checkExplicit: Boolean, val filterImplicit: Boolean) extends NotNull
 final class IvyPaths(val projectDirectory: Path, val managedLibDirectory: Path, val cacheDirectory: Option[Path]) extends NotNull
 final class IvyFlags(val validate: Boolean, val addScalaTools: Boolean, val errorIfNoConfiguration: Boolean) extends NotNull
-final class IvyConfiguration(val paths: IvyPaths, val manager: Manager, val flags: IvyFlags, val scalaVersion: Option[String], val log: Logger) extends NotNull
+final class IvyConfiguration(val paths: IvyPaths, val manager: Manager, val flags: IvyFlags, val ivyScala: Option[IvyScala], val log: Logger) extends NotNull
 final class UpdateConfiguration(val outputPattern: String, val synchronize: Boolean, val quiet: Boolean) extends NotNull
 object ManageDependencies
 {
@@ -224,20 +226,31 @@ object ManageDependencies
 				{dependencies}
 			</ivy-module>
 		}
+		/** Performs checks/adds filters on Scala dependencies (if enabled in IvyScala). */
 		def checkModule(moduleAndConf: (ModuleDescriptor, String)): Either[String, (ModuleDescriptor, String)] =
-			scalaVersion match
+			ivyScala match
 			{
-				case None => Right(moduleAndConf)
-				case Some(checkScalaVersion) =>
+				case Some(check) =>
 					val (module, conf) = moduleAndConf
-					checkDependencies(module, checkScalaVersion) match
+					val explicitCheck =
+						if(check.checkExplicit)
+							checkDependencies(module, check.scalaVersion, check.configurations)
+						else
+							None
+					explicitCheck match
 					{
 						case None =>
-							val asDefault = toDefaultModuleDescriptor(module)
-							excludeScalaJars(asDefault)
-							Right( (asDefault, conf) )
+							if(check.filterImplicit)
+							{
+								val asDefault = toDefaultModuleDescriptor(module)
+								excludeScalaJars(asDefault, check.configurations)
+								Right( (asDefault, conf) )
+							}
+							else
+								Right(moduleAndConf)
 						case Some(err) => Left(err)
 					}
+				case None => Right(moduleAndConf)
 			}
 		
 		this.synchronized // Ivy is not thread-safe.  In particular, it uses a static DocumentBuilder, which is not thread-safe
@@ -253,24 +266,39 @@ object ManageDependencies
 		}
 	}
 	/** Checks the immediate dependencies of module for dependencies on scala jars and verifies that the version on the
-	* dependencies matches the version on the project. */
-	private def checkDependencies(module: ModuleDescriptor, scalaVersion: String): Option[String] =
+	* dependencies matches scalaVersion. */
+	private def checkDependencies(module: ModuleDescriptor, scalaVersion: String, configurations: Iterable[Configuration]): Option[String] =
 	{
+		val configSet =configurationSet(configurations)
 		Control.lazyFold(module.getDependencies.toList)
 		{ dep =>
 			val id = dep.getDependencyRevisionId
-			if(id.getOrganisation == ScalaOrganization && id.getRevision != scalaVersion)
+			if(id.getOrganisation == ScalaOrganization && id.getRevision != scalaVersion && dep.getModuleConfigurations.exists(configSet.contains))
 				Some("Different Scala version specified in dependency ("+ id.getRevision + ") than in project (" + scalaVersion + ").")
 			else
 				None
 		}
 	}
+	private def configurationSet(configurations: Iterable[Configuration]) =
+		HashSet(configurations.map(_.toString).toSeq : _*)
 	/** Adds exclusions for the scala library and compiler jars so that they are not downloaded.  This is
-	* done because these jars are already on the classpath and cannot/should not be overridden.  The version
+	* done because normally these jars are already on the classpath and cannot/should not be overridden.  The version
 	* of Scala to use is done by setting scala.version in the project definition. */
-	private def excludeScalaJars(module: DefaultModuleDescriptor)
+	private def excludeScalaJars(module: DefaultModuleDescriptor, configurations: Iterable[Configuration])
 	{
-		val configurationNames = module.getConfigurationsNames
+		val configurationNames =
+		{
+			val names = module.getConfigurationsNames
+			if(configurations.isEmpty)
+				names
+			else
+			{
+				import scala.collection.mutable.HashSet
+				val configSet = configurationSet(configurations)
+				configSet.intersect(HashSet(names : _*))
+				configSet.toArray
+			}
+		}
 		def excludeScalaJar(name: String)
 			{ module.addExcludeRule(excludeRule(ScalaOrganization, name, configurationNames)) }
 		excludeScalaJar(ScalaLibraryID)
