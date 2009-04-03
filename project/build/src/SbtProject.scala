@@ -18,6 +18,8 @@ class SbtProject(info: ProjectInfo) extends ParentProject(info)
 		
 	override def shouldCheckOutputDirectories = false
 	override def baseUpdateOptions = QuietUpdate :: Nil
+	
+	override def parallelExecution = true
 }
 
 protected class MainProject(val info: ProjectInfo) extends CrossCompileProject
