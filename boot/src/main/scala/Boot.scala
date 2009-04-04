@@ -133,14 +133,12 @@ private class Setup extends NotNull
 		val scalaDirectory = new File(baseDirectory, ScalaDirectoryName)
 		val sbtDirectory = new File(baseDirectory, sbtDirectoryName(sbtVersion))
 		
-		val targets = checkTarget(scalaDirectory, UpdateScala) ::: checkTarget(sbtDirectory, UpdateSbt)
-		Update(baseDirectory, sbtVersion, scalaVersion, targets: _*)
+		val updateTargets = needsUpdate(scalaDirectory, TestLoadScalaClasses, UpdateScala) ::: needsUpdate(sbtDirectory, TestLoadSbtClasses, UpdateSbt)
+		Update(baseDirectory, sbtVersion, scalaVersion, updateTargets: _*)
 		
-		
-		def checkFailure(dir: File, label: String, key: String) = if(dir.exists) Success else new Failure(label, List(key) )
 		import ProjectProperties.{ScalaVersionKey, SbtVersionKey}
-		val sbtFailed = checkFailure(sbtDirectory, "sbt " + sbtVersion, SbtVersionKey)
-		val scalaFailed = checkFailure(scalaDirectory, "Scala " + scalaVersion, ScalaVersionKey)
+		val sbtFailed = failIfMissing(sbtDirectory, TestLoadSbtClasses, "sbt " + sbtVersion, SbtVersionKey)
+		val scalaFailed = failIfMissing(scalaDirectory, TestLoadScalaClasses, "Scala " + scalaVersion, ScalaVersionKey)
 		(scalaFailed ++ sbtFailed) match
 		{
 			case Success => getJars(scalaDirectory, sbtDirectory).toArray
@@ -156,7 +154,24 @@ private class Setup extends NotNull
 }
 private object Setup
 {
-	private def checkTarget(dir: File, target: UpdateTarget.Value) = if(!dir.exists) target :: Nil else Nil
+	private def failIfMissing(dir: File, classes: Iterable[String], label: String, key: String) = checkTarget(dir, classes, Success, new Failure(label, List(key)))
+	private def needsUpdate(dir: File, classes: Iterable[String], target: UpdateTarget.Value) = checkTarget(dir, classes, Nil, target :: Nil)
+	private def checkTarget[T](dir: File, classes: Iterable[String], ifSuccess: => T, ifFailure: => T): T =
+	{
+		if(dir.exists)
+		{
+			val loader = new URLClassLoader(getJars(dir).toArray, new BootFilteredLoader)
+			try
+			{
+				for(c <- classes)
+					Class.forName(c, false, loader)
+				ifSuccess
+			}
+			catch { case e: ClassNotFoundException => ifFailure }
+		}
+		else
+			ifFailure
+	}
 	private def isYes(s: String) =
 		s != null &&
 		{

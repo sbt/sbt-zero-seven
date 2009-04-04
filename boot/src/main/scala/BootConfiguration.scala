@@ -42,6 +42,12 @@ private object BootConfiguration
 	/** The class name prefix used to hide the Ivy classes used by this loader from sbt
 	* and the project definition*/
 	val IvyPackage = "org.apache.ivy."
+	/** The loader will check that these classes can be loaded and will assume that their presence indicates
+	* sbt and its dependencies have been downloaded.*/
+	val TestLoadSbtClasses = "sbt.Main" :: "org.apache.ivy.Ivy" :: Nil
+	/** The loader will check that these classes can be loaded and will assume that their presence indicates
+	* the Scala compiler and library have been downloaded.*/
+	val TestLoadScalaClasses = "scala.ScalaObject" :: "scala.tools.nsc.GenericRunnerCommand" :: Nil
 	
 	val ProjectDirectoryName = "project"
 	val BootDirectoryName = "boot"
