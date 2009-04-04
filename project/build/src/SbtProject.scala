@@ -55,6 +55,6 @@ protected class MainProject(val info: ProjectInfo) extends CrossCompileProject
 	
 	val filter = new ScriptedTestFilter
 	{
-		def accept(group: String, name: String) = name == "multi"
+		def accept(group: String, name: String) = true//name == "multi"
 	}
 }

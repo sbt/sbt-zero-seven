@@ -46,7 +46,7 @@ private object ProjectProperties
 	/** The default version of the new user project when the user doesn't explicitly specify a version when prompted.*/
 	val DefaultVersion = "1.0"
 	/** The default version of sbt when the user doesn't explicitly specify a version when prompted.*/
-	val DefaultSbtVersion = "0.4.1"
+	val DefaultSbtVersion = "0.4.3"
 	/** The default version of Scala when the user doesn't explicitly specify a version when prompted.*/
 	val DefaultScalaVersion = "2.7.3"
 
