@@ -77,6 +77,7 @@ private final class RunTask(root: Task, rootName: String, maximumTasks: Int) ext
 		}
 		banner(ControlEvent.Header, "\n==", "==")
 		try { action.invoke }
+		catch { case e: Exception => action.manager.log.trace(e); Some(e.toString) }
 		finally
 		{
 			banner(ControlEvent.Finish, "==", "==")
