@@ -72,7 +72,9 @@ private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion
 		// add dependencies based on which target needs updating
 		target match
 		{
-			case UpdateScala => addDependency(moduleID, ScalaOrg, CompilerModuleName, scalaVersion, "default")
+			case UpdateScala =>
+				addDependency(moduleID, ScalaOrg, CompilerModuleName, scalaVersion, "default")
+				addDependency(moduleID, ScalaOrg, LibraryModuleName, scalaVersion, "default")
 			case UpdateSbt => addDependency(moduleID, SbtOrg, SbtModuleName, sbtVersion, scalaVersion)
 		}
 		update(moduleID, target)
