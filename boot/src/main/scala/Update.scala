@@ -144,10 +144,15 @@ private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion
 		val newDefault = new ChainResolver
 		newDefault.setName("redefined-public")
 		newDefault.add(localResolver(settings.getDefaultIvyUserDir.getAbsolutePath))
-		newDefault.add(sbtResolver(scalaVersion))
-		newDefault.add(mavenResolver("Scala Tools Releases", "http://scala-tools.org/repo-releases"))
-		newDefault.add(mavenResolver("Scala Tools Snapshots", "http://scala-tools.org/repo-snapshots"))
-		newDefault.add(mavenMainResolver)
+		target match
+		{
+			case UpdateSbt =>
+				newDefault.add(sbtResolver(scalaVersion))
+				newDefault.add(mavenMainResolver)
+			case UpdateScala =>
+				newDefault.add(mavenResolver("Scala Tools Releases", "http://scala-tools.org/repo-releases"))
+				newDefault.add(mavenResolver("Scala Tools Snapshots", "http://scala-tools.org/repo-snapshots"))
+		}
 		settings.addResolver(newDefault)
 		settings.setDefaultResolver(newDefault.getName)
 	}
