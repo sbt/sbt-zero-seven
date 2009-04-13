@@ -10,6 +10,8 @@ abstract class CompilerCore
 	
 	// Returns false if there were errors, true if there were not.
 	protected def process(args: List[String], log: Logger): Boolean
+	// Returns false if there were errors, true if there were not.
+	protected def processJava(args: List[String], log: Logger): Boolean = true
 	def actionStartMessage(label: String): String
 	def actionNothingToDoMessage: String
 	def actionSuccessfulMessage: String
@@ -39,18 +41,34 @@ abstract class CompilerCore
 				else
 				{
 					val arguments = (options ++ classpathAndOut ++ sourceList).toList
-					log.debug("Arguments: " + arguments.mkString(" "))
+					log.debug("Scala arguments: " + arguments.mkString(" "))
 					if(process(arguments, log))
 					{
-						log.info(actionSuccessfulMessage)
-						None
+						val javaSourceList = sourceList.filter(_.endsWith(".java"))
+						if(javaSourceList.isEmpty)
+							success(log)
+						else
+						{
+							val javaArguments = classpathAndOut ::: javaSourceList
+							log.debug("Java arguments: " + javaArguments.mkString(" "))
+							if(processJava(javaArguments, log))
+								success(log)
+							else
+								failure
+						}
 					}
 					else
-						Some(actionUnsuccessfulMessage)
+						failure
 				}
 			}
 		}
 	}
+	private def success(log: Logger) =
+	{
+		log.info(actionSuccessfulMessage)
+		None
+	}
+	private def failure = Some(actionUnsuccessfulMessage)
 }
 // The following code is based on scala.tools.nsc.Main and scala.tools.nsc.ScalaDoc
 // Copyright 2005-2008 LAMP/EPFL
@@ -74,6 +92,11 @@ object Compile extends CompilerCore
 			reporter.printSummary()
 		}
 		!reporter.hasErrors
+	}
+	override protected def processJava(args: List[String], log: Logger): Boolean =
+	{
+		val process = (new ProcessRunner("javac", args) ).logIO(log)
+		process.run.exitValue == 0
 	}
 	def actionStartMessage(label: String) = "Compiling " + label + " sources..."
 	val actionNothingToDoMessage = "Nothing to compile."

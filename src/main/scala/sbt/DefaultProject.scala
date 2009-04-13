@@ -29,15 +29,18 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	/** Declares all paths to be packaged by the package-project action.*/
 	def packageProjectPaths =
 	{
-		val children = (info.projectPath ##) * (AllPassFilter -- defaultExcludes) --- packageProjectRootExcludes
+		val children = (info.projectPath ##) * (AllPassFilter -- defaultExcludes) --- (packageProjectRootExcludes ** AllPassFilter)
 		descendents(children, "*")
 	}
 	protected def packageProjectRootExcludes: PathFinder = outputPath +++ managedDependencyPath +++ bootPath
 	
+	def mainScalaSources = descendents(mainScalaSourcePath, "*.scala")
+	def testScalaSources = descendents(testScalaSourcePath, "*.scala")
+	
 	/** A PathFinder that selects all main sources.  It excludes paths that match 'defaultExcludes'.*/
-	def mainSources = descendents(mainScalaSourcePath, "*.scala")
+	def mainSources = mainScalaSources
 	/** A PathFinder that selects all test sources.  It excludes paths that match 'defaultExcludes'.*/
-	def testSources = descendents(testScalaSourcePath, "*.scala")
+	def testSources = testScalaSources
 	/** A PathFinder that selects all main resources.  It excludes paths that match 'defaultExcludes'.*/
 	def mainResources = descendents(mainResourcesPath ##, "*")
 	/** A PathFinder that selects all test resources.  It excludes paths that match 'defaultExcludes'.*/
