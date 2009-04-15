@@ -101,7 +101,7 @@ object Compile extends CompilerCore
 	def actionStartMessage(label: String) = "Compiling " + label + " sources..."
 	val actionNothingToDoMessage = "Nothing to compile."
 	val actionSuccessfulMessage = "Compilation successful."
-	def actionUnsuccessfulMessage = "Compilation unsuccessful."
+	val actionUnsuccessfulMessage = "Compilation unsuccessful."
 }
 object Scaladoc extends CompilerCore
 {

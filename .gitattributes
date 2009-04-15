@@ -50,6 +50,7 @@ src/main/scala/sbt/FileTask.scala -text
 src/main/scala/sbt/FileUtilities.scala -text
 src/main/scala/sbt/Hash.scala -text
 src/main/scala/sbt/IntegrationTesting.scala -text
+src/main/scala/sbt/JavaProject.scala -text
 src/main/scala/sbt/LineReader.scala -text
 src/main/scala/sbt/Logger.scala -text
 src/main/scala/sbt/Main.scala -text
