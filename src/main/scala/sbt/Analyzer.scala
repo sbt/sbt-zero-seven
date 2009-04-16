@@ -140,7 +140,7 @@ class Analyzer(val global: Global) extends Plugin
 				for(clazz @ ClassDef(mods, n, _, _) <- unit.body)
 				{
 					val sym = clazz.symbol
-					if(mods.isPublic && !mods.isAbstract && !mods.isTrait &&
+					if(sym != NoSymbol && mods.isPublic && !mods.isAbstract && !mods.isTrait &&
 						 !sym.isImplClass && sym.isStatic && !sym.isNestedClass)
 					{
 						val isModule = sym.isModuleClass
