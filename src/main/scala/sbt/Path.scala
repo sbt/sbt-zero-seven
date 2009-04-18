@@ -64,6 +64,7 @@ sealed abstract class Path extends PathFinder with NotNull
 }
 private final class BaseDirectory(private[sbt] val path: Path) extends Path
 {
+	override def ## : Path = this
 	override def toString = path.toString
 	def asFile = path.asFile
 	def relativePath = ""
