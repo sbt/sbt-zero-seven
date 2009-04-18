@@ -79,3 +79,14 @@ private object BootConfiguration
 	/** The name of the directory in the boot directory to put all jars for the given version of scala in.*/
 	def baseDirectoryName(scalaVersion: String) = "scala-" + scalaVersion
 }
+private object ProxyProperties
+{
+	val HttpProxyEnv = "http_proxy"
+	val HttpProxyUser = "http_proxy_user"
+	val HttpProxyPassword = "http_proxy_pass"
+	
+	val ProxyHost = "http.proxyHost"
+	val ProxyPort = "http.proxyPort"
+	val ProxyUser = "http.proxyUser"
+	val ProxyPassword = "http.proxyPassword"
+}

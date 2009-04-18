@@ -11,7 +11,7 @@
 // Artifact names must be consistent between the main sbt build and this build.
 
 import java.io.{File, FileFilter}
-import java.net.{URL, URLClassLoader}
+import java.net.{MalformedURLException, URL, URLClassLoader}
 
 // contains constants and paths
 import BootConfiguration._
@@ -26,6 +26,7 @@ object Boot
 {
 	def main(args: Array[String])
 	{
+		checkProxy()
 		try { boot(args) }
 		catch
 		{
@@ -96,6 +97,34 @@ object Boot
 		runMethod.invoke(null, Array(args) : _*)
 		NormalExitCode
 	}
+	
+	private def checkProxy()
+	{
+		import ProxyProperties._
+		val httpProxy = System.getenv(HttpProxyEnv)
+		if(isDefined(httpProxy) && !isPropertyDefined(ProxyHost) && !isPropertyDefined(ProxyPort))
+		{
+			try
+			{
+				val proxy = new URL(httpProxy)
+				setProperty(ProxyHost, proxy.getHost)
+				val port = proxy.getPort
+				if(port >= 0)
+					System.setProperty(ProxyPort, port.toString)
+				copyEnv(HttpProxyUser, ProxyUser)
+				copyEnv(HttpProxyPassword, ProxyPassword)
+			}
+			catch
+			{
+				case e: MalformedURLException =>
+					System.out.println("Warning: could not parse http_proxy setting: " + e.toString)
+			}
+		}
+	}
+	private def copyEnv(envKey: String, sysKey: String) { setProperty(sysKey, System.getenv(envKey)) }
+	private def setProperty(key: String, value: String) { if(value != null) System.setProperty(key, value) }
+	private def isPropertyDefined(k: String) = isDefined(System.getProperty(k))
+	private def isDefined(s: String) = s != null && !s.isEmpty
 }
 
 /** A class to handle setting up the properties and classpath of the project
