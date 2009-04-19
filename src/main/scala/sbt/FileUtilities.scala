@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008, 2009 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah, Nathan Hamblen
  */
 package sbt
 
@@ -381,6 +381,15 @@ object FileUtilities
 			}
 		}
 		creationError orElse ( Control.trapUnit("", log) { copy(sources.toList) } )
+	}
+	/** Retrieves the content of the given URL and writes it to the given File. */
+	def download(url: URL, to: File, log: Logger) =
+	{
+		readStream(url, log) { inputStream =>
+			writeStream(to, log) { outputStream => 
+				transfer(inputStream, outputStream, log)
+			}
+		}
 	}
 	/** Copies the files declared in <code>sources</code> to the <code>destinationDirectory</code>
 	* directory.  Directories are not recursively entered.  The destination hierarchy matches the
