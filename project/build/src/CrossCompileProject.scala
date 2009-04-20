@@ -4,8 +4,7 @@ import java.io.File
 
 /** Support for compiling sbt across multiple versions of Scala.  The scala compiler is run in a
 * separate JVM and no partial compilation is done.*/
-protected/* protected required until sbt 0.4.1, which will properly ignore abstract classes and traits*/
-	abstract class CrossCompileProject extends BasicScalaProject
+abstract class CrossCompileProject extends BasicScalaProject
 {
 	/** Used for 2.8.0-SNAPSHOT*/
 	val scalaToolsSnapshots = "Scala Tools Snapshots" at "http://scala-tools.org/repo-snapshots"
@@ -78,6 +77,8 @@ protected/* protected required until sbt 0.4.1, which will properly ignore abstr
 	// the list of all configurations to cross-compile against
 	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_8_0 :: Nil
 	
+	override def filterScalaJars = false
+	
 	/** The lib directory is now only for building using the 'build' script.*/
 	override def unmanagedClasspath = path("ignore_lib_directory")
 	/** When cross-compiling, replace mainCompilePath with the classes directory for the version being compiled.*/
@@ -131,7 +132,8 @@ protected/* protected required until sbt 0.4.1, which will properly ignore abstr
 			
 			// the compiler classpath has to be appended to the boot classpath to work properly
 			val allArguments = "-Xmx256M" :: ("-Xbootclasspath/a:" + compilerClasspath) :: CompilerMainClass :: compilerArguments
-			val process = (new ProcessRunner("java", allArguments)).mergeErrorStream.logIO(log)
+			log.debug("Running external compiler with command: java " + allArguments.mkString(" "))
+			val process = (new ProcessRunner("java", allArguments)).logIO(log)
 			val exitValue = process.run.exitValue
 			if(exitValue == 0)
 				None
