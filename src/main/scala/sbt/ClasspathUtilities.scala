@@ -1,10 +1,13 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
 import java.io.File
+import java.net.{URI, URL, URLClassLoader}
+import java.util.Collections
 import scala.collection.Set
+import scala.collection.jcl.Conversions
 import scala.collection.mutable.{HashSet, ListBuffer}
 
 private[sbt] object ClasspathUtilities
@@ -27,6 +30,30 @@ private[sbt] object ClasspathUtilities
 			classpathJars.contains(f)
 		else
 			classpathDirectories.find(Path.relativize(_, f).isDefined).isDefined
+	}
+	
+
+	def compilerPlugins(classpath: Iterable[Path]): Iterable[File] =
+	{
+		val loader = new URLClassLoader(classpath.map(_.asURL).toList.toArray)
+		val all = Conversions.convertList(Collections.list(loader.getResources("scalac-plugin.xml"))).readOnly
+		all.flatMap(jarFile)
+	}
+	private def jarFile(url: URL) =
+	{
+		try
+		{
+			url.getProtocol match
+			{
+				case "file" => new File(url.toURI) :: Nil
+				case "jar" =>
+					val path = url.getPath
+					val end = path.indexOf('!')
+					new File(new URI(if(end == -1) path else path.substring(0, end))) :: Nil
+				case _ => Nil
+			}
+		}
+		catch { case e: Exception => Nil }
 	}
 	
 	private lazy val (extraJars, extraDirs) =
@@ -59,7 +86,6 @@ private[sbt] object ClasspathUtilities
 	}
 }
 
-import java.net.{URL, URLClassLoader}
 private abstract class LoaderBase(urls: Array[URL], parent: ClassLoader) extends URLClassLoader(urls, parent) with NotNull
 {
 	require(parent != null) // included because a null parent is legitimate in Java

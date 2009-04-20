@@ -222,7 +222,7 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	def baseUpdateOptions = checkScalaVersion :: Validate :: Synchronize :: QuietUpdate :: AddScalaToolsReleases :: Nil
 	override def ivyConfigurations: Iterable[Configuration] =
 	{
-		val reflective = reflectiveIvyConfigurations
+		val reflective = super.ivyConfigurations
 		if(useMavenConfigurations)
 		{
 			val base = Configurations.defaultMavenConfigurations ++ reflective
@@ -267,16 +267,21 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	* includeProvidedWithCompile to false.*/
 	override def managedClasspath(config: Configuration, useDefaultFallback: Boolean) =
 	{
-		import Configurations.{Compile, Provided, Runtime, Test}
-		val superClasspath = super.managedClasspath(config, useDefaultFallback)
-		if(config == Compile && includeProvidedWithCompile)
-			superClasspath +++ super.managedClasspath(Provided, false)
-		else if(defaultConfigurationExtensions && config == Runtime)
-			superClasspath +++ super.managedClasspath(Compile, false)
-		else if(defaultConfigurationExtensions && config == Test)
-			superClasspath +++ super.managedClasspath(Compile, false) +++ super.managedClasspath(Runtime, false)
+		import Configurations.{Compile, CompilerPlugin, Provided, Runtime, Test}
+		if(config == CompilerPlugin)
+			super.managedClasspath(CompilerPlugin, false)
 		else
-			superClasspath
+		{
+			val superClasspath = super.managedClasspath(config, useDefaultFallback)
+			if(config == Compile && includeProvidedWithCompile)
+				superClasspath +++ super.managedClasspath(Provided, false)
+			else if(defaultConfigurationExtensions && config == Runtime)
+				superClasspath +++ super.managedClasspath(Compile, false)
+			else if(defaultConfigurationExtensions && config == Test)
+				superClasspath +++ super.managedClasspath(Compile, false) +++ super.managedClasspath(Runtime, false)
+			else
+				superClasspath
+		}
 	}
 	
 	protected def updateAction = updateTask(outputPattern, managedDependencyPath, updateOptions) describedAs UpdateDescription

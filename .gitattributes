@@ -35,6 +35,7 @@ src/main/resources/scalac-plugin.xml -text
 src/main/scala/sbt/Analysis.scala -text
 src/main/scala/sbt/AnalysisCallback.scala -text
 src/main/scala/sbt/Analyzer.scala -text
+src/main/scala/sbt/AutoCompilerPlugins.scala -text
 src/main/scala/sbt/BasicProjectTypes.scala -text
 src/main/scala/sbt/BuilderProject.scala -text
 src/main/scala/sbt/ClasspathUtilities.scala -text

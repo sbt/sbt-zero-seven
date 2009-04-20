@@ -614,6 +614,8 @@ object Configurations
 	lazy val Sources = config("sources")
 	lazy val System = config("system")
 	lazy val Optional = config("optional")
+
+	lazy val CompilerPlugin = config("plugin")
 	
 	private[sbt] def removeDuplicates(configs: Iterable[Configuration]) = Set(scala.collection.mutable.Map(configs.map(config => (config.name, config)).toSeq: _*).values.toList: _*)
 }
