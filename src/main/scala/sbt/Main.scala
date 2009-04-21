@@ -113,6 +113,8 @@ object Main
 		}
 	}
 	
+	/** The name of the command that loads a console with access to the current project through the variable 'project'.*/
+	val ProjectConsoleAction = "console-project"
 	/** The name of the command that shows the current project and logging level of that project.*/
 	val ShowCurrent = "current"
 	/** The name of the command that shows all available actions.*/
@@ -152,7 +154,7 @@ object Main
 	private def logLevels: Iterable[String] = TreeSet.empty[String] ++ Level.elements.map(_.toString)
 	/** The list of all interactive commands other than logging level.*/
 	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowMethods, ShowCurrent, HelpAction,
-		RebootCommand, ReloadAction, TraceCommand, ContinuousCompileCommand)
+		RebootCommand, ReloadAction, TraceCommand, ContinuousCompileCommand, ProjectConsoleAction)
 	
 	/** Enters interactive mode for the given root project.  It uses JLine for tab completion and
 	* history.  It returns normally when the user terminates or reloads the interactive session.  That is,
@@ -219,6 +221,8 @@ object Main
 							setProperty(currentProject, trimmed.substring(SetAction.length + 1))
 						else if(trimmed.startsWith(GetAction + " "))
 							getProperty(currentProject, trimmed.substring(GetAction.length + 1))
+						else if(trimmed == ProjectConsoleAction)
+							showResult(Run.projectConsole(currentProject), currentProject.log)
 						else
 							handleInteractiveCommand(currentProject, trimmed)
 						loop(currentProject)
@@ -244,6 +248,7 @@ object Main
 		printCmd(ShowActions, "Shows all available actions.")
 		printCmd(ShowMethods, "Shows all available methods.")
 		printCmd(RebootCommand, "Changes to scala.version or sbt.version are processed and the project definition is reloaded.")
+		printCmd(ProjectConsoleAction, "Enters the Scala interpreter with the current project bound to the variable 'project'.")
 		printCmd(HelpAction, "Displays this help message.")
 	}
 	private def displayInteractiveHelp() = {
@@ -308,18 +313,19 @@ object Main
 	// returns true if it succeeded (needed by noninteractive handleCommand)
 	private def handleAction(project: Project, action: String): Boolean =
 	{
-		def showResult(result: Option[String]): Boolean =
-		{
-			result match
-			{
-				case Some(errorMessage) => project.log.error(errorMessage); false
-				case None => project.log.success("Successful."); true
-			}
-		}
+		def show(result: Option[String]): Boolean = showResult(result, project.log)
 		val startTime = System.currentTimeMillis
-		val result = withAction(project, action)( (name, params) => showResult(project.call(name, params)))( name => showResult(project.act(name)))
+		val result = withAction(project, action)( (name, params) => show(project.call(name, params)))( name => show(project.act(name)))
 		printTime(project, startTime, "")
 		result
+	}
+	private def showResult(result: Option[String], log: Logger): Boolean =
+	{
+		result match
+		{
+			case Some(errorMessage) => log.error(errorMessage); false
+			case None => log.success("Successful."); true
+		}
 	}
 	// true if the action exists
 	private def checkAction(project: Project, actionString: String): Boolean =

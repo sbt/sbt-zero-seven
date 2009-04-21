@@ -3,9 +3,13 @@
  */
 package sbt
 
-import scala.tools.nsc.{interpreter, util, GenericRunnerCommand, InterpreterLoop, ObjectRunner, Settings}
-import util.ClassPath
-import java.net.URL
+import scala.tools.nsc.{GenericRunnerCommand, Interpreter, InterpreterLoop, ObjectRunner, Settings}
+import scala.tools.nsc.interpreter.InteractiveReader
+import scala.tools.nsc.reporters.Reporter
+import scala.tools.nsc.util.ClassPath
+
+import java.io.File
+import java.net.{URL, URLClassLoader}
 
 /** This module is an interface to starting the scala interpreter or runner.*/
 object Run
@@ -85,5 +89,38 @@ object Run
 			f(command.settings)
 		else
 			Some(command.usageMsg)
+	}
+	
+	def projectConsole(project: Project): Option[String] =
+	{
+		import project.log
+		createSettings(log) { interpreterSettings =>
+		createSettings(log) { compilerSettings =>
+		
+			val loader = project.getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader]
+			compilerSettings.classpath.value = loader.getURLs.flatMap(ClasspathUtilities.asFile).map(_.getAbsolutePath).mkString(java.io.File.pathSeparator)
+			log.info("Starting scala interpreter on project " + project.name + " ...")
+			log.debug("  Compiler classpath: " + compilerSettings.classpath.value)
+			log.info("")
+			Control.trapUnit("Error during session: ", log)
+			{
+				val loop = new ProjectInterpreterLoop(compilerSettings, project, loader)
+				executeTrapExit(loop.main(interpreterSettings), log)
+			}
+		}}
+	}
+	private class ProjectInterpreterLoop(compilerSettings: Settings, project: Project, loader: ClassLoader) extends InterpreterLoop
+	{
+		override def createInterpreter()
+		{
+			in = InteractiveReader.createDefault()
+			interpreter = new Interpreter(settings)
+			{
+				override protected def parentClassLoader = loader
+				override protected def newCompiler(settings: Settings, reporter: Reporter) = super.newCompiler(compilerSettings, reporter)
+			}
+			interpreter.setContextClassLoader()
+			interpreter.bind("project", project.getClass.getName, project)
+		}
 	}
 }

@@ -37,9 +37,9 @@ private[sbt] object ClasspathUtilities
 	{
 		val loader = new URLClassLoader(classpath.map(_.asURL).toList.toArray)
 		val all = Conversions.convertList(Collections.list(loader.getResources("scalac-plugin.xml"))).readOnly
-		all.flatMap(jarFile)
+		all.flatMap(asFile)
 	}
-	private def jarFile(url: URL) =
+	private[sbt] def asFile(url: URL) =
 	{
 		try
 		{
