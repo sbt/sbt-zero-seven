@@ -60,16 +60,16 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 				|}"""
 			
 			val defaultJar = (outputPath / defaultJarName).asFile.getAbsolutePath
-			log.debug("proguard task using main jar " + defaultJar)
+			log.debug("proguard configuration using main jar " + defaultJar)
 			val ivyKeepOptions = ivyKeepResolvers.map("-keep public class " + _  + allPublic).mkString("\n")
 			val externalDependencies = mainCompileConditional.analysis.allExternals.map(_.getAbsoluteFile).filter(_.getName.endsWith(".jar"))
-			log.debug("proguard tasks external dependencies: \n\t" + externalDependencies.mkString("\n\t"))
+			log.debug("proguard configuration external dependencies: \n\t" + externalDependencies.mkString("\n\t"))
 			// pull out the Java rt.jar from the external jar dependencies of this project to put it in libraryjars
 			val (rtJar, externalJars) = externalDependencies.toList.partition(_.getName == "rt.jar")
-			log.debug("proguard task, rt.jar location: " + rtJar.mkString(", "))
+			log.debug("proguard configuration rt.jar location: " + rtJar.mkString(", "))
 			// pull out Ivy in order to exclude resources inside
 			val (ivyJars, otherExternalJars) = externalJars.partition(_.getName.startsWith("ivy"))
-			log.debug("proguard task, ivy jar location: " + ivyJars.mkString(", "))
+			log.debug("proguard configuration ivy jar location: " + ivyJars.mkString(", "))
 			// exclude properties files and manifests from scala-library jar
 			val inJars = (defaultJar :: otherExternalJars.map( _ + "(!META-INF/**,!*.properties)")).map("-injars " + _).mkString("\n")
 			ivyJars match
