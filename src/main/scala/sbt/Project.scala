@@ -159,8 +159,14 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	/** Initializes the project directories when a user has requested that sbt create a new project.*/
 	def initializeDirectories() {}
 	/** True if projects should be run in parallel, false if they should run sequentially.
-	*  This only has an effect for multi-projects.*/
-	def parallelExecution = false
+	*  This only has an effect for multi-projects.  If this project has a parent, this value is
+	* inherited from that parent project.*/
+	def parallelExecution: Boolean =
+		info.parent match
+		{
+			case Some(parent) => parent.parallelExecution
+			case None => false
+		}
 	
 	/** True if a project and its dependencies should be checked to ensure that their
 	* output directories are not the same, false if they should not be checked. */
