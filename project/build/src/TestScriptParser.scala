@@ -17,7 +17,7 @@ import scala.util.parsing.input.Positional
 import TestScriptParser._
 private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexParsers with NotNull
 {
-	type Statement = Project => Either[String, Boolean]
+	type Statement = Project => Either[String, ReloadProject]
 	type PStatement = Statement with Positional
 	
 	private def evaluateList(list: List[PStatement])(p: Project): WithProjectResult[Unit] =
@@ -28,7 +28,7 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 				head(p) match
 				{
 					case Left(msg) => new ErrorResult(msg)
-					case Right(reload) => ContinueResult(p =>evaluateList(tail)(p), if(reload) Some(linePrefix(head)) else None)
+					case Right(reload) => ContinueResult(p =>evaluateList(tail)(p), reload)
 				}
 		}
 
@@ -41,7 +41,7 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 				case start ~ command ~ open ~ result ~ close =>
 					val successExpected = result.toLowerCase == SuccessLiteral.toLowerCase
 					new Statement with Positional
-					{
+					{ selfPositional =>
 						def apply(p: Project) =
 						{
 							val result =
@@ -49,8 +49,8 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 								{
 									start match
 									{
-										case CommandStart => evaluateCommand(command, successExpected)(p)
-										case ActionStart => evaluateAction(command, successExpected)(p).toLeft(false)
+										case CommandStart => evaluateCommand(command, successExpected, selfPositional)(p)
+										case ActionStart => evaluateAction(command, successExpected)(p).toLeft(NoReload)
 									}
 								}
 								catch
@@ -88,12 +88,12 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 		scriptError("Command '" + commandName + "' does not accept arguments (found '" + spacedString(args) + "').")
 	private def wrongArguments(commandName: String, requiredArgs: String, args: List[String]): Some[String] = 
 		scriptError("Wrong number of arguments to " + commandName + " command.  " + requiredArgs + " required, found: '" + spacedString(args) + "'.")
-	private def evaluateCommand(command: List[String], successExpected: Boolean)(project: Project): Either[String, Boolean] =
+	private def evaluateCommand(command: List[String], successExpected: Boolean, position: Positional)(project: Project): Either[String, ReloadProject] =
 	{
 		command match
 		{
-			case "reload" :: Nil => Right(true)
-			case x => evaluateCommandNoReload(x, successExpected)(project).toLeft(false)
+			case "reload" :: Nil => Right(if(successExpected) new ReloadSuccessExpected(linePrefix(position)) else ReloadErrorExpected)
+			case x => evaluateCommandNoReload(x, successExpected)(project).toLeft(NoReload)
 		}
 	}
 	private def evaluateCommandNoReload(command: List[String], successExpected: Boolean)(project: Project): Option[String] =
