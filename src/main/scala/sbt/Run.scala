@@ -91,28 +91,43 @@ object Run
 			Some(command.usageMsg)
 	}
 	
+	/** Starts a Scala interpreter session with 'project' bound to the value 'current' in the console
+	* and the following two lines executed:
+	*   import sbt._
+	*   import current._
+	*/
 	def projectConsole(project: Project): Option[String] =
 	{
 		import project.log
 		createSettings(log) { interpreterSettings =>
 		createSettings(log) { compilerSettings =>
-		
-			val loader = project.getClass.getClassLoader.asInstanceOf[java.net.URLClassLoader]
-			compilerSettings.classpath.value = loader.getURLs.flatMap(ClasspathUtilities.asFile).map(_.getAbsolutePath).mkString(java.io.File.pathSeparator)
-			log.info("Starting scala interpreter on project " + project.name + " ...")
-			log.debug("  Compiler classpath: " + compilerSettings.classpath.value)
+			log.info("Starting scala interpreter with project definition " + project.name + " ...")
 			log.info("")
 			Control.trapUnit("Error during session: ", log)
 			{
-				val loop = new ProjectInterpreterLoop(compilerSettings, project, loader)
+				val loop = new ProjectInterpreterLoop(compilerSettings, project)
 				executeTrapExit(loop.main(interpreterSettings), log)
 			}
 		}}
 	}
-	private class ProjectInterpreterLoop(compilerSettings: Settings, project: Project, loader: ClassLoader) extends InterpreterLoop
+	/** A custom InterpreterLoop with the purpose of creating an interpreter with Project 'project' bound to the value 'current', 
+	* and the following two lines interpreted:
+	*   import sbt._
+	*   import current._.
+	* To do this,
+	* 1)  The compiler uses a different settings instance: 'compilerSettings', which will have its classpath set to include the classpath
+	*    of the loader that loaded 'project'.  The compiler can then find the classes it needs to compile code referencing the project.
+	* 2) The parent class loader for the interpreter is the loader that loaded the project, so that the project can be bound to a variable
+	*    in the interpreter.
+	*/
+	private class ProjectInterpreterLoop(compilerSettings: Settings, project: Project) extends InterpreterLoop
 	{
 		override def createInterpreter()
 		{
+			val loader = project.getClass.getClassLoader.asInstanceOf[URLClassLoader]
+			compilerSettings.classpath.value = loader.getURLs.flatMap(ClasspathUtilities.asFile).map(_.getAbsolutePath).mkString(File.pathSeparator)
+			project.log.debug("  Compiler classpath: " + compilerSettings.classpath.value)
+			
 			in = InteractiveReader.createDefault()
 			interpreter = new Interpreter(settings)
 			{
@@ -120,7 +135,9 @@ object Run
 				override protected def newCompiler(settings: Settings, reporter: Reporter) = super.newCompiler(compilerSettings, reporter)
 			}
 			interpreter.setContextClassLoader()
-			interpreter.bind("project", project.getClass.getName, project)
+			interpreter.bind("current", project.getClass.getName, project)
+			interpreter.interpret("import sbt._")
+			interpreter.interpret("import current._")
 		}
 	}
 }

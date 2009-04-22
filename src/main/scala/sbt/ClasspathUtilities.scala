@@ -15,8 +15,9 @@ private[sbt] object ClasspathUtilities
 	def isArchive(path: Path): Boolean = isArchive(path.asFile)
 	def isArchive(file: File): Boolean = isArchiveName(file.getName)
 	def isArchiveName(fileName: String) = fileName.endsWith(".jar") || fileName.endsWith(".zip")
-	// (jars, dirs)
+	// Partitions the given classpath into (jars, directories)
 	def separate(paths: Iterable[File]): (Iterable[File], Iterable[File]) = paths.partition(isArchive)
+	// Partitions the given classpath into (jars, directories)
 	def separatePaths(paths: Iterable[Path]) = separate(paths.map(_.asFile.getCanonicalFile))
 	def buildSearchPaths(classpath: Iterable[Path]): (Set[File], Set[File]) =
 	{
@@ -32,13 +33,14 @@ private[sbt] object ClasspathUtilities
 			classpathDirectories.find(Path.relativize(_, f).isDefined).isDefined
 	}
 	
-
+	/** Returns all entries in 'classpath' that correspond to a compiler plugin.*/
 	def compilerPlugins(classpath: Iterable[Path]): Iterable[File] =
 	{
 		val loader = new URLClassLoader(classpath.map(_.asURL).toList.toArray)
 		val all = Conversions.convertList(Collections.list(loader.getResources("scalac-plugin.xml"))).readOnly
 		all.flatMap(asFile)
 	}
+	/** Converts the given URL to a File.  If the URL is for an entry in a jar, the File for the jar is returned. */
 	private[sbt] def asFile(url: URL) =
 	{
 		try
