@@ -124,18 +124,22 @@ trait ManagedProject extends ClasspathProject
 	def updateTask(outputPattern: String, managedDependencyPath: Path, options: => Seq[ManagedOption]) =
 		withIvyTask(withConfigurations(outputPattern, managedDependencyPath, options)(ManageDependencies.update))
 		
-	def publishTask(publishConfig: PublishConfiguration, options: => Seq[ManagedOption]) =
-	{
-		import publishConfig._
-		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) =>
-			ManageDependencies.publish(ivyConf, resolverName, srcArtifactPatterns, deliveredPattern, configurations) } )
-	}
-	def deliverTask(deliverConfig: PublishConfiguration, options: => Seq[ManagedOption]) =
-	{
-		import deliverConfig._
-		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, updateConf) =>
-			ManageDependencies.deliver(ivyConf, updateConf, status, deliveredPattern, extraDependencies, configurations) } )
-	}
+	def publishTask(publishConfiguration: => PublishConfiguration, options: => Seq[ManagedOption]) =
+		withIvyTask
+		{
+			val publishConfig = publishConfiguration
+			import publishConfig._
+			withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) =>
+			ManageDependencies.publish(ivyConf, resolverName, srcArtifactPatterns, deliveredPattern, configurations) }
+		}
+	def deliverTask(deliverConfiguration: => PublishConfiguration, options: => Seq[ManagedOption]) =
+		withIvyTask
+		{
+			val deliverConfig = deliverConfiguration
+			import deliverConfig._
+			withConfigurations("", managedDependencyPath, options) { (ivyConf, updateConf) =>
+			ManageDependencies.deliver(ivyConf, updateConf, status, deliveredPattern, extraDependencies, configurations) }
+		}
 	def makePomTask(output: Path, extraDependencies: Iterable[ModuleID], options: => Seq[ManagedOption]) =
 		withIvyTask(withConfigurations("", managedDependencyPath: Path, options) { (ivyConf, ignore) =>
 			ManageDependencies.makePom(ivyConf, extraDependencies, output.asFile) })
