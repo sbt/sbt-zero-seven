@@ -248,7 +248,7 @@ object Main
 		printCmd(ShowActions, "Shows all available actions.")
 		printCmd(ShowMethods, "Shows all available methods.")
 		printCmd(RebootCommand, "Changes to scala.version or sbt.version are processed and the project definition is reloaded.")
-		printCmd(ProjectConsoleAction, "Enters the Scala interpreter with the current project bound to the variable 'project'.")
+		printCmd(ProjectConsoleAction, "Enters the Scala interpreter with the current project bound to the variable 'current' and all members imported.")
 		printCmd(HelpAction, "Displays this help message.")
 	}
 	private def displayInteractiveHelp() = {
