@@ -14,7 +14,7 @@ trait AutoCompilerPlugins extends BasicScalaProject
 				 Configurations.Default :: withPlugin
 			else
 				withPlugin
-		println("Auto configurations: " + newConfigurations.toList.mkString(", "))
+		log.debug("Auto configurations: " + newConfigurations.toList.mkString(", "))
 		Configurations.removeDuplicates(newConfigurations)
 	}
 	override def compileOptions = compilerPlugins ++ super.compileOptions
