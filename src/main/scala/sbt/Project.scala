@@ -175,7 +175,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	/** The list of directories to which this project writes.  This is used to verify that multiple
 	* projects have not been defined with the same output directories. */
 	def outputDirectories: Iterable[Path] = outputPath :: Nil
-	
+	def rootProject = Project.rootProject(this)
 	/** The path to the file that provides persistence for properties.*/
 	final def envBackingPath = info.builderPath / Project.DefaultEnvBackingName
 	/** The path to the file that provides persistence for history. */
@@ -411,4 +411,11 @@ object Project
 		project.log.info(projectHeader)
 		project.log.info("=" * projectHeader.length)
 	}
+	
+	def rootProject(p: Project): Project =
+		p.info.parent match
+		{
+			case Some(parent) => rootProject(parent)
+			case None => p
+		}
 }
