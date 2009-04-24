@@ -1,6 +1,7 @@
 /* sbt -- Simple Build Tool
  * Copyright 2008, 2009  Steven Blundy, Mark Harrah
  */
+
 package sbt.impl
 
 import scala.xml.{Elem, Group}
