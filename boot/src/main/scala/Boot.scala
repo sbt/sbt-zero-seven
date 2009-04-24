@@ -162,7 +162,7 @@ private class Setup extends NotNull
 		val scalaDirectory = new File(baseDirectory, ScalaDirectoryName)
 		val sbtDirectory = new File(baseDirectory, sbtDirectoryName(sbtVersion))
 		
-		val updateTargets = needsUpdate(scalaDirectory, TestLoadScalaClasses, UpdateScala) ::: needsUpdate(sbtDirectory, TestLoadSbtClasses, UpdateSbt)
+		val updateTargets = needsUpdate("", scalaDirectory, TestLoadScalaClasses, UpdateScala) ::: needsUpdate(sbtVersion, sbtDirectory, TestLoadSbtClasses, UpdateSbt)
 		Update(baseDirectory, sbtVersion, scalaVersion, updateTargets: _*)
 		
 		import ProjectProperties.{ScalaVersionKey, SbtVersionKey}
@@ -184,7 +184,11 @@ private class Setup extends NotNull
 private object Setup
 {
 	private def failIfMissing(dir: File, classes: Iterable[String], label: String, key: String) = checkTarget(dir, classes, Success, new Failure(label, List(key)))
-	private def needsUpdate(dir: File, classes: Iterable[String], target: UpdateTarget.Value) = checkTarget(dir, classes, Nil, target :: Nil)
+	private def needsUpdate(version: String, dir: File, classes: Iterable[String], target: UpdateTarget.Value) =
+		if(version.endsWith("-SNAPSHOT"))
+			target :: Nil
+		else
+			checkTarget(dir, classes, Nil, target :: Nil)
 	private def checkTarget[T](dir: File, classes: Iterable[String], ifSuccess: => T, ifFailure: => T): T =
 	{
 		if(dir.exists)

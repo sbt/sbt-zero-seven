@@ -7,6 +7,7 @@ import java.io.{File, FileWriter, PrintWriter, Writer}
 
 import org.apache.ivy.{core, plugins, util, Ivy}
 import core.LogOptions
+import core.cache.DefaultRepositoryCacheManager
 import core.event.EventManager
 import core.module.id.ModuleRevisionId
 import core.module.descriptor.{Configuration, DefaultDependencyDescriptor, DefaultModuleDescriptor, ModuleDescriptor}
@@ -152,6 +153,11 @@ private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion
 			case UpdateScala =>
 				newDefault.add(mavenResolver("Scala Tools Releases", "http://scala-tools.org/repo-releases"))
 				newDefault.add(mavenResolver("Scala Tools Snapshots", "http://scala-tools.org/repo-snapshots"))
+		}
+		settings.getDefaultRepositoryCacheManager match
+		{
+			case manager: DefaultRepositoryCacheManager => manager.setUseOrigin(true)
+			case _ => ()
 		}
 		settings.addResolver(newDefault)
 		settings.setDefaultResolver(newDefault.getName)
