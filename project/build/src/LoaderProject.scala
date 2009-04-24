@@ -12,9 +12,9 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 	val mainClassName = "sbt.boot.Boot"
 	val baseName = "sbt-launcher"
 	val proguardConfigurationPath: Path = "proguard.pro"
-	val outputJar: Path = rootProject.outputPath / (baseName + ".jar")
-	def rootProject = info.parent.getOrElse(this)
-	def rootProjectDirectory = rootProject.info.projectPath
+	lazy val outputJar: Path = parentProject.outputPath / (baseName + "-" + version + ".jar")
+	def parentProject = info.parent.getOrElse(this)
+	def rootProjectDirectory = parentProject.info.projectPath
 	
 	override def mainClass = Some(mainClassName)
 	override def defaultJarBaseName = baseName + "-" + version.toString
@@ -81,7 +81,7 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 				case Nil => Some("Ivy not present (try running update)")
 				case ivyJar :: _ =>
 					val proguardConfiguration =
-						outTemplate.stripMargin.format(libraryJars.mkString(File.pathSeparator), ivyJar.getAbsolutePath, inJars, outputJar, ivyKeepOptions, mainClassName)
+						outTemplate.stripMargin.format(libraryJars.mkString(File.pathSeparator), ivyJar.getAbsolutePath, inJars, outputJar.absolutePath, ivyKeepOptions, mainClassName)
 					log.debug("Proguard configuration written to " + proguardConfigurationPath)
 					FileUtilities.write(proguardConfigurationPath.asFile, proguardConfiguration, log)
 			}
