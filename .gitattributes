@@ -71,12 +71,14 @@ src/main/scala/sbt/ScalaProject.scala -text
 src/main/scala/sbt/SourceModificationWatch.scala -text
 src/main/scala/sbt/TaskManager.scala -text
 src/main/scala/sbt/TestFramework.scala -text
+src/main/scala/sbt/TestReportListener.scala -text
 src/main/scala/sbt/TrapExit.scala -text
 src/main/scala/sbt/Version.scala -text
 src/main/scala/sbt/WebApp.scala -text
 src/main/scala/sbt/Webstart.scala -text
 src/main/scala/sbt/impl/CommandParser.scala -text
 src/main/scala/sbt/impl/RunTask.scala -text
+src/main/scala/sbt/impl/TestFrameworkImpl.scala -text
 src/main/scala/sbt/impl/TestParser.scala -text
 src/main/scala/sbt/impl/TestStatusReporter.scala -text
 src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject2.scala -text

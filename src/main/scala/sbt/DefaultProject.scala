@@ -65,7 +65,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		windowTitle(name + " " + version + " API") ::
 		Nil
 	/** The options provided to the 'test' action.  You can specify tests to exclude here.*/
-	def testOptions: Seq[TestOption] = TestFilter(includeTest) :: Nil
+	def testOptions: Seq[TestOption] = TestListeners(testListeners) :: TestFilter(includeTest) :: Nil
 	/** The options provided to the clean action.  You can add files to be removed here.*/
 	def cleanOptions: Seq[CleanOption] =
 		ClearAnalysis(mainCompileConditional.analysis) ::
@@ -152,6 +152,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	* for an active project currently requires an explicit 'clean' to properly update the set of tests to
 	* run*/
 	def testFrameworks: Iterable[TestFramework] = ScalaCheckFramework :: SpecsFramework :: ScalaTestFramework :: Nil
+	/** The list of listeners for testing. */
+	def testListeners: Seq[TestReportListener] = new LogTestReportListener(log) :: Nil
 	
 	def mainLabel = "main"
 	def testLabel = "test"

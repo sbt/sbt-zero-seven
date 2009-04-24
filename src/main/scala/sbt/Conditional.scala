@@ -229,7 +229,7 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 		}
 	}
 	
-	import ChangeDetection._
+	import ChangeDetection.{LastModifiedOnly, HashOnly, HashAndLastModified, HashAndProductsExist}
 	protected def changeDetectionMethod: ChangeDetection.Value = HashAndProductsExist
 	override protected def checkLastModified = changeDetectionMethod != HashAndProductsExist
 	override protected def noProductsImpliesModified = changeDetectionMethod == LastModifiedOnly
