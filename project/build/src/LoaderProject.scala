@@ -1,6 +1,7 @@
 import sbt._
 
 import LoaderProject._
+import java.io.File
 
 // a project for the sbt launcher
 // the main content of this project definition is setting up and running proguard
@@ -11,7 +12,9 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 	val mainClassName = "sbt.boot.Boot"
 	val baseName = "sbt-launcher"
 	val proguardConfigurationPath: Path = "proguard.pro"
-	val outputJar: Path = baseName + ".jar"
+	val outputJar: Path = rootProject.outputPath / (baseName + ".jar")
+	def rootProject = info.parent.getOrElse(this)
+	def rootProjectDirectory = rootProject.info.projectPath
 	
 	override def mainClass = Some(mainClassName)
 	override def defaultJarBaseName = baseName + "-" + version.toString
@@ -64,9 +67,10 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 			val ivyKeepOptions = ivyKeepResolvers.map("-keep public class " + _  + allPublic).mkString("\n")
 			val externalDependencies = mainCompileConditional.analysis.allExternals.map(_.getAbsoluteFile).filter(_.getName.endsWith(".jar"))
 			log.debug("proguard configuration external dependencies: \n\t" + externalDependencies.mkString("\n\t"))
-			// pull out the Java rt.jar from the external jar dependencies of this project to put it in libraryjars
-			val (rtJar, externalJars) = externalDependencies.toList.partition(_.getName == "rt.jar")
-			log.debug("proguard configuration rt.jar location: " + rtJar.mkString(", "))
+			// partition jars from the external jar dependencies of this project by whether they are located in the project directory
+			// if they are, they are specified with -injars, otherwise they are specified with -libraryjars
+			val (externalJars, libraryJars) = externalDependencies.toList.partition(jar => Path.relativize(rootProjectDirectory, jar).isDefined)
+			log.debug("proguard configuration library jars locations: " + libraryJars.mkString(", "))
 			// pull out Ivy in order to exclude resources inside
 			val (ivyJars, otherExternalJars) = externalJars.partition(_.getName.startsWith("ivy"))
 			log.debug("proguard configuration ivy jar location: " + ivyJars.mkString(", "))
@@ -77,7 +81,7 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 				case Nil => Some("Ivy not present (try running update)")
 				case ivyJar :: _ =>
 					val proguardConfiguration =
-						outTemplate.stripMargin.format(rtJar.mkString, ivyJar.getAbsolutePath, inJars, outputJar, ivyKeepOptions, mainClassName)
+						outTemplate.stripMargin.format(libraryJars.mkString(File.pathSeparator), ivyJar.getAbsolutePath, inJars, outputJar, ivyKeepOptions, mainClassName)
 					log.debug("Proguard configuration written to " + proguardConfigurationPath)
 					FileUtilities.write(proguardConfigurationPath.asFile, proguardConfiguration, log)
 			}
