@@ -79,15 +79,16 @@ trait ScalaProject extends Project with FileTasks
 	def consoleTask(classpath : PathFinder): Task = 
 		interactiveTask { Run.console(classpath.get, log) }
 
-	def runTask(mainClass: Option[String], classpath: PathFinder, options: String*): Task =
+	def runTask(mainClass: => Option[String], classpath: PathFinder, options: String*): Task =
 		runTask(mainClass, classpath, options)
-	def runTask(mainClass: Option[String], classpath: PathFinder, options: => Seq[String]): Task =
+	def runTask(mainClass: => Option[String], classpath: PathFinder, options: => Seq[String]): Task =
 		task
 		{
-			if(mainClass.isDefined)
-				Run(mainClass, classpath.get, options, log)
-			else
-				Some("No main class specified.")
+			mainClass match
+			{
+				case Some(main) => Run.run(main, classpath.get, options, log)
+				case None => Some("No main class specified.")
+			}
 		}
 
 	def cleanTask(paths: PathFinder, options: CleanOption*): Task =
