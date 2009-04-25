@@ -28,7 +28,13 @@ trait ScalaProject extends Project with FileTasks
 		assert(m != null)
 	}
 	case class MainClass(mainClassName: String) extends PackageOption
+	case class ManifestAttributes(attributes: (Attributes.Name, String)*) extends PackageOption
 	case object Recursive extends PackageOption
+	def ManifestAttributes(attributes: (String, String)*): ManifestAttributes =
+	{
+		val converted = for( (name,value) <- attributes ) yield (new Attributes.Name(name), value)
+		new ManifestAttributes(converted : _*)
+	}
 	
 	val Deprecation = CompileOption("-deprecation")
 	val ExplainTypes = CompileOption("-explaintypes")
@@ -161,6 +167,10 @@ trait ScalaProject extends Project with FileTasks
 					case Recursive => recursive = true
 					case MainClass(mainClassName) =>
 						manifest.getMainAttributes.put(Attributes.Name.MAIN_CLASS, mainClassName)
+					case ManifestAttributes(attributes @ _*) =>
+						val main = manifest.getMainAttributes
+						for( (name, value) <- attributes)
+							main.put(name, value)
 					case _ => log.warn("Ignored unknown package option " + option)
 				}
 			}

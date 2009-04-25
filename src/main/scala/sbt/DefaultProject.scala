@@ -9,6 +9,7 @@ class DefaultProject(val info: ProjectInfo) extends BasicScalaProject
 class DefaultWebProject(val info: ProjectInfo) extends BasicWebScalaProject
 
 import BasicScalaProject._
+import java.util.jar.Attributes
 
 /** This class defines concrete instances of actions from ScalaProject using overridable paths,
 * options, and configuration. */
@@ -24,6 +25,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 			impl.SelectMainClass(promptIfMultipleChoices, applications) orElse
 			warnIfMultiple(applications, log)
 		}
+	def manifestClassPath: Option[String] = None
 	def dependencies = info.dependencies ++ subProjects.values.toList
 
 	val mainCompileConditional = new CompileConditional(mainCompileConfiguration)
@@ -79,7 +81,9 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		ClearAnalysis(testCompileConditional.analysis) ::
 		Nil
 		
-	def packageOptions: Seq[PackageOption] = getMainClass(false).map(MainClass(_)).toList
+	def packageOptions: Seq[PackageOption] =
+		manifestClassPath.map(cp => ManifestAttributes( (Attributes.Name.CLASS_PATH, cp) )).toList :::
+		getMainClass(false).map(MainClass(_)).toList
 	
 	private def succeededTestPath = testAnalysisPath / "succeeded-tests"
 	private def quickOptions(failedOnly: Boolean) =
