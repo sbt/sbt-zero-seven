@@ -64,8 +64,8 @@ abstract class CrossCompileProject extends BasicScalaProject
 			<!-- the dependencies that are different dependeding on the version of Scala -->
 			{ variableDependencies(version2_7_2, /*ScalaTest*/"0.9.3", /*Specs*/"1.4.0", false) }
 			{ variableDependencies(version2_7_3, /*ScalaTest*/"0.9.4", /*Specs*/"1.4.3", true) }
-			{ variableDependencies(version2_7_4, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.4", true) }
-			{ variableDependencies(version2_8_0, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.4", true) }
+			{ variableDependencies(version2_7_4, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.3", true) }
+			{ variableDependencies(version2_8_0, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.3", true) }
 		</dependencies>)
 
 	/** Creates a publication (an 'artifact' element) for each Scala version */
