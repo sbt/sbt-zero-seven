@@ -78,6 +78,7 @@ src/main/scala/sbt/WebApp.scala -text
 src/main/scala/sbt/Webstart.scala -text
 src/main/scala/sbt/impl/CommandParser.scala -text
 src/main/scala/sbt/impl/RunTask.scala -text
+src/main/scala/sbt/impl/SelectMainClass.scala -text
 src/main/scala/sbt/impl/TestFrameworkImpl.scala -text
 src/main/scala/sbt/impl/TestParser.scala -text
 src/main/scala/sbt/impl/TestStatusReporter.scala -text
