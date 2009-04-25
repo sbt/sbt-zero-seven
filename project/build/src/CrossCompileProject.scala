@@ -1,6 +1,7 @@
 import sbt._
 
 import java.io.File
+import scala.xml.NodeSeq
 
 /** Support for compiling sbt across multiple versions of Scala.  The scala compiler is run in a
 * separate JVM and no partial compilation is done.*/
@@ -8,12 +9,26 @@ abstract class CrossCompileProject extends BasicScalaProject
 {
 	/** Used for 2.8.0-SNAPSHOT*/
 	val scalaToolsSnapshots = "Scala Tools Snapshots" at "http://scala-tools.org/repo-snapshots"
-	
+
+	/* The base configuration names for the versions of Scala*/
 	private val version2_7_2 = "2.7.2"
 	private val version2_7_3 = "2.7.3"
+	private val version2_7_4 = "2.7.4"
 	private val version2_8_0 = "2.8.0-SNAPSHOT"
 	private val base = "base"
-	
+
+	/* The configurations for the versions of Scala.*/
+	private val conf_2_7_2 = config(version2_7_2)
+	private val conf_2_7_3 = config(version2_7_3)
+	private val conf_2_7_4 = config(version2_7_4)
+	private val conf_2_8_0 = config(version2_8_0)
+	// the list of all configurations to cross-compile against
+	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_8_0 :: Nil
+	// the names of all configurations to cross-compile against
+	private val allConfigurationsNames = allConfigurations.map(_.toString)
+	//private val allConfigurations = conf_2_7_3 :: Nil
+
+	/* Methods to derive the configuration name from the base name 'v'.*/
 	private def optional(v: String) = "optional-" + v
 	private def scalac(v: String) = "scalac-" + v
 	private def sbt(v: String) = "sbt_" + v
@@ -32,51 +47,68 @@ abstract class CrossCompileProject extends BasicScalaProject
 	override def ivyXML =
 		(<configurations>
 			<conf name={base}/>
-			<conf name={version2_7_2} extends={base}/>
-			<conf name={version2_7_3} extends={base}/>
-			<conf name={version2_8_0} extends={base}/>
 			<conf name={optional(base)}/>
-			<conf name={optional(version2_7_2)} extends={optional(base)}/>
-			<conf name={optional(version2_7_3)} extends={optional(base)}/>
-			<conf name={optional(version2_8_0)} extends={optional(base)}/>
+			{ variableConfigurations }
+			<!-- The configuration used for normal development (actions other than cross-*) -->
 			<conf name="default" extends={version2_7_2 + "," + optional(version2_7_2)} visibility="private"/>
-			<conf name={scalac(version2_7_2)} visibility="private"/>
-			<conf name={scalac(version2_7_3)} visibility="private"/>
-			<conf name={scalac(version2_8_0)} visibility="private"/>
 		</configurations>
 		<publications>
-			<artifact name={sbt(version2_7_2)} conf={version2_7_2}/>
-			<artifact name={sbt(version2_7_3)} conf={version2_7_3}/>
-			<artifact name={sbt(version2_8_0)} conf={version2_8_0}/>
+			{ publications }
 		</publications>
 		<dependencies>
-			<!-- All Scala versions -->
+			<!-- Dependencies that are the same across all Scala versions -->
 			<dependency org="org.apache.ivy" name="ivy" rev="2.0.0" transitive="false" conf={depConf(base)}/>
-			<dependency org="org.scalacheck" name="scalacheck" rev="1.5" transitive="false" conf={depConf(optional(base))}/>
+			{testDependency("scalacheck", "1.5", false, base)}
 			<dependency org="org.mortbay.jetty" name="jetty" rev="6.1.14" transitive="true" conf={depConf(optional(base))}/>
-			
-			<!-- Scala 2.7.2 -->
-			<dependency org="org.specs" name="specs" rev="1.4.0" transitive="false" conf={depConf(optional(version2_7_2))}/>
-			<dependency org="org.scalatest" name="scalatest" rev="0.9.3" transitive="false" conf={depConf(optional(version2_7_2))}/>
-			<dependency org="org.scala-lang" name="scala-compiler" rev={version2_7_2} conf={depConf(scalac(version2_7_2))}/>
-			
-			<!-- Scala 2.7.3 -->
-			<dependency org="org.scala-tools.testing" name="scalatest" rev="0.9.4" transitive="false" conf={depConf(optional(version2_7_3))}/>
-			<dependency org="org.specs" name="specs" rev="1.4.3" transitive="false" conf={depConf(optional(version2_7_3))}/>
-			<dependency org="org.scala-lang" name="scala-compiler" rev={version2_7_3} conf={depConf(scalac(version2_7_3))}/>
 
-			<!-- Scala 2.8.0-SNAPSHOT -->
-			<dependency org="org.scala-tools.testing" name="scalatest" rev="0.9.5" transitive="false" conf={depConf(optional(version2_8_0))}/>
-			<dependency org="org.specs" name="specs" rev="1.4.3" transitive="false" conf={depConf(optional(version2_8_0))}/>
-			<dependency org="org.scala-lang" name="scala-compiler" rev={version2_8_0} conf={depConf(scalac(version2_8_0))}/>
+			<!-- the dependencies that are different dependeding on the version of Scala -->
+			{ variableDependencies(version2_7_2, /*ScalaTest*/"0.9.3", /*Specs*/"1.4.0", false) }
+			{ variableDependencies(version2_7_3, /*ScalaTest*/"0.9.4", /*Specs*/"1.4.3", true) }
+			{ variableDependencies(version2_7_4, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.4", true) }
+			{ variableDependencies(version2_8_0, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.4", true) }
 		</dependencies>)
-	
-	private val conf_2_7_2 = config(version2_7_2)
-	private val conf_2_7_3 = config(version2_7_3)
-	private val conf_2_8_0 = config(version2_8_0)
-	// the list of all configurations to cross-compile against
-	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_8_0 :: Nil
-	
+
+	/** Creates a publication (an 'artifact' element) for each Scala version */
+	private def publications: NodeSeq =
+	{
+		for(conf <- allConfigurationsNames) yield
+			<artifact name={sbt(conf)} conf={conf}/>
+	}
+	/** Creates the main, optional, and scalac configurations for each Scala version*/
+	private def variableConfigurations: NodeSeq =
+	{
+		allConfigurationsNames flatMap
+		{ conf =>
+			scalaComment(conf) ++
+			(<conf name={conf} extends={base}/>
+			<conf name={optional(conf)} extends={optional(base)}/>
+			<conf name={scalac(conf)} visibility="private"/>)
+		}
+	}
+	/** Defines the dependencies for the given version of Scala, ScalaTest, and Specs.  If uniformTestOrg is true,
+	* the 'org.scala-tools.testing' organization is used.  Otherwise, 'org.' is prefixed to the module name. */
+	private def variableDependencies(scalaVersion: String, scalaTestVersion: String, specsVersion: String, uniformTestOrg: Boolean) =
+	{
+		scalaComment(scalaVersion) ++
+		testDependency("scalatest", scalaTestVersion, uniformTestOrg, scalaVersion) ++
+		testDependency("specs", specsVersion, uniformTestOrg, scalaVersion) ++
+		<dependency org="org.scala-lang" name="scala-compiler" rev={scalaVersion} conf={depConf(scalac(scalaVersion))}/>
+	}
+	/** Creates a comment containing the version of Scala*/
+	private def scalaComment(scalaVersion: String) = scala.xml.Comment("Scala " + scalaVersion)
+	/** Creates a dependency element for a test.  See 'testOrg' for a description of uniformTestOrg.*/
+
+	private def testDependency(name: String, version: String, uniformTestOrg: Boolean, baseConf: String) =
+		<dependency org={testOrg(name, uniformTestOrg)} name={name} rev={version} transitive="false" conf={depConf(optional(baseConf))}/>
+		
+	/** Returns the organization for the given test library.  If uniform is true,
+	* the 'org.scala-tools.testing' organization is used.  Otherwise, 'org.' is prefixed to the module name.*/
+	private def testOrg(name: String, uniform: Boolean) =
+		if(uniform) "org.scala-tools.testing"
+		else "org." + name
+
+	/** Disable filtering Scala jars from dependency management, because we need them and are putting them
+	* in custom configurations and are using them in a separate process than sbt runs in.*/
 	override def filterScalaJars = false
 	
 	/** The lib directory is now only for building using the 'build' script.*/

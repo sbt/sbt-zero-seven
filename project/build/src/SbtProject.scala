@@ -20,6 +20,9 @@ class SbtProject(info: ProjectInfo) extends ParentProject(info)
 	override def baseUpdateOptions = QuietUpdate :: Nil
 	
 	override def parallelExecution = true
+	override def deliverLocalAction = noAction
+	private def noAction = task { None }
+	override def publishLocalAction = noAction
 }
 
 protected class MainProject(val info: ProjectInfo) extends CrossCompileProject
