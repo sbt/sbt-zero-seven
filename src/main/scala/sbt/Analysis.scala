@@ -142,10 +142,12 @@ object CompileAnalysis
 {
 	val HashesFileName = "hashes"
 	val TestsFileName = "tests"
+	val ApplicationsFileName = "applications"
 	val ProjectDefinitionsName = "projects"
 	
 	val HashesLabel = "Source Hashes"
 	val TestsLabel = "Tests"
+	val ApplicationsLabel = "Classes with main methods"
 	val ProjectDefinitionsLabel = "Project Definitions"
 	
 	def load(analysisPath: Path, projectPath: Path, log: Logger): Either[String, CompileAnalysis] =
@@ -161,12 +163,14 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 	private val testMap = new HashMap[Path, Set[TestDefinition]]
 	private val projectDefinitionMap = new HashMap[Path, Set[String]]
 	private val hashesMap = new HashMap[Path, Array[Byte]]
+	private val applicationsMap = new HashMap[Path, Set[String]]
 	
-	override protected def mapsToClear = hashesMap :: testMap :: projectDefinitionMap :: super.mapsToClear
-	override protected def mapsToRemoveSource = hashesMap :: testMap :: projectDefinitionMap :: super.mapsToRemoveSource
+	override protected def mapsToClear = applicationsMap :: hashesMap :: testMap :: projectDefinitionMap :: super.mapsToClear
+	override protected def mapsToRemoveSource = applicationsMap :: hashesMap :: testMap :: projectDefinitionMap :: super.mapsToRemoveSource
 	
 	def allTests = all(testMap)
 	def allProjects = all(projectDefinitionMap)
+	def allApplications = all(applicationsMap)
 	def testSourceMap: Map[String, Path] =
 	{
 		val map = new HashMap[String, Path]
@@ -176,6 +180,7 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 	
 	def addTest(source: Path, test: TestDefinition) = add(source, test, testMap)
 	def addProjectDefinition(source: Path, className: String) = add(source, className, projectDefinitionMap)
+	def addApplication(source: Path, className: String) = add(source, className, applicationsMap)
 	def setHash(source: Path, hash: Array[Byte]) { hashesMap(source) = hash }
 	def clearHash(source: Path) { hashesMap.removeKey(source) }
 	def hash(source: Path) = hashesMap.get(source)
@@ -191,12 +196,14 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 		
 	override protected def loadExtra() =
 	{
+		loadStrings(applicationsMap, analysisPath / ApplicationsFileName, projectPath, log) orElse
 		loadHashes(hashesMap, analysisPath / HashesFileName, projectPath, log) orElse
 		loadTestDefinitions(testMap, analysisPath / TestsFileName, projectPath, log) orElse
 		loadStrings(projectDefinitionMap, analysisPath / ProjectDefinitionsName, projectPath, log)
 	}
 	override protected def saveExtra() =
 	{
+		writeStrings(applicationsMap, ApplicationsLabel, analysisPath / ApplicationsFileName, log) orElse
 		writeHashes(hashesMap, HashesLabel, analysisPath / HashesFileName, log) orElse
 		writeTestDefinitions(testMap, TestsLabel, analysisPath / TestsFileName, log) orElse
 		writeStrings(projectDefinitionMap, ProjectDefinitionsLabel, analysisPath / ProjectDefinitionsName, log)
@@ -278,7 +285,7 @@ object MapUtilities
 		(new HashSet[Path]) ++ Path.splitString(projectPath, s)
 	private def stringToSet[T](f: String => T)(s: String): Set[T] =
 		(new HashSet[T]) ++ FileUtilities.pathSplit(s).map(_.trim).filter(_.length > 0).map(f)
-	
+
 	def loadHashes(map: Map[Path, Array[Byte]], from: Path, projectPath: Path, log: Logger) =
 		load(map, Hash.fromHex, from, projectPath, log)
 	def loadTestDefinitions(map: Map[Path, Set[TestDefinition]], from: Path, projectPath: Path, log: Logger) =

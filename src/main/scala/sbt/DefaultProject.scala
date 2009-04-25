@@ -17,6 +17,13 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	/** The class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
 	def mainClass: Option[String] = None
+	def getMainClass(promptIfMultipleChoices: Boolean) =
+		mainClass orElse
+		{
+			val applications = mainCompileConditional.analysis.allApplications.toList
+			impl.SelectMainClass(promptIfMultipleChoices, applications) orElse
+			warnIfMultiple(applications, log)
+		}
 	def dependencies = info.dependencies ++ subProjects.values.toList
 
 	val mainCompileConditional = new CompileConditional(mainCompileConfiguration)
@@ -72,7 +79,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		ClearAnalysis(testCompileConditional.analysis) ::
 		Nil
 		
-	def packageOptions: Seq[PackageOption] = mainClass.map(MainClass(_)).toList
+	def packageOptions: Seq[PackageOption] = getMainClass(false).map(MainClass(_)).toList
 	
 	private def succeededTestPath = testAnalysisPath / "succeeded-tests"
 	private def quickOptions(failedOnly: Boolean) =
@@ -114,7 +121,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	def compileClasspath = fullClasspath(Compile) +++ optionalClasspath
 	/** A PathFinder that provides the classpath to use when unit testing.*/
 	def testClasspath = fullClasspath(Test) +++ optionalClasspath
-	/** A PathFinder that provides the classpath to use when running the class specified in 'mainClass'.*/
+	/** A PathFinder that provides the classpath to use when running the class specified by 'getMainClass'.*/
 	def runClasspath = fullClasspath(Runtime) +++ optionalClasspath
 	/** A PathFinder that provides the classpath to use for a Scala interpreter session.*/
 	def consoleClasspath = fullClasspath(consoleConfiguration) +++ optionalClasspath
@@ -189,7 +196,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	protected def compileAction = task { mainCompileConditional.run } describedAs MainCompileDescription
 	protected def testCompileAction = task { testCompileConditional.run } dependsOn compile describedAs TestCompileDescription
 	protected def cleanAction = cleanTask(outputPath, cleanOptions) describedAs CleanDescription
-	protected def runAction = task { args => runTask(mainClass, runClasspath, args) dependsOn(compile) } describedAs RunDescription
+	protected def runAction = task { args => runTask(getMainClass(true), runClasspath, args) dependsOn(compile) } describedAs RunDescription
 	protected def consoleQuickAction = consoleTask(consoleClasspath) describedAs ConsoleQuickDescription
 	protected def consoleAction = consoleTask(consoleClasspath).dependsOn(testCompile) describedAs ConsoleDescription
 	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
@@ -337,6 +344,17 @@ object BasicScalaProject
 		"Compiles, tests, generates documentation, packages, and increments the version."
 		
 	lazy val ScalaJarNames = Set("scala-library.jar", "scala-compiler.jar")
+	
+	private def warnIfMultiple(applications: List[String], log: Logger) =
+	{
+		if(!applications.isEmpty)
+		{
+			log.warn("No Main-Class attribute will be added automatically added:")
+			log.warn("Multiple classes with a main method were detected.  Specify main class explicitly with:")
+			log.warn("     override mainClass = Some(\"className\")")
+		}
+		None
+	}
 }
 object BasicWebScalaProject
 {

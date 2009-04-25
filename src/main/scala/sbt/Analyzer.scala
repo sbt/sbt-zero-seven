@@ -136,7 +136,7 @@ class Analyzer(val global: Global) extends Plugin
 					}
 				}
 				
-				// find subclasses
+				// find subclasses and modules with main methods
 				for(clazz @ ClassDef(mods, n, _, _) <- unit.body)
 				{
 					val sym = clazz.symbol
@@ -146,6 +146,8 @@ class Analyzer(val global: Global) extends Plugin
 						val isModule = sym.isModuleClass
 						for(superclass <- superclasses.filter(sym.isSubClass))
 							callback.foundSubclass(sourcePath, sym.fullNameString, superclass.fullNameString, isModule)
+						if(isModule && hasMainMethod(sym))
+							callback.foundApplication(sourcePath, sym.fullNameString)
 					}
 				}
 				
@@ -188,7 +190,6 @@ class Analyzer(val global: Global) extends Plugin
 		atPhase (currentRun.picklerPhase.next) {
 			sym.isModuleClass && !sym.isImplClass && !sym.isNestedClass
 		}
-	
 	private def pathOfClass(outputPath: Path, s: Symbol, separatorRequired: Boolean): Path =
 		pathOfClass(outputPath, s, separatorRequired, ".class")
 	private def pathOfClass(outputPath: Path, s: Symbol, separatorRequired: Boolean, postfix: String): Path =
@@ -205,4 +206,26 @@ class Analyzer(val global: Global) extends Plugin
 		else
 			packagePath(outputPath, s.owner.enclClass) / s.simpleName.toString
 	}
+	
+	private def hasMainMethod(sym: Symbol): Boolean =
+	{
+		val main = sym.info.nonPrivateMember(newTermName("main"))//nme.main)
+		main.tpe match
+		{
+			case OverloadedType(pre, alternatives) => alternatives.exists(alt => isVisible(alt) && isMainType(pre.memberType(alt)))
+			case tpe => isVisible(main) && isMainType(main.owner.thisType.memberType(main))
+		}
+	}
+	private def isVisible(sym: Symbol) = sym != NoSymbol && sym.isPublic && !sym.isDeferred
+	private def isMainType(tpe: Type) =
+	{
+		tpe match
+		{
+			case MethodType(List(singleArgument), result) => isUnitType(result) && isStringArray(singleArgument)
+			case _ => false
+		}
+	}
+	private lazy val StringArrayType = appliedType(definitions.ArrayClass.typeConstructor, definitions.StringClass.tpe :: Nil)
+	private def isStringArray(tpe: Type) = tpe.typeSymbol == StringArrayType.typeSymbol
+	private def isUnitType(tpe: Type) = tpe.typeSymbol == definitions.UnitClass
 }
