@@ -76,19 +76,33 @@ private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion
 			case UpdateScala =>
 				addDependency(moduleID, ScalaOrg, CompilerModuleName, scalaVersion, "default")
 				addDependency(moduleID, ScalaOrg, LibraryModuleName, scalaVersion, "default")
-			case UpdateSbt => addDependency(moduleID, SbtOrg, SbtModuleName, sbtVersion, scalaVersion)
+				update(moduleID, target, false)
+			case UpdateSbt =>
+				addDependency(moduleID, SbtOrg, SbtModuleName, sbtVersion, scalaVersion)
+				try { update(moduleID, target, false) }
+				catch
+				{
+					 // unfortunately, there is not a more specific exception thrown when a configuration does not exist,
+					 // so we always retry after cleaning the ivy file for this version of sbt on in case it is a newer version
+					 // of Scala than when this version of sbt was initially published
+					case e: RuntimeException =>
+						update(moduleID, target, true)
+				}
 		}
-		update(moduleID, target)
 	}
 	/** Runs the resolve and retrieve for the given moduleID, which has had its dependencies added already. */
-	private def update(moduleID: DefaultModuleDescriptor,  target: UpdateTarget.Value)
+	private def update(moduleID: DefaultModuleDescriptor,  target: UpdateTarget.Value, cleanExisting: Boolean)
 	{
 		val eventManager = new EventManager
 		val settings = new IvySettings
 		addResolvers(settings, scalaVersion, target)
 		settings.setDefaultConflictManager(settings.getConflictManager(ConflictManagerName))
 		settings.setBaseDir(bootDirectory)
-		settings
+		if(cleanExisting)
+		{
+			val sbtID = createID(SbtOrg, SbtModuleName, sbtVersion)
+			onDefaultRepositoryCacheManager(settings)( _.getIvyFileInCache(sbtID).delete )
+		}
 		resolve(settings, eventManager, moduleID)
 		retrieve(settings, eventManager, moduleID, target)
 	}
@@ -154,13 +168,17 @@ private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion
 				newDefault.add(mavenResolver("Scala Tools Releases", "http://scala-tools.org/repo-releases"))
 				newDefault.add(mavenResolver("Scala Tools Snapshots", "http://scala-tools.org/repo-snapshots"))
 		}
-		settings.getDefaultRepositoryCacheManager match
-		{
-			case manager: DefaultRepositoryCacheManager => manager.setUseOrigin(true)
-			case _ => ()
-		}
+		onDefaultRepositoryCacheManager(settings)(_.setUseOrigin(true))
 		settings.addResolver(newDefault)
 		settings.setDefaultResolver(newDefault.getName)
+	}
+	private def onDefaultRepositoryCacheManager(settings: IvySettings)(f: DefaultRepositoryCacheManager => Unit)
+	{
+		settings.getDefaultRepositoryCacheManager match
+		{
+			case manager: DefaultRepositoryCacheManager => f(manager)
+			case _ => ()
+		}
 	}
 	/** Uses the pattern defined in BuildConfiguration to download sbt from Google code.*/
 	private def sbtResolver(scalaVersion: String) =
