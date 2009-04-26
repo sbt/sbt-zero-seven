@@ -14,7 +14,7 @@ private[sbt] object SelectMainClass
 					println("\nMultiple main classes detected, select one to run:\n")
 					for( (className, index) <- multiple.zipWithIndex )
 						println(" [" + (index+1) + "] " + className)
-					val line = trim(Console.readLine("\nEnter number: "))
+					val line = trim(SimpleReader.readLine("\nEnter number: "))
 					println("")
 					toInt(line, multiple.length) map multiple.apply
 				}
@@ -22,7 +22,7 @@ private[sbt] object SelectMainClass
 					None
 		}
 	}
-	private def trim(s: String) = if(s == null) "" else s.trim
+	private def trim(s: Option[String]) = s.getOrElse("")
 	private def toInt(s: String, size: Int) =
 		try
 		{

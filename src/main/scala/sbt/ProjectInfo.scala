@@ -40,14 +40,14 @@ object ProjectInfo
 	{
 		if(confirmPrompt("No project found. Create new project?", false))
 		{
-			val name = trim(Console.readLine("Project Name: "))
+			val name = trim(SimpleReader.readLine("Project Name: "))
 			if(name.isEmpty)
 				new SetupError("Project not created: no name specified.")
 			else
 			{
 				val organization =
 				{
-					val org = trim(Console.readLine("Organization [" + DefaultOrganization + "]: "))
+					val org = trim(SimpleReader.readLine("Organization [" + DefaultOrganization + "]: "))
 					if(org.isEmpty)
 						DefaultOrganization
 					else
@@ -73,14 +73,14 @@ object ProjectInfo
 	private def confirmPrompt(question: String, defaultYes: Boolean) =
 	{
 		val choices = if(defaultYes) " (Y/n) " else " (y/N) "
-		val answer = trim(Console.readLine(question + choices))
+		val answer = trim(SimpleReader.readLine(question + choices))
 		val yes = "y" :: "yes" :: (if(defaultYes) List("") else Nil)
 		yes.contains(answer.toLowerCase)
 	}
 	
 	private def readVersion(projectDirectory: File, log: Logger): Option[Version] =
 	{
-		val version = trim(Console.readLine("Version: "))
+		val version = trim(SimpleReader.readLine("Version: "))
 		if(version.isEmpty)
 			None
 		else
@@ -96,5 +96,5 @@ object ProjectInfo
 			}
 		}
 	}
-	private def trim(s: String) = if(s == null) "" else s.trim
+	private def trim(s: Option[String]) = s.getOrElse("")
 }

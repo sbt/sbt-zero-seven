@@ -53,7 +53,7 @@ object Main
 				ExitHooks.runExitHooks(log)
 				// Because this is an error that can probably be corrected, prompt user to try again.
 				val line =
-					try { Some(readLine("\n Hit enter to retry or 'exit' to quit: ")).filter(_ != null) }
+					try { SimpleReader.readLine("\n Hit enter to retry or 'exit' to quit: ") }
 					catch
 					{
 						case e =>
@@ -405,22 +405,18 @@ object Main
 						case property: Project#UserProperty[_] =>
 							if(first)
 								project.log.error(" Property '" + name + "' " + undefinedMessage(property))
-							val newValue = Console.readLine("  Enter new value for " + name + " : ")
-							Console.println()
-							if(newValue == null)
-								None
-							else
+							for(newValue <- SimpleReader.readLine("  Enter new value for " + name + " : ")) yield
 							{
 								try
 								{
 									property.setStringValue(newValue)
-									Some(true)
+									true
 								}
 								catch
 								{
 									case e =>
 										project.log.error("Invalid value: " + e.getMessage)
-										Some(false)
+										false
 								}
 							}
 						case _ => Some(true)

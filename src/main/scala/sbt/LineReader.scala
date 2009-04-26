@@ -10,17 +10,37 @@ trait LineReader extends NotNull
 class Completors(val projectAction: String, val projectNames: Iterable[String],
 	val generalCommands: Iterable[String], val propertyActions: Iterable[String],
 	val prefixes: Iterable[String]) extends NotNull
-class JLineReader(historyPath: Option[Path], completors: Completors, log: Logger) extends LineReader
+import jline.ConsoleReader
+abstract class JLine extends LineReader
+{
+	protected[this] val reader: ConsoleReader
+	def readLine(prompt: String) =
+		reader.readLine(prompt) match
+		{
+			case null => None
+			case x => Some(x.trim)
+		}
+}
+object SimpleReader extends JLine
+{
+	protected[this] val reader =
+	{
+		val cr = new ConsoleReader
+		cr.setBellEnabled(false)
+		cr
+	}
+}
+class JLineReader(historyPath: Option[Path], completors: Completors, log: Logger) extends JLine
 {
 	import completors._
-	import jline.{ArgumentCompletor, Completor, ConsoleReader, MultiCompletor, NullCompletor, SimpleCompletor}
+	import jline.{ArgumentCompletor, Completor, MultiCompletor, NullCompletor, SimpleCompletor}
 	
 	private val generalCompletor = simpleCompletor(generalCommands)
 	private val projectCompletor = simpleArgumentCompletor(projectAction :: Nil, projectNames)
 		
 	private val completor = new MultiCompletor()
 	
-	private val reader =
+	protected[this] val reader =
 	{
 		val cr = new ConsoleReader
 		cr.setBellEnabled(false)
@@ -74,10 +94,4 @@ class JLineReader(historyPath: Option[Path], completors: Completors, log: Logger
 		val baseCompletor = new MultiCompletor(baseCompletors.toArray)
 		completor.setCompletors( Array(baseCompletor, prefixedCompletor(baseCompletor)) )
 	}
-	def readLine(prompt: String) =
-		reader.readLine(prompt) match
-		{
-			case null => None
-			case x => Some(x)
-		}
 }
