@@ -12,6 +12,7 @@ protected/* protected required until sbt 0.4.1, which will properly ignore abstr
 	
 	private val version2_7_2 = "2.7.2"
 	private val version2_7_3 = "2.7.3"
+	private val version2_7_4 = "2.7.4"
 	private val version2_8_0 = "2.8.0-SNAPSHOT"
 	private val base = "base"
 	
@@ -35,19 +36,23 @@ protected/* protected required until sbt 0.4.1, which will properly ignore abstr
 			<conf name={base}/>
 			<conf name={version2_7_2} extends={base}/>
 			<conf name={version2_7_3} extends={base}/>
+			<conf name={version2_7_4} extends={base}/>
 			<conf name={version2_8_0} extends={base}/>
 			<conf name={optional(base)}/>
 			<conf name={optional(version2_7_2)} extends={optional(base)}/>
 			<conf name={optional(version2_7_3)} extends={optional(base)}/>
+			<conf name={optional(version2_7_4)} extends={optional(base)}/>
 			<conf name={optional(version2_8_0)} extends={optional(base)}/>
 			<conf name="default" extends={version2_7_2 + "," + optional(version2_7_2)} visibility="private"/>
 			<conf name={scalac(version2_7_2)} visibility="private"/>
 			<conf name={scalac(version2_7_3)} visibility="private"/>
+			<conf name={scalac(version2_7_4)} visibility="private"/>
 			<conf name={scalac(version2_8_0)} visibility="private"/>
 		</configurations>
 		<publications>
 			<artifact name={sbt(version2_7_2)} conf={version2_7_2}/>
 			<artifact name={sbt(version2_7_3)} conf={version2_7_3}/>
+			<artifact name={sbt(version2_7_4)} conf={version2_7_4}/>
 			<artifact name={sbt(version2_8_0)} conf={version2_8_0}/>
 		</publications>
 		<dependencies>
@@ -65,6 +70,11 @@ protected/* protected required until sbt 0.4.1, which will properly ignore abstr
 			<dependency org="org.scala-tools.testing" name="scalatest" rev="0.9.4" transitive="false" conf={depConf(optional(version2_7_3))}/>
 			<dependency org="org.specs" name="specs" rev="1.4.3" transitive="false" conf={depConf(optional(version2_7_3))}/>
 			<dependency org="org.scala-lang" name="scala-compiler" rev={version2_7_3} conf={depConf(scalac(version2_7_3))}/>
+			
+			<!-- Scala 2.7.4 -->
+			<dependency org="org.scala-tools.testing" name="scalatest" rev="0.9.4" transitive="false" conf={depConf(optional(version2_7_4))}/>
+			<dependency org="org.specs" name="specs" rev="1.4.3" transitive="false" conf={depConf(optional(version2_7_4))}/>
+			<dependency org="org.scala-lang" name="scala-compiler" rev={version2_7_4} conf={depConf(scalac(version2_7_4))}/>
 
 			<!-- Scala 2.8.0-SNAPSHOT -->
 			<dependency org="org.scala-tools.testing" name="scalatest" rev="0.9.5" transitive="false" conf={depConf(optional(version2_8_0))}/>
@@ -74,9 +84,10 @@ protected/* protected required until sbt 0.4.1, which will properly ignore abstr
 	
 	private val conf_2_7_2 = config(version2_7_2)
 	private val conf_2_7_3 = config(version2_7_3)
+	private val conf_2_7_4 = config(version2_7_4)
 	private val conf_2_8_0 = config(version2_8_0)
 	// the list of all configurations to cross-compile against
-	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_8_0 :: Nil
+	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_8_0 :: Nil
 	
 	/** The lib directory is now only for building using the 'build' script.*/
 	override def unmanagedClasspath = path("ignore_lib_directory")
