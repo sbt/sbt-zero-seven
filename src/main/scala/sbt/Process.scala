@@ -6,6 +6,7 @@ package sbt
 import java.lang.{Process => JProcess, ProcessBuilder => JProcessBuilder}
 import java.io.{Closeable, File, IOException}
 import java.io.{BufferedReader, InputStream, InputStreamReader, OutputStream, PipedInputStream, PipedOutputStream}
+import java.net.URL
 
 /** Methods for constructing simple commands that can then be combined. */
 object Process
@@ -14,6 +15,25 @@ object Process
 	implicit def apply(command: Seq[String]): ProcessBuilder = apply(new JProcessBuilder(command : _*))
 	def apply(command: String, arguments: Seq[String]): ProcessBuilder = apply(new JProcessBuilder(command :: arguments.toList : _*))
 	implicit def apply(builder: JProcessBuilder): ProcessBuilder = new SimpleProcessBuilder(builder)
+	implicit def apply(file: File): FilePartialBuilder = new FileBuilder(file)
+	implicit def apply(url: URL): URLPartialBuilder = new URLBuilder(url)
+}
+
+trait URLPartialBuilder extends NotNull
+{
+	def #>(b: ProcessBuilder): ProcessBuilder
+	def #>>(b: File): ProcessBuilder
+	def #>(b: File): ProcessBuilder
+}
+trait FilePartialBuilder extends NotNull
+{
+	def #>(b: ProcessBuilder): ProcessBuilder
+	def #<(b: ProcessBuilder): ProcessBuilder
+	def #<(url: URL): ProcessBuilder
+	def #>>(b: File): ProcessBuilder
+	def #>(b: File): ProcessBuilder
+	def #<(file: File): ProcessBuilder
+	def #<<(file: File): ProcessBuilder
 }
 
 /** Represents a process that is running or has finished running.
@@ -51,6 +71,8 @@ trait ProcessBuilder extends NotNull
 	def ## (other: ProcessBuilder): ProcessBuilder
 	/** Reads the given file into the input stream of this process. */
 	def #< (f: File): ProcessBuilder
+	/** Reads the given URL into the input stream of this process. */
+	def #< (f: URL): ProcessBuilder
 	/** Writes the output stream of this process to the given file. */
 	def #> (f: File): ProcessBuilder
 	/** Appends the output stream of this process to the given file. */

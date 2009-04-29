@@ -77,6 +77,7 @@ private abstract class AbstractProcessBuilder extends ProcessBuilder
 	def ##(other: ProcessBuilder): ProcessBuilder = new SequenceProcessBuilder(this, other)
 	
 	def #< (f: File): ProcessBuilder = new PipedProcessBuilder(new FileInput(f), this, false)
+	def #< (url: URL): ProcessBuilder = new PipedProcessBuilder(new URLInput(url), this, false)
 	def #> (f: File): ProcessBuilder = new PipedProcessBuilder(this, new FileOutput(f, false), false)
 	def #>> (f: File): ProcessBuilder = new PipedProcessBuilder(this, new FileOutput(f, true), true)
 	
@@ -88,6 +89,24 @@ private abstract class AbstractProcessBuilder extends ProcessBuilder
 	def !(io: ProcessIO) = run(io).exitValue()
 
 	def canPipeTo = false
+}
+private[sbt] class URLBuilder(url: URL) extends URLPartialBuilder
+{
+	def #>(b: ProcessBuilder): ProcessBuilder = b #< url
+	def #>>(file: File): ProcessBuilder = toFile(file, true)
+	def #>(file: File): ProcessBuilder = toFile(file, false)
+	private def toFile(file: File, append: Boolean) = new PipedProcessBuilder(new URLInput(url), new FileOutput(file, append), false)
+}
+private[sbt] class FileBuilder(base: File) extends FilePartialBuilder
+{
+	def #>(b: ProcessBuilder): ProcessBuilder = b #< base
+	def #<(b: ProcessBuilder): ProcessBuilder = b #> base
+	def #<(url: URL): ProcessBuilder = new URLBuilder(url) #> base
+	def #>>(file: File): ProcessBuilder = pipe(base, file, true)
+	def #>(file: File): ProcessBuilder = pipe(base, file, false)
+	def #<(file: File): ProcessBuilder = pipe(file, base, false)
+	def #<<(file: File): ProcessBuilder = pipe(file, base, true)
+	private def pipe(from: File, to: File, append: Boolean) = new PipedProcessBuilder(new FileInput(from), new FileOutput(to, append), false)
 }
 
 private abstract class BasicBuilder extends AbstractProcessBuilder

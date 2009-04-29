@@ -248,7 +248,6 @@ object Main
 		printCmd(ShowActions, "Shows all available actions.")
 		printCmd(ShowMethods, "Shows all available methods.")
 		printCmd(RebootCommand, "Changes to scala.version or sbt.version are processed and the project definition is reloaded.")
-		printCmd(ProjectConsoleAction, "Enters the Scala interpreter with the current project bound to the variable 'current' and all members imported.")
 		printCmd(HelpAction, "Displays this help message.")
 	}
 	private def displayInteractiveHelp() = {
@@ -267,6 +266,7 @@ object Main
 		printCmd(TerminateActions.elements.mkString(", "), "Terminates the program.")
 		printCmd(SetAction + " <property> <value>", "Sets the value of the property given as its argument.")
 		printCmd(GetAction + " <property>", "Gets the value of the property given as its argument.")
+		printCmd(ProjectConsoleAction, "Enters the Scala interpreter with the current project bound to the variable 'current' and all members imported.")
 	}
 	private def listProject(p: Project) = printProject("\t", p)
 	private def printProject(prefix: String, p: Project)

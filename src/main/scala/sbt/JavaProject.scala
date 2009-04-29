@@ -7,6 +7,8 @@ trait JavaProject extends BasicScalaProject with JavaPaths
 {
 	def mainJavaSources = descendents(mainJavaSourcePath, "*.java")
 	override def mainSources = mainScalaSources +++ mainJavaSources
+	def testJavaSources = descendents(testJavaSourcePath, "*.java")
+	override def testSources = testScalaSources +++ testJavaSources
 }
 trait JavaPaths extends BasicProjectPaths
 {
@@ -14,6 +16,7 @@ trait JavaPaths extends BasicProjectPaths
 	
 	def javaDirectoryName = DefaultJavaDirectoryName
 	def mainJavaSourcePath = mainSourcePath / javaDirectoryName
+	def testJavaSourcePath = testSourcePath / javaDirectoryName
 }
 object JavaProject
 {
