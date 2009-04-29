@@ -61,30 +61,25 @@ object SignJar
 	{
 		require(!alias.trim.isEmpty, "Alias cannot be empty")
 		val arguments = options.toList.flatMap(_.toList) ::: jarPath.asFile.getAbsolutePath :: alias :: Nil
-		val pr = (new ProcessRunner(CommandName, arguments)).logIO(log)
-		val exitCode = pr.run.exitValue()
-		if(exitCode == 0)
-		{
-			log.debug("Signed " + jarPath)
-			None
-		}
-		else
-			Some("Error signing jar (exit code was " + exitCode + ".)")
+		execute("Signed " + jarPath, "signing", arguments, log)
 	}
 	/** Uses jarsigner to verify the given jar.*/
 	def verify(jarPath: Path, options: Seq[SignOption], log: Logger): Option[String] =
 	{
 		val arguments = options.filter(!_.signOnly).toList.flatMap(_.toList) ::: VerifyOption :: jarPath.asFile.getAbsolutePath :: Nil
-		val pr = (new ProcessRunner(CommandName, arguments)).logIO(log)
-		val exitCode = pr.run.exitValue()
+		execute("Verified " + jarPath, "verifying", arguments, log)
+	}
+	private def execute(successMessage: String, action: String, arguments: List[String], log: Logger): Option[String] =
+	{
+		val exitCode = Process(CommandName, arguments) ! log
 		if(exitCode == 0)
 		{
-			log.debug("Verified " + jarPath)
+			log.debug(successMessage)
 			None
 		}
 		else
-			Some("Error verifying jar (exit code was " + exitCode + ".)")
+			Some("Error " + action + " jar (exit code was " + exitCode + ".)")
 	}
 	
-	val CommandName = "jarsigner"
+	private val CommandName = "jarsigner"
 }

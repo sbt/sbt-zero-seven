@@ -137,6 +137,7 @@ object Run
 			interpreter.setContextClassLoader()
 			interpreter.bind("current", project.getClass.getName, project)
 			interpreter.interpret("import sbt._")
+			interpreter.interpret("import Process._")
 			interpreter.interpret("import current._")
 		}
 	}

@@ -119,7 +119,7 @@ object FileUtilities
 	
 	private def withZipOutput(file: File, manifest: Option[Manifest], log: Logger)(f: ZipOutputStream => Option[String]): Option[String] =
 	{
-		writeStream(file: File, log: Logger)
+		writeStream(file, log)
 		{
 			fileOut =>
 			{

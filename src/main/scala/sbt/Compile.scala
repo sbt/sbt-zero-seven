@@ -93,11 +93,9 @@ object Compile extends CompilerCore
 		}
 		!reporter.hasErrors
 	}
-	override protected def processJava(args: List[String], log: Logger): Boolean =
-	{
-		val process = (new ProcessRunner("javac", args) ).logIO(log)
-		process.run.exitValue == 0
-	}
+	override protected def processJava(args: List[String], log: Logger) =
+		(Process("javac", args) ! log) == 0
+	
 	def actionStartMessage(label: String) = "Compiling " + label + " sources..."
 	val actionNothingToDoMessage = "Nothing to compile."
 	val actionSuccessfulMessage = "Compilation successful."
