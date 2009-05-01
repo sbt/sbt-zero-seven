@@ -93,6 +93,12 @@ src/test/resources/sbt-test-resources/actions/interactive/project/build.properti
 src/test/resources/sbt-test-resources/actions/interactive/project/build/src/Marker.scala -text
 src/test/resources/sbt-test-resources/actions/interactive/project/build/src/TestProject.scala -text
 src/test/resources/sbt-test-resources/actions/interactive/test -text
+src/test/resources/sbt-test-resources/dependency-management/inherit-repo/changes/CorrectProject.scala -text
+src/test/resources/sbt-test-resources/dependency-management/inherit-repo/changes/CorrectProject2.scala -text
+src/test/resources/sbt-test-resources/dependency-management/inherit-repo/changes/CorrectProject3.scala -text
+src/test/resources/sbt-test-resources/dependency-management/inherit-repo/project/build.properties -text
+src/test/resources/sbt-test-resources/dependency-management/inherit-repo/project/build/src/TestProject.scala -text
+src/test/resources/sbt-test-resources/dependency-management/inherit-repo/test -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/project/build.properties -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/project/build/src/UpdateTestProject.scala -text
 src/test/resources/sbt-test-resources/dependency-management/inline-dependencies-a/test -text
@@ -185,6 +191,13 @@ src/test/resources/sbt-test-resources/tests/Class.forName/project/build.properti
 src/test/resources/sbt-test-resources/tests/Class.forName/src/main/scala/Test.scala -text
 src/test/resources/sbt-test-resources/tests/Class.forName/src/test/scala/Test.scala -text
 src/test/resources/sbt-test-resources/tests/Class.forName/test -text
+src/test/resources/sbt-test-resources/tests/extend/changes/ScalaCheck.scala -text
+src/test/resources/sbt-test-resources/tests/extend/changes/TestFailure.scala -text
+src/test/resources/sbt-test-resources/tests/extend/changes/TestProject2.scala -text
+src/test/resources/sbt-test-resources/tests/extend/changes/TestSuccess.scala -text
+src/test/resources/sbt-test-resources/tests/extend/project/build.properties -text
+src/test/resources/sbt-test-resources/tests/extend/project/build/src/TestProject.scala -text
+src/test/resources/sbt-test-resources/tests/extend/test -text
 src/test/resources/sbt-test-resources/tests/resources/ivy.xml -text
 src/test/resources/sbt-test-resources/tests/resources/project/build.properties -text
 src/test/resources/sbt-test-resources/tests/resources/src/main/resources/MainResource.txt -text
