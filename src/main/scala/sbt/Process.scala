@@ -13,7 +13,7 @@ object Process
 {
 	implicit def apply(command: String): ProcessBuilder = apply(command.split("""\s+""")) // TODO: use CommandParser
 	implicit def apply(command: Seq[String]): ProcessBuilder = apply(new JProcessBuilder(command : _*))
-	def apply(command: String, arguments: Seq[String]): ProcessBuilder = apply(new JProcessBuilder(command :: arguments.toList : _*))
+	def apply(command: String, arguments: Seq[String]): ProcessBuilder = apply(new JProcessBuilder((command :: arguments.toList).toArray : _*))
 	implicit def apply(builder: JProcessBuilder): ProcessBuilder = new SimpleProcessBuilder(builder)
 	implicit def apply(file: File): FilePartialBuilder = new FileBuilder(file)
 	implicit def apply(url: URL): URLPartialBuilder = new URLBuilder(url)
