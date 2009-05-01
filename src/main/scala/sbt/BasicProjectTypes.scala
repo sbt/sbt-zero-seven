@@ -460,7 +460,12 @@ trait ReflectiveConfigurations extends Project
 * that conforms to ModuleID.*/
 trait ReflectiveRepositories extends Project
 {
-	def repositories: Set[Resolver] = reflectiveRepositories
+	def repositories: Set[Resolver] =
+		info.parent match
+		{
+			case Some(p: ReflectiveRepositories) => p.repositories ++ reflectiveRepositories
+			case None => reflectiveRepositories
+		}
 	def reflectiveRepositories: Set[Resolver] = Set(Reflective.reflectiveMappings[Resolver](this).values.toList: _*)
 }
 
