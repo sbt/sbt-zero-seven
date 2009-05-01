@@ -17,6 +17,8 @@ abstract class CrossCompileProject extends BasicScalaProject
 	private val version2_8_0 = "2.8.0-SNAPSHOT"
 	private val base = "base"
 
+	private def developmentVersion = version2_7_2
+
 	/* The configurations for the versions of Scala.*/
 	private val conf_2_7_2 = config(version2_7_2)
 	private val conf_2_7_3 = config(version2_7_3)
@@ -50,7 +52,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 			<conf name={optional(base)}/>
 			{ variableConfigurations }
 			<!-- The configuration used for normal development (actions other than cross-*) -->
-			<conf name="default" extends={version2_7_2 + "," + optional(version2_7_2)} visibility="private"/>
+			<conf name="default" extends={developmentVersion + "," + optional(developmentVersion)} visibility="private"/>
 		</configurations>
 		<publications>
 			{ publications }

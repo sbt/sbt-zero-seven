@@ -143,14 +143,20 @@ private trait ClassFilter
 {
 	def include(className: String): Boolean
 }
+
 private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], parent: ClassLoader, grandparent: ClassLoader)
 	extends LoaderBase(urls, parent) with NotNull
 {
 	def doLoadClass(className: String): Class[_] =
 	{
 		if(Loaders.isNestedOrSelf(className, runnerClassName))
-			findClass(className)
-		else if(className.startsWith(Loaders.SbtPackage)) // we circumvent the parent loader because we know that we want the
+		{
+			if(Loaders.isSbtClass(className))
+				findClass(className)
+			else
+				grandparent.loadClass(className)
+		}
+		else if(Loaders.isSbtClass(className)) // we circumvent the parent loader because we know that we want the
 			grandparent.loadClass(className)              // version of sbt that is currently the builder (not the project being built)
 		else
 			parent.loadClass(className)
@@ -161,4 +167,5 @@ private object Loaders
 	val SbtPackage = "sbt."
 	def isNestedOrSelf(className: String, checkAgainst: String) =
 		className == checkAgainst || className.startsWith(checkAgainst + "$")
+	def isSbtClass(className: String) = className.startsWith(Loaders.SbtPackage)
 }
