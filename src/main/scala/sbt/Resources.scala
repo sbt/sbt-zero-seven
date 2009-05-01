@@ -109,6 +109,8 @@ class Resources(val baseDirectory: File)
 		loadResult match
 		{
 			case Right(project) =>
+				project.log.enableTrace(log.traceEnabled)
+				project.log.setLevel(log.getLevel)
 				f(project) match
 				{
 					case ContinueResult(newF, newReload) => withProject(log, Some(project), newReload, dir)(newF)
