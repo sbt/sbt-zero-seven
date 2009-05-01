@@ -2,6 +2,8 @@
  * Copyright 2009  Mark Harrah
  */
 
+package scripted
+
 import sbt._
 import java.io.{BufferedReader, File, InputStreamReader}
 

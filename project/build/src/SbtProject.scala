@@ -40,7 +40,7 @@ protected class MainProject(val info: ProjectInfo) extends CrossCompileProject
 	
 	lazy val testNoScripted = super.testAction
 	override def testAction = testNoScripted dependsOn(scripted)
-	lazy val scripted = scriptedTask dependsOn testCompile
+	lazy val scripted = scriptedTask dependsOn(testCompile, `package`)
 	def scriptedTask =
 		task
 		{
@@ -48,16 +48,23 @@ protected class MainProject(val info: ProjectInfo) extends CrossCompileProject
 			log.info("")
 			// load ScriptedTests using a ClassLoader that loads from the project classpath so that the version
 			// of sbt being built is tested, not the one doing the building.
-			val loader = ScriptedLoader(runClasspath.get.map(_.asURL).toSeq.toArray)
-			val scriptedClass = Class.forName(ScriptedClassName, true, loader).asSubclass(classOf[Scripted])
-			val scriptedConstructor = scriptedClass.getConstructor(classOf[File], classOf[ScriptedTestFilter])
+			val loader = ScriptedLoader(scriptedClasspath.toArray)
+			val scriptedClass = Class.forName(ScriptedClassName, true, loader)
+			val scriptedConstructor = scriptedClass.getConstructor(classOf[File], classOf[Function2[String, String, Boolean]])
 			val runner = scriptedConstructor.newInstance(sbtTestResources.asFile, filter)
-			runner.scriptedTests(log)
+			runner.asInstanceOf[{def scriptedTests(log: Logger): Option[String]}].scriptedTests(log)
 		}
-	val ScriptedClassName = "ScriptedTests"
-	
-	val filter = new ScriptedTestFilter
+	/** The classpath to use for scripted tests.   This ensures that the version of sbt being built it the one used for testing.*/
+	private def scriptedClasspath =
 	{
-		def accept(group: String, name: String) = true//name == "multi"
+		val buildClasspath = classOf[SbtProject]. getProtectionDomain.getCodeSource.getLocation.toURI.toURL
+		val scalacJar = scalaJars.filter(_.getName.contains("compiler")).map(_.toURI.toURL).toList
+		val runcp = scala.collection.immutable.Set(runClasspath.get.toSeq :_*) - mainCompilePath - mainResourcesPath
+		val builtSbtJar = (outputPath / defaultJarName).asURL
+		builtSbtJar :: buildClasspath :: scalacJar ::: runcp.map(_.asURL).toList
 	}
+		
+	val ScriptedClassName = "scripted.ScriptedTests"
+	
+	val filter = (group: String, name: String) => group == "java"//name == "multi"
 }
