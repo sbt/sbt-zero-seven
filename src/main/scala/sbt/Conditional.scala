@@ -283,6 +283,11 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 		log.info(executeAnalysis.toString)
 		finishHashes()
 		import executeAnalysis.dirtySources
+		
+		// the output directory won't show up in the classpath unless it exists, so do this before classpath.get
+		val outputDir = outputDirectory.asFile
+		FileUtilities.createDirectory(outputDir, log)
+		
 		val cp = classpath.get
 		if(!dirtySources.isEmpty)
 			checkClasspath(cp)
