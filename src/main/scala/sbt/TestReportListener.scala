@@ -44,25 +44,25 @@ abstract class WriterReportListener(val log: Logger) extends TestsListener
 	protected val passedEventHandler: TestEvent => Summary = (event: TestEvent) => event match
 		{
 			case SpecificationReportEvent(successes, failures, errors, skipped, desc, systems, subSpecs) => Summary(successes, failures, errors, skipped, None)
-			case IgnoredEvent(name, Some(message)) => Summary(1, 0, 0, 1, Some(message.text))
+			case IgnoredEvent(name, Some(message)) => Summary(1, 0, 0, 1, Some(message))
 			case IgnoredEvent(name, None) => Summary(1, 0, 0, 1, None)
 			case _ => Summary(1, 0, 0, 0, None)
 		}
 	protected val failedEventHandler: TestEvent => Summary = (event: TestEvent) => event match
 		{
-			case FailedEvent(name, msg) => Summary(1, 1, 0, 0, Some("! " + name + ": " + msg.text))
-			case TypedErrorEvent(name, event, Some(msg)) => Summary(1, 1, 0, 0, Some(event + " - " + name + ": " + msg.text))
+			case FailedEvent(name, msg) => Summary(1, 1, 0, 0, Some("! " + name + ": " + msg))
+			case TypedErrorEvent(name, event, Some(msg)) => Summary(1, 1, 0, 0, Some(event + " - " + name + ": " + msg))
 			case TypedErrorEvent(name, event, None) => Summary(1, 1, 0, 0, Some(event + " - " + name))
-			case ErrorEvent(msg) => Summary(1, 1, 0, 0, Some(msg.text))
+			case ErrorEvent(msg) => Summary(1, 1, 0, 0, Some(msg))
 			case SpecificationReportEvent(successes, failures, errors, skipped, desc, systems, subSpecs) => Summary(successes + failures + errors + skipped, failures, errors, skipped, Some(desc))
 			case _ => {log.warn("Unrecognized failure: " + event); Summary(1, 1, 0, 0, None)}
 		}
 	protected val errorEventHandler: TestEvent => Summary = (event: TestEvent) => event match
 		{
-			case FailedEvent(name, msg) => Summary(1, 0, 1, 0, Some("! " + name + ": " + msg.text))
-			case TypedErrorEvent(name, event, Some(msg)) => Summary(1, 0, 1, 0, Some(event + " - " + name + ": " + msg.text))
+			case FailedEvent(name, msg) => Summary(1, 0, 1, 0, Some("! " + name + ": " + msg))
+			case TypedErrorEvent(name, event, Some(msg)) => Summary(1, 0, 1, 0, Some(event + " - " + name + ": " + msg))
 			case TypedErrorEvent(name, event, None) => Summary(1, 0, 1, 0, Some(event + " - " + name))
-			case ErrorEvent(msg) => Summary(1, 0, 1, 0, Some(msg.text))
+			case ErrorEvent(msg) => Summary(1, 0, 1, 0, Some(msg))
 			case SpecificationReportEvent(successes, failures, errors, skipped, desc, systems, subSpecs) => Summary(successes + failures + errors + skipped, failures, errors, skipped, Some(desc))
 			case _ => {log.warn("Unrecognized error: " + event); Summary(1, 0, 1, 0, None)}
 		}
@@ -157,22 +157,22 @@ abstract class TestEvent extends NotNull
 }
 
 sealed abstract class ScalaCheckEvent extends TestEvent
-final case class PassedEvent(name: String, msg: Elem) extends ScalaCheckEvent { def result = Some(Result.Passed) }
-final case class FailedEvent(name: String, msg: Elem) extends ScalaCheckEvent { def result = Some(Result.Failed) }
+final case class PassedEvent(name: String, msg: String) extends ScalaCheckEvent { def result = Some(Result.Passed) }
+final case class FailedEvent(name: String, msg: String) extends ScalaCheckEvent { def result = Some(Result.Failed) }
 
 sealed abstract class ScalaTestEvent(val result: Option[Result.Value]) extends TestEvent
-final case class TypedEvent(name: String, `type`: String, msg: Option[Elem])(result: Option[Result.Value]) extends ScalaTestEvent(result)
-final case class TypedErrorEvent(name: String, `type`: String, msg: Option[Elem])(result: Option[Result.Value]) extends ScalaTestEvent(result)
-final case class MessageEvent(msg: Elem) extends ScalaTestEvent(None)
-final case class ErrorEvent(msg: Elem) extends ScalaTestEvent(None)
-final case class IgnoredEvent(name: String, msg: Option[Elem]) extends ScalaTestEvent(Some(Result.Passed))
+final case class TypedEvent(name: String, `type`: String, msg: Option[String])(result: Option[Result.Value]) extends ScalaTestEvent(result)
+final case class TypedErrorEvent(name: String, `type`: String, msg: Option[String])(result: Option[Result.Value]) extends ScalaTestEvent(result)
+final case class MessageEvent(msg: String) extends ScalaTestEvent(None)
+final case class ErrorEvent(msg: String) extends ScalaTestEvent(None)
+final case class IgnoredEvent(name: String, msg: Option[String]) extends ScalaTestEvent(Some(Result.Passed))
 
 sealed abstract class SpecsEvent extends TestEvent
 final case class SpecificationReportEvent(successes: Int, failures: Int, errors: Int, skipped: Int, pretty: String, systems: Seq[SystemReportEvent], subSpecs: Seq[SpecificationReportEvent]) extends SpecsEvent
 {
 	def result = if(errors > 0) Some(Result.Error) else if(failures > 0) Some(Result.Failed) else Some(Result.Passed)
 }
-final case class SystemReportEvent(description: String, verb: String, skippedSus:Option[Throwable], literateDescription: Option[Group], examples: Seq[ExampleReportEvent]) extends SpecsEvent { def result = None }
+final case class SystemReportEvent(description: String, verb: String, skippedSus:Option[Throwable], literateDescription: Option[Seq[String]], examples: Seq[ExampleReportEvent]) extends SpecsEvent { def result = None }
 final case class ExampleReportEvent(description: String, errors: Seq[Throwable], failures: Seq[RuntimeException], skipped: Seq[RuntimeException], subExamples: Seq[ExampleReportEvent]) extends SpecsEvent { def result = None }
 
 trait EventOutput[E <: TestEvent]
@@ -186,8 +186,8 @@ class ScalaCheckOutput(log: Logger) extends LazyEventOutput[ScalaCheckEvent](log
 {
 	def output(event: ScalaCheckEvent) = event match
 		{
-			case PassedEvent(name, msg) => log.info("+ " + name + ": " + msg.text)
-			case FailedEvent(name, msg) => log.error("! " + name + ": " + msg.text)
+			case PassedEvent(name, msg) => log.info("+ " + name + ": " + msg)
+			case FailedEvent(name, msg) => log.error("! " + name + ": " + msg)
 		}
 }
 
@@ -195,13 +195,13 @@ class ScalaTestOutput(log: Logger) extends LazyEventOutput[ScalaTestEvent](log)
 {
 	def output(event: ScalaTestEvent) = event match
 		{
-			case TypedEvent(name, event, Some(msg)) => log.info(event + " - " + name + ": " + msg.text)
+			case TypedEvent(name, event, Some(msg)) => log.info(event + " - " + name + ": " + msg)
 			case TypedEvent(name, event, None) => log.info(event + " - " + name)
-			case TypedErrorEvent(name, event, Some(msg)) => log.error(event + " - " + name + ": " + msg.text)
+			case TypedErrorEvent(name, event, Some(msg)) => log.error(event + " - " + name + ": " + msg)
 			case TypedErrorEvent(name, event, None) => log.error(event + " - " + name)
-			case MessageEvent(msg) => log.info(msg.text)
-			case ErrorEvent(msg) => log.error(msg.text)
-			case IgnoredEvent(name, Some(msg)) => log.info("Test ignored - " + name + ": " + msg.text)
+			case MessageEvent(msg) => log.info(msg)
+			case ErrorEvent(msg) => log.error(msg)
+			case IgnoredEvent(name, Some(msg)) => log.info("Test ignored - " + name + ": " + msg)
 			case IgnoredEvent(name, None) => log.info("Test ignored - " + name)
 		}
 }
@@ -241,7 +241,7 @@ class SpecsOutput(val log: Logger) extends EventOutput[SpecsEvent]
 	{
 		log.info(padding + sus.description + " " + sus.verb + sus.skippedSus.map(" (skipped: " + _.getMessage + ")").getOrElse(""))
 		for(description <- sus.literateDescription)
-			log.info(padding + description.text)
+			log.info(padding + description.mkString)
 		reportExamples(sus.examples, padding)
 		log.info(" ")
 	}
@@ -304,10 +304,7 @@ class LogTestReportListener(val log: Logger) extends TestReportListener
 			case e => handleOtherTestEvent(e)
 		}
 	}
-	protected def handleOtherTestEvent(event: TestEvent)
-	{
-		log.error("Event not supported: " + event)
-	}
+	protected def handleOtherTestEvent(event: TestEvent) {}
 	def endGroup(name: String, t: Throwable)
 	{
 		log.error("Could not run test " + name + ": " + t.toString)

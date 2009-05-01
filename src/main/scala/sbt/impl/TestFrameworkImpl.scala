@@ -30,9 +30,9 @@ private[sbt] class ScalaCheckRunner(val log: Logger, val listeners: Seq[TestRepo
 	private def testReport(pName: String, res: Test.Result) =
 	{
 		if(res.passed)
-			fire(PassedEvent(pName, <message>{Pretty.pretty(res)}</message>))
+			fire(PassedEvent(pName, Pretty.pretty(res)))
 		else
-			fire(FailedEvent(pName, <message>{Pretty.pretty(res)}</message>))
+			fire(FailedEvent(pName, Pretty.pretty(res)))
 	}
 }
 /** The test runner for ScalaTest suites. */
@@ -59,7 +59,7 @@ private[sbt] class ScalaTestRunner(val log: Logger, val listeners: Seq[TestRepor
 		override def testIgnored(report: Report) =
 		{
 			if(report.message.trim.isEmpty) fire(IgnoredEvent(report.name, None))
-			else fire(IgnoredEvent(report.name, Some(<message>report.message.trim</message>)))
+			else fire(IgnoredEvent(report.name, Some(report.message.trim)))
 		}
 		override def testStarting(report: Report) { info(report, "Test starting", None) }
 		override def testSucceeded(report: Report) { info(report, "Test succeeded", Some(Result.Passed)) }
@@ -75,11 +75,11 @@ private[sbt] class ScalaTestRunner(val log: Logger, val listeners: Seq[TestRepor
 		override def suiteCompleted(report: Report) { info(report, "Suite completed", None) }
 		override def suiteAborted(report: Report) { error(report, "Suite aborted", None) }
 		
-		override def runStarting(testCount: Int) { fire(MessageEvent(<message>Run starting</message>)) }
+		override def runStarting(testCount: Int) { fire(MessageEvent("Run starting")) }
 		override def runStopped()
 		{
 			succeeded = false
-			fire(ErrorEvent(<message>Run stopped</message>))
+			fire(ErrorEvent("Run stopped"))
 		}
 		override def runAborted(report: Report)
 		{
@@ -98,13 +98,13 @@ private[sbt] class ScalaTestRunner(val log: Logger, val listeners: Seq[TestRepor
 					if(report.message.trim.isEmpty)
 						fire(TypedErrorEvent(report.name, event, None)(result))
 					else
-						fire(TypedErrorEvent(report.name, event, Some(<message>{report.message.trim}</message>))(result))
+						fire(TypedErrorEvent(report.name, event, Some(report.message.trim))(result))
 				case Level.Info =>
 					if(report.message.trim.isEmpty)
 						fire(TypedEvent(report.name, event, None)(result))
 					else
-						fire(TypedEvent(report.name, event, Some(<message>{report.message.trim}</message>))(result))
-				case l => log.warn("Level not prepared for:" + l)
+						fire(TypedEvent(report.name, event, Some(report.message.trim))(result))
+				case l => log.warn("Level not expected:" + l)
 			}
 		}
 		
@@ -149,11 +149,11 @@ private[sbt] class SpecsRunner(val log: Logger, val listeners: Seq[TestReportLis
 	}
 	private def reportSystem(sus: Sus): SystemReportEvent =
 	{
-		def format(description: Option[Elem]): Option[Group] = description match
-			{
-				case None => None
-				case Some(elem) => Some(new TextFormatter().format(elem, sus.examples))
-			}
+		def format(description: Option[Elem]): Option[Seq[String]] =
+		{
+			for(elem <- description) yield
+				new TextFormatter().format(elem, sus.examples).nodes.map(_.text)
+		}
 
 		SystemReportEvent(sus.description, sus.verb, sus.skippedSus, format(sus.literateDescription), reportExamples(sus.examples))
 	}
