@@ -119,8 +119,6 @@ object Main
 	val ShowCurrent = "current"
 	/** The name of the command that shows all available actions.*/
 	val ShowActions = "actions"
-	/** The name of the command that shows all available methods.*/
-	val ShowMethods = "methods"
 	/** The name of the command that sets the currently active project.*/
 	val ProjectAction = "project"
 	/** The name of the command that shows all available projects.*/
@@ -153,7 +151,7 @@ object Main
 	/** The list of logging levels.*/
 	private def logLevels: Iterable[String] = TreeSet.empty[String] ++ Level.elements.map(_.toString)
 	/** The list of all interactive commands other than logging level.*/
-	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowMethods, ShowCurrent, HelpAction,
+	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent, HelpAction,
 		RebootCommand, ReloadAction, TraceCommand, ContinuousCompileCommand, ProjectConsoleAction)
 	
 	/** Enters interactive mode for the given root project.  It uses JLine for tab completion and
@@ -246,7 +244,6 @@ object Main
 		printCmd("<method name> <parameter>*", "Executes the project specified method.")
 		printCmd("~ <command>", "Executes the project specified action or method whenever source files change.")
 		printCmd(ShowActions, "Shows all available actions.")
-		printCmd(ShowMethods, "Shows all available methods.")
 		printCmd(RebootCommand, "Changes to scala.version or sbt.version are processed and the project definition is reloaded.")
 		printCmd(HelpAction, "Displays this help message.")
 	}
@@ -269,10 +266,8 @@ object Main
 		printCmd(ProjectConsoleAction, "Enters the Scala interpreter with the current project bound to the variable 'current' and all members imported.")
 	}
 	private def listProject(p: Project) = printProject("\t", p)
-	private def printProject(prefix: String, p: Project)
-	{
+	private def printProject(prefix: String, p: Project): Unit =
 		Console.println(prefix + p.name + " " + p.version)
-	}
 	
 	/** Handles the given command string provided by batch mode execution..*/
 	private def handleBatchCommand(project: Project)(command: String): Option[String] =
@@ -280,8 +275,7 @@ object Main
 		command.trim match
 		{
 			case HelpAction => displayBatchHelp(); None
-			case ShowActions => Console.println(project.taskList); None
-			case ShowMethods => Console.println(project.methodList); None
+			case ShowActions => showActions(project); None
 			case action => if(handleAction(project, action)) None else Some("")
 		}
 	}
@@ -295,13 +289,10 @@ object Main
 			case SetAction => setArgumentError(project.log)
 			case ProjectAction => setProjectError(project.log)
 			case ShowCurrent =>
-			{
 				printProject("Current project is ", project)
 				Console.println("Current log level is " + project.log.getLevel)
 				printTraceEnabled(project)
-			}
-			case ShowActions => Console.println(project.taskList)
-			case ShowMethods => Console.println(project.methodList)
+			case ShowActions => showActions(project)
 			case TraceCommand => toggleTrace(project)
 			case Level(level) => setLevel(project, level)
 			case ContinuousCompileCommand => compileContinuously(project)
@@ -310,6 +301,9 @@ object Main
 			case action => handleAction(project, action)
 		}
 	}
+	private def showActions(project: Project): Unit =
+		Console.println(project.taskAndMethodList)
+	
 	// returns true if it succeeded (needed by noninteractive handleCommand)
 	private def handleAction(project: Project, action: String): Boolean =
 	{
@@ -335,9 +329,7 @@ object Main
 		def didNotExist(taskType: String, name: String) =
 		{
 			project.log.error("No " + taskType + " named '" + name + "' exists.")
-			project.log.info("Execute 'help' for a list of commands, " +
-				"'actions' for a list of available project actions, or " +
-				"'methods' for a list of available project methods.")
+			project.log.info("Execute 'help' for a list of commands or 'actions' for a list of available project actions and methods.")
 			false
 		}
 		impl.CommandParser.parse(actionString) match

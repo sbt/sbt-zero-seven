@@ -42,6 +42,19 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	/** A description of all available tasks in this project and all dependencies.  If there
 	* are different tasks with the same name, only one will be included. */
 	def taskList: String = descriptionList(deepTasks)
+	
+	/** A description of all available tasks in this project and all dependencies and all
+	* available method tasks in this project, but not of dependencies.  If there
+	* are different tasks or methods with the same name, only one will be included. */
+	def taskAndMethodList: String = descriptionList(tasksAndMethods)
+	/** The actions and methods declared on this project. */
+	final def tasksAndMethods: Map[String, Described] =
+	{
+		val map = new jcl.TreeMap[String, Described]
+		map ++= methods
+		map ++= tasks
+		map.readOnly
+	}
 	private def descriptionList(described: Map[String, Described]): String =
 	{
 		val buffer = new StringBuilder
