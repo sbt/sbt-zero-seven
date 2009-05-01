@@ -34,10 +34,10 @@ class Analyzer(val global: Global) extends Plugin
 			if(option.startsWith(CallbackIDOptionName))
 				callbackOption = AnalysisCallback(option.substring(CallbackIDOptionName.length).toInt)
 			else
-				error("Option not understood: " + option)
+				error("Option for sbt analyzer plugin not understood: " + option)
 		}
 		if(callbackOption.isEmpty)
-			error("Callback ID not specified.")
+			error("Callback ID not specified for sbt analyzer plugin.")
 	}
 
 	override val optionsHelp: Option[String] =
