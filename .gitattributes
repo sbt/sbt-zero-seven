@@ -113,11 +113,9 @@ src/test/resources/sbt-test-resources/dependency-management/ivy-settings-b/proje
 src/test/resources/sbt-test-resources/dependency-management/ivy-settings-b/project/build/src/UpdateTestProject.scala -text
 src/test/resources/sbt-test-resources/dependency-management/ivy-settings-b/test -text
 src/test/resources/sbt-test-resources/java/analysis/project/build.properties -text
-src/test/resources/sbt-test-resources/java/analysis/project/build/src/JavaTest.scala -text
 src/test/resources/sbt-test-resources/java/analysis/src/main/java/test/R.java -text
 src/test/resources/sbt-test-resources/java/analysis/test -text
 src/test/resources/sbt-test-resources/java/basic/project/build.properties -text
-src/test/resources/sbt-test-resources/java/basic/project/build/src/JavaTest.scala -text
 src/test/resources/sbt-test-resources/java/basic/src/main/java/test/R.java -text
 src/test/resources/sbt-test-resources/java/basic/src/main/scala/S.scala -text
 src/test/resources/sbt-test-resources/java/basic/test -text
