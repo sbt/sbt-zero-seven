@@ -330,7 +330,7 @@ object BasicScalaProject
 	val TestDocDescription =
 		"Generates API documentation for test Scala source files using scaladoc."
 	val RunDescription =
-		"Runs the main class specified for the project or starts the console if main class is not specified."
+		"Runs the main class for the project with the provided arguments."
 	val ConsoleDescription =
 		"Starts the Scala interpreter with the project classes on the classpath."
 	val ConsoleQuickDescription =
