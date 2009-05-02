@@ -21,12 +21,7 @@ class RunnerScalaCheck(val log: Logger, val listeners: Seq[TestReportListener], 
 	import org.scalacheck.{Pretty, Properties, Test}
 	def runTest(testClassName: String): Result.Value =
 	{
-		val test = 
-		try {
-			ModuleUtilities.getObject(testClassName, testLoader).asInstanceOf[Properties]
-		} catch {
-			case e => e.printStackTrace; throw e
-		}
+		val test = ModuleUtilities.getObject(testClassName, testLoader).asInstanceOf[Properties]
 		val result = Test.checkProperties(test, Test.defaultParams, propReport, testReport).find(!_._2.passed)
 		if(result.isEmpty)
 			Result.Failed // intentionally flipped (see top comment)

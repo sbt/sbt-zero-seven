@@ -733,8 +733,10 @@ object FileUtilities
 	
 	/** The directory in which temporary files are placed.*/
 	val temporaryDirectory = new File(System.getProperty("java.io.tmpdir"))
+	def classLocation(cl: Class[_]): URL = cl.getProtectionDomain.getCodeSource.getLocation
+	def classLocation[T](implicit mf: scala.reflect.Manifest[T]): URL = classLocation(mf.erasure)
 	/** The location of the jar containing this class.*/
-	lazy val sbtJar: File = new File(getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
+	lazy val sbtJar: File = new File(classLocation(getClass).toURI)
 	/** The producer of randomness for unique name generation.*/
 	private val random = new java.util.Random
 }

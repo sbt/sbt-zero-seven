@@ -156,7 +156,9 @@ abstract class LazyTestFramework extends TestFramework
 	final def testRunner(projectLoader: ClassLoader, listeners: Iterable[TestReportListener], log: Logger): TestRunner =
 	{
 		val runnerClassName = testRunnerClassName
-		val lazyLoader = new LazyFrameworkLoader(runnerClassName, Array(FileUtilities.sbtJar.toURI.toURL), projectLoader, getClass.getClassLoader)
+		val frameworkClasspath = FileUtilities.classLocation(getClass)
+		val sbtURL = FileUtilities.sbtJar.toURI.toURL
+		val lazyLoader = new LazyFrameworkLoader(runnerClassName, Array(frameworkClasspath, sbtURL), projectLoader, getClass.getClassLoader)
 		val runnerClass = Class.forName(runnerClassName, true, lazyLoader).asSubclass(classOf[TestRunner])
 
 		runnerClass.getConstructor(classOf[Logger], classOf[Seq[TestReportListener]], classOf[ClassLoader]).newInstance(log, listeners, projectLoader)

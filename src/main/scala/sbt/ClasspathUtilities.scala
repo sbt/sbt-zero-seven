@@ -150,12 +150,7 @@ private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], par
 	def doLoadClass(className: String): Class[_] =
 	{
 		if(Loaders.isNestedOrSelf(className, runnerClassName))
-		{
-			if(Loaders.isSbtClass(className))
-				findClass(className)
-			else
-				grandparent.loadClass(className)
-		}
+			findClass(className)
 		else if(Loaders.isSbtClass(className)) // we circumvent the parent loader because we know that we want the
 			grandparent.loadClass(className)              // version of sbt that is currently the builder (not the project being built)
 		else

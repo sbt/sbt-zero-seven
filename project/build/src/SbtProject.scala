@@ -59,9 +59,9 @@ protected class MainProject(val info: ProjectInfo) extends CrossCompileProject
 	{
 		val buildClasspath = classOf[SbtProject]. getProtectionDomain.getCodeSource.getLocation.toURI.toURL
 		val scalacJar = scalaJars.filter(_.getName.contains("compiler")).map(_.toURI.toURL).toList
-		val runcp = scala.collection.immutable.Set(runClasspath.get.toSeq :_*) - mainCompilePath - mainResourcesPath
+		val ivy = runClasspath.get.filter(_.asFile.getName.startsWith("ivy-")).map(_.asURL).toList
 		val builtSbtJar = (outputPath / defaultJarName).asURL
-		builtSbtJar :: buildClasspath :: scalacJar ::: runcp.map(_.asURL).toList
+		builtSbtJar :: buildClasspath :: scalacJar ::: ivy
 	}
 		
 	val ScriptedClassName = "scripted.ScriptedTests"
