@@ -9,6 +9,7 @@ class DefaultProject(val info: ProjectInfo) extends BasicScalaProject
 class DefaultWebProject(val info: ProjectInfo) extends BasicWebScalaProject
 
 import BasicScalaProject._
+import ScalaProject.{optionsAsString, javaOptionsAsString}
 import java.util.jar.Attributes
 
 /** This class defines concrete instances of actions from ScalaProject using overridable paths,
@@ -44,12 +45,14 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	protected def packageProjectRootExcludes: PathFinder = outputPath +++ managedDependencyPath +++ bootPath
 	
 	def mainScalaSources = descendents(mainScalaSourcePath, "*.scala")
+	def mainJavaSources = descendents(mainJavaSourcePath, "*.java")
 	def testScalaSources = descendents(testScalaSourcePath, "*.scala")
+	def testJavaSources = descendents(testJavaSourcePath, "*.java")
 	
 	/** A PathFinder that selects all main sources.  It excludes paths that match 'defaultExcludes'.*/
-	def mainSources = mainScalaSources
+	def mainSources = mainScalaSources +++ mainJavaSources
 	/** A PathFinder that selects all test sources.  It excludes paths that match 'defaultExcludes'.*/
-	def testSources = testScalaSources
+	def testSources = testScalaSources +++ testJavaSources
 	/** A PathFinder that selects all main resources.  It excludes paths that match 'defaultExcludes'.*/
 	def mainResources = descendents(mainResourcesPath ##, "*")
 	/** A PathFinder that selects all test resources.  It excludes paths that match 'defaultExcludes'.*/
@@ -62,10 +65,14 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	
 	import Project._
 	
-	/** The options provided to the 'compile' action.*/
+	/** The options provided to the 'compile' action to pass to the Scala compiler.*/
 	def compileOptions: Seq[CompileOption] = Deprecation :: Nil
+	/** The options provided to the 'compile' action to pass to the Java compiler. */
+	def javaCompileOptions: Seq[JavaCompileOption] = Nil
 	/** The options provided to the 'test-compile' action, defaulting to those for the 'compile' action.*/
 	def testCompileOptions: Seq[CompileOption] = compileOptions
+	/** The options provided to the 'test-compile' action to pass to the Java compiler. */
+	def testJavaCompileOptions: Seq[JavaCompileOption] = javaCompileOptions
 	
 	/** The options provided to the 'doc' and 'docTest' actions.*/
 	def documentOptions: Seq[ScaladocOption] =
@@ -184,7 +191,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		def classpath = compileClasspath
 		def analysisPath = mainAnalysisPath
 		def testDefinitionClassNames = Nil
-		def options = compileOptions.map(_.asString)
+		def options = optionsAsString(compileOptions)
+		def javaOptions = javaOptionsAsString(javaCompileOptions)
 	}
 	class TestCompileConfig extends BaseCompileConfig
 	{
@@ -194,7 +202,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		def classpath = testClasspath
 		def analysisPath = testAnalysisPath
 		def testDefinitionClassNames = testFrameworks.map(_.testSuperClassName)
-		def options = testCompileOptions.map(_.asString)
+		def options = optionsAsString(testCompileOptions)
+		def javaOptions = javaOptionsAsString(testJavaCompileOptions)
 	}
 	
 	protected def compileAction = task { mainCompileConditional.run } describedAs MainCompileDescription
@@ -380,6 +389,7 @@ trait BasicProjectPaths extends Project
 	def sourceDirectoryName = DefaultSourceDirectoryName
 	def mainDirectoryName = DefaultMainDirectoryName
 	def scalaDirectoryName = DefaultScalaDirectoryName
+	def javaDirectoryName = DefaultJavaDirectoryName
 	def resourcesDirectoryName = DefaultResourcesDirectoryName
 	def testDirectoryName = DefaultTestDirectoryName
 	def mainCompileDirectoryName = DefaultMainCompileDirectoryName
@@ -395,12 +405,14 @@ trait BasicProjectPaths extends Project
 	
 	def mainSourcePath = sourcePath / mainDirectoryName
 	def mainScalaSourcePath = mainSourcePath / scalaDirectoryName
+	def mainJavaSourcePath = mainSourcePath / javaDirectoryName
 	def mainResourcesPath = mainSourcePath / resourcesDirectoryName
 	def mainDocPath = docPath / mainDirectoryName / apiDirectoryName
 	def mainCompilePath = outputPath / mainCompileDirectoryName
 	def mainAnalysisPath = outputPath / mainAnalysisDirectoryName
 	
 	def testSourcePath = sourcePath / testDirectoryName
+	def testJavaSourcePath = testSourcePath / javaDirectoryName
 	def testScalaSourcePath = testSourcePath / scalaDirectoryName
 	def testResourcesPath = testSourcePath / resourcesDirectoryName
 	def testDocPath = docPath / testDirectoryName / apiDirectoryName
@@ -423,6 +435,7 @@ object BasicProjectPaths
 	
 	val DefaultMainDirectoryName = "main"
 	val DefaultScalaDirectoryName = "scala"
+	val DefaultJavaDirectoryName = "java"
 	val DefaultResourcesDirectoryName = "resources"
 	val DefaultTestDirectoryName = "test"
 	

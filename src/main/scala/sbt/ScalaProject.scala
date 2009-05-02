@@ -14,6 +14,7 @@ trait ScalaProject extends Project with FileTasks
 	def errorTask(message: String) = task{ Some(message) }
 	
 	case class CompileOption(val asString: String) extends ActionOption
+	case class JavaCompileOption(val asString: String) extends ActionOption
 	trait PackageOption extends ActionOption
 	trait TestOption extends ActionOption
 	trait CleanOption extends ActionOption
@@ -285,4 +286,6 @@ object ScalaProject
 	val AnalysisDirectoryName = "analysis"
 	val MainClassKey = "Main-Class"
 	val TestResourcesProperty = "sbt.test.resources"
+	def optionsAsString(options: Seq[ScalaProject#CompileOption]) = options.map(_.asString)
+	def javaOptionsAsString(options: Seq[ScalaProject#JavaCompileOption]) = options.map(_.asString)
 }

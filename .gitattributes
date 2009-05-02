@@ -51,7 +51,6 @@ src/main/scala/sbt/FileTask.scala -text
 src/main/scala/sbt/FileUtilities.scala -text
 src/main/scala/sbt/Hash.scala -text
 src/main/scala/sbt/IntegrationTesting.scala -text
-src/main/scala/sbt/JavaProject.scala -text
 src/main/scala/sbt/LineReader.scala -text
 src/main/scala/sbt/Logger.scala -text
 src/main/scala/sbt/Main.scala -text
@@ -122,6 +121,11 @@ src/test/resources/sbt-test-resources/java/basic/project/build/src/JavaTest.scal
 src/test/resources/sbt-test-resources/java/basic/src/main/java/test/R.java -text
 src/test/resources/sbt-test-resources/java/basic/src/main/scala/S.scala -text
 src/test/resources/sbt-test-resources/java/basic/test -text
+src/test/resources/sbt-test-resources/java/options/project/build.properties -text
+src/test/resources/sbt-test-resources/java/options/project/build/src/JavaProject.scala -text
+src/test/resources/sbt-test-resources/java/options/src/main/java/test/R.java -text
+src/test/resources/sbt-test-resources/java/options/src/main/scala/S.scala -text
+src/test/resources/sbt-test-resources/java/options/test -text
 src/test/resources/sbt-test-resources/package/lazy-name/project/build.properties -text
 src/test/resources/sbt-test-resources/package/lazy-name/test -text
 src/test/resources/sbt-test-resources/package/manifest/project/build.properties -text

@@ -3,6 +3,8 @@
  */
 package sbt
 
+import ScalaProject.{optionsAsString, javaOptionsAsString}
+
 trait IntegrationTesting
 {
 	/** Override to provide pre-suite setup. */
@@ -55,6 +57,7 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 
 	def integrationTestOptions: Seq[TestOption] = Nil
 	def integrationTestCompileOptions = testCompileOptions
+	def javaIntegrationTestCompileOptions: Seq[JavaCompileOption] = testJavaCompileOptions
 	
 	def integrationTestConfiguration = if(useIntegrationTestConfiguration) Configurations.IntegrationTest else Configurations.Test
 	def integrationTestClasspath = fullClasspath(integrationTestConfiguration) +++ optionalClasspath
@@ -81,7 +84,8 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 		def outputDirectory = integrationTestCompilePath
 		def classpath = integrationTestClasspath
 		def analysisPath = integrationTestAnalysisPath
-		def options = integrationTestCompileOptions.map(_.asString)
+		def options = optionsAsString(integrationTestCompileOptions)
+		def javaOptions = javaOptionsAsString(javaCompileOptions)
 		def testDefinitionClassNames = integrationTestFrameworks.map(_.testSuperClassName)
 	}
 }

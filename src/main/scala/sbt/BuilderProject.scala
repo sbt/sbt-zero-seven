@@ -5,7 +5,7 @@ package sbt
 
 /** The project definition used to build project definitions. */
 final class BuilderProject(val info: ProjectInfo, override protected val logImpl: Logger) extends ScalaProject
-{	
+{
 	import BasicProjectPaths._
 	
 	def compilePath = outputPath / DefaultMainCompileDirectoryName
@@ -16,6 +16,7 @@ final class BuilderProject(val info: ProjectInfo, override protected val logImpl
 	def libraries = descendents(dependencyPath, "*.jar")
 	
 	def compileOptions = Deprecation :: Unchecked :: Nil
+	def javaCompileOptions = Nil
 	override def tasks = Map.empty
 	override def methods = Map.empty
 	def dependencies = Nil
@@ -69,6 +70,7 @@ final class BuilderProject(val info: ProjectInfo, override protected val logImpl
 			def testDefinitionClassNames = Nil
 			def log = BuilderProject.this.log
 			def options = compileOptions.map(_.asString)
+			def javaOptions = javaCompileOptions
 		}
 		
 	def projectDefinition: Either[String, Option[String]] =

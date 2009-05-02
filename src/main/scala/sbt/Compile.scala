@@ -17,7 +17,9 @@ abstract class CompilerCore
 	def actionSuccessfulMessage: String
 	def actionUnsuccessfulMessage: String
 
-	final def apply(label: String, sources: Iterable[Path], classpathString: String, outputDirectory: Path, options: Iterable[String], log: Logger) =
+	final def apply(label: String, sources: Iterable[Path], classpathString: String, outputDirectory: Path, options: Seq[String], log: Logger): Option[String] =
+		apply(label, sources, classpathString, outputDirectory, options, Nil, log)
+	final def apply(label: String, sources: Iterable[Path], classpathString: String, outputDirectory: Path, options: Seq[String], javaOptions: Seq[String], log: Logger): Option[String] =
 	{
 		log.info(actionStartMessage(label))
 		val classpathOption: List[String] =
@@ -49,7 +51,7 @@ abstract class CompilerCore
 							success(log)
 						else
 						{
-							val javaArguments = classpathAndOut ::: javaSourceList
+							val javaArguments = javaOptions.toList ::: classpathAndOut ::: javaSourceList
 							log.debug("Java arguments: " + javaArguments.mkString(" "))
 							if(processJava(javaArguments, log))
 								success(log)

@@ -8,8 +8,8 @@ Project does not exist, create new project? [y/N] y
 Name: 
 Organization [empty]:
 Version [1.0]: 
-Scala version [2.7.3]: 
-sbt version [0.4.1]: 
+Scala version [2.7.4]: 
+sbt version [0.4.5]: 
 */
 import java.io.File
 /** Constants related to reading/writing the build.properties file in a project.
@@ -46,9 +46,9 @@ private object ProjectProperties
 	/** The default version of the new user project when the user doesn't explicitly specify a version when prompted.*/
 	val DefaultVersion = "1.0"
 	/** The default version of sbt when the user doesn't explicitly specify a version when prompted.*/
-	val DefaultSbtVersion = "0.4.3"
+	val DefaultSbtVersion = "0.4.5"
 	/** The default version of Scala when the user doesn't explicitly specify a version when prompted.*/
-	val DefaultScalaVersion = "2.7.3"
+	val DefaultScalaVersion = "2.7.4"
 
 	// (scala version, sbt version)
 	def apply(file: File, setInitializeProject: Boolean): (String, String) = applyImpl(file, setInitializeProject, Nil)
