@@ -4,8 +4,6 @@
 
 package sbt
 
-import scala.xml.{Elem, Group}
-
 trait TestReportListener
 {
 	/** called for each class or equivalent grouping */
