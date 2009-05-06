@@ -3,12 +3,15 @@
 /NOTICE -text
 boot/LICENSE -text
 boot/NOTICE -text
+boot/lib/jline-0.9.94.jar -text
 boot/licenses/LICENSE_Ivy -text
+boot/licenses/LICENSE_JLine -text
 boot/licenses/LICENSE_Scala -text
 boot/src/main/scala/Boot.scala -text
 boot/src/main/scala/BootConfiguration.scala -text
 boot/src/main/scala/FilteredLoader.scala -text
 boot/src/main/scala/ProjectProperties.scala -text
+boot/src/main/scala/SimpleReader.scala -text
 boot/src/main/scala/Update.scala -text
 /build -text
 /clean -text

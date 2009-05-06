@@ -89,25 +89,12 @@ private object ProjectProperties
 				case Some(d) => "%s [%s]: ".format(label, d)
 				case None => "%s: ".format(label)
 			}
-		readLine(prompt) orElse default match
+		SimpleReader.readLine(prompt) orElse default match
 		{
 			case Some(line) => line
 			case None => throw new BootException("Project not loaded: " + label + " not specified.")
 		}
 	}
-	// None if line is null or empty
-	private def readLine(prompt: String): Option[String] = process(Console.readLine(prompt))
-	private def process(line: String): Option[String] =
-		if(line == null)
-			None
-		else
-		{
-			val trimmed = line.trim
-			if(trimmed.isEmpty)
-				None
-			else
-				Some(trimmed)
-		}
 }
 
 import java.io.{FileInputStream, FileOutputStream}

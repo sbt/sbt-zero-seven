@@ -69,8 +69,7 @@ object Boot
 	* this loader from being seen by the loaded sbt/project.*/
 	private def load(args: Array[String])
 	{
-		val classpath = (new Setup).classpath()
-		val loader = new URLClassLoader(classpath, new BootFilteredLoader)
+		val loader = (new Setup).loader()
 		val sbtMain = Class.forName(SbtMainClass, true, loader)
 		val exitCode = run(sbtMain, args)
 		if(exitCode == NormalExitCode)
@@ -140,7 +139,7 @@ private class Setup extends NotNull
 	{
 		if(!ProjectDirectory.exists)
 		{
-			val line = Console.readLine("Project does not exist, create new project? (y/N) : ")
+			val line = SimpleReader.readLine("Project does not exist, create new project? (y/N) : ")
 			if(isYes(line))
 				ProjectProperties(PropertiesFile, true)
 			else
@@ -152,8 +151,8 @@ private class Setup extends NotNull
 	* It performs a simple check that the appropriate directories exist.  It does
 	* not actually verify that appropriate classes are resolvable.  It uses Ivy
 	* to resolve and retrieve any necessary libraries. The classpath to use is returned.*/
-	final def classpath(): Array[URL] = classpath(Nil)
-	private final def classpath(forcePrompt: Seq[String]): Array[URL] =
+	final def loader(): ClassLoader = loader(Nil)
+	private final def loader(forcePrompt: Seq[String]): ClassLoader =
 	{
 		val (scalaVersion, sbtVersion) = ProjectProperties.forcePrompt(PropertiesFile, forcePrompt : _*)
 		
@@ -168,14 +167,17 @@ private class Setup extends NotNull
 		import ProjectProperties.{ScalaVersionKey, SbtVersionKey}
 		val sbtFailed = failIfMissing(sbtDirectory, TestLoadSbtClasses, "sbt " + sbtVersion, SbtVersionKey)
 		val scalaFailed = failIfMissing(scalaDirectory, TestLoadScalaClasses, "Scala " + scalaVersion, ScalaVersionKey)
-		(scalaFailed ++ sbtFailed) match
+		
+		(scalaFailed +++ sbtFailed) match
 		{
-			case Success => getJars(scalaDirectory, sbtDirectory).toArray
+			case Success =>
+				val classpath = getJars(scalaDirectory, sbtDirectory)
+				new URLClassLoader(classpath.toArray, new BootFilteredLoader)
 			case f: Failure =>
 				val noRetrieveMessage = "Could not retrieve " + f.label + "."
-				val getNewVersions = Console.readLine(noRetrieveMessage + " Select different version? (y/N) : ")
+				val getNewVersions = SimpleReader.readLine(noRetrieveMessage + " Select different version? (y/N) : ")
 				if(isYes(getNewVersions))
-					classpath(f.keys)
+					loader(f.keys)
 				else
 					throw new BootException(noRetrieveMessage)
 		}
@@ -205,11 +207,13 @@ private object Setup
 		else
 			ifFailure
 	}
-	private def isYes(s: String) =
-		s != null &&
+	private def isYes(so: Option[String]) =
+		so match
 		{
-			val trimmed = s.trim.toLowerCase
-			trimmed == "y" || trimmed == "yes"
+			case Some(s) =>
+				val check = s.toLowerCase
+				check == "y" || check == "yes"
+			case None => false
 		}
 	private def getJars(directories: File*) = directories.flatMap(file => wrapNull(file.listFiles(JarFilter))).map(_.toURI.toURL)
 	private def wrapNull(a: Array[File]): Array[File] = if(a == null) Array() else a
@@ -220,11 +224,11 @@ private object JarFilter extends FileFilter
 	def accept(file: File) = !file.isDirectory && file.getName.endsWith(".jar")
 }
 
-private sealed trait Checked extends NotNull { def ++(o: Checked): Checked }
-private final object Success extends Checked { def ++(o: Checked) = o }
+private sealed trait Checked extends NotNull { def +++(o: Checked): Checked }
+private final object Success extends Checked { def +++(o: Checked) = o }
 private final class Failure(val label: String, val keys: List[String]) extends Checked
 {
-	def ++(o: Checked) =
+	def +++(o: Checked) =
 		o match
 		{
 			case Success => this
