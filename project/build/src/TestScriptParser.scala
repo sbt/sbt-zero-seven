@@ -236,22 +236,8 @@ private class TestScriptParser(baseDirectory: File, log: Logger) extends RegexPa
 		{
 			Control.trapUnit("Error running command: ", project.log)
 			{
-				val array = (command :: args).toArray
-				val builder = (new ProcessBuilder(array: _*)).directory(project.info.projectDirectory).redirectErrorStream(true)
-				val p = builder.start()
-				val reader = new BufferedReader(new InputStreamReader(p.getInputStream))
-				def readFully()
-				{
-					val line = reader.readLine()
-					if(line != null)
-					{
-						project.log.info(line)
-						readFully()
-					}
-				}
-				readFully()
-				p.waitFor()
-				val exitValue = p.exitValue
+				val builder = new java.lang.ProcessBuilder((command :: args).toArray :  _*).directory(project.info.projectDirectory)
+				val exitValue = Process(builder) ! log
 				if(exitValue == 0)
 					None
 				else

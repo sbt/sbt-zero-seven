@@ -28,7 +28,6 @@ abstract class CrossCompileProject extends BasicScalaProject
 	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_8_0 :: Nil
 	// the names of all configurations to cross-compile against
 	private val allConfigurationsNames = allConfigurations.map(_.toString)
-	//private val allConfigurations = conf_2_7_3 :: Nil
 
 	/* Methods to derive the configuration name from the base name 'v'.*/
 	private def optional(v: String) = "optional-" + v
@@ -167,8 +166,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 			// the compiler classpath has to be appended to the boot classpath to work properly
 			val allArguments = "-Xmx256M" :: ("-Xbootclasspath/a:" + compilerClasspath) :: CompilerMainClass :: compilerArguments
 			log.debug("Running external compiler with command: java " + allArguments.mkString(" "))
-			val process = (new ProcessRunner("java", allArguments)).logIO(log)
-			val exitValue = process.run.exitValue
+			val exitValue = Process("java", allArguments) ! log
 			if(exitValue == 0)
 				None
 			else
