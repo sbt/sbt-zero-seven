@@ -56,7 +56,7 @@ abstract class Logger extends NotNull
 /** Implements the level-setting methods of Logger.*/
 abstract class BasicLogger extends Logger
 {
-	private var traceEnabledVar = false
+	private var traceEnabledVar = true
 	private var level: Level.Value = Level.Info
 	def getLevel = level
 	def setLevel(newLevel: Level.Value) { level = newLevel }
