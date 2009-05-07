@@ -63,6 +63,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	/** A PathFinder that selects all the classes compiled from the test sources.*/
 	def testClasses = (testCompilePath ##) ** "*.class"
 	
+	override def defaultPomBaseName = defaultJarBaseName
+	
 	import Project._
 	
 	/** The options provided to the 'compile' action to pass to the Scala compiler.*/
@@ -225,6 +227,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
 		
 	override protected def publishLocalAction = super.publishLocalAction dependsOn(`package`)
+	override protected def publishAction = super.publishAction dependsOn(`package`)
 	
 	protected def packageAction = packageTask(mainClasses +++ mainResources, outputPath, defaultJarName, packageOptions).dependsOn(compile) describedAs PackageDescription
 	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription

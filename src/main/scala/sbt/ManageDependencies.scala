@@ -193,7 +193,7 @@ object ManageDependencies
 						autodetectConfiguration()
 					else
 					{
-						log.debug("Using inline configuration.")
+						log.debug("Using inline repositories.")
 						configureDefaults()
 						val extra = if(flags.addScalaTools) ScalaToolsReleases :: resolvers.toList else resolvers
 						addResolvers(ivy.getSettings, extra, log)
@@ -341,6 +341,7 @@ object ManageDependencies
 			{
 				val module = addLateDependencies(ivy, md, Configurations.Compile.name, extraDependencies)
 				PomModuleDescriptorWriter.write(module, DefaultConfigurationMapping, output)
+				config.log.info("Wrote " + output.getAbsolutePath)
 				None
 			}
 		withIvy(config)(doMakePom)
@@ -553,6 +554,7 @@ private object ConvertResolver
 			case repo: FileRepository =>
 			{
 				val resolver = new FileSystemResolver
+				resolver.setName(repo.name)
 				initializePatterns(resolver, repo.patterns)
 				import repo.configuration.{isLocal, isTransactional}
 				resolver.setLocal(isLocal)

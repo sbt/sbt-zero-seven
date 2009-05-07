@@ -240,6 +240,7 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 		else
 			reflective
 	}
+	def defaultPomBaseName: String = "pom"
 	def useIntegrationTestConfiguration = false
 	def defaultConfiguration = if(useMavenConfigurations) Some(Configurations.Compile) else None
 	def useMavenConfigurations = false
@@ -267,6 +268,15 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	/** The configurations to check/filter.*/
 	def checkScalaInConfigurations: Iterable[Configuration] = ivyConfigurations
 	def checkScalaVersion = CheckScalaVersion(checkScalaInConfigurations, checkExplicitScalaDependencies, filterScalaJars)
+	def defaultPublishRepository: Option[Resolver] =
+	{
+		reflectiveRepositories.get("publish-to") orElse
+		info.parent.flatMap
+			{
+				case managed: BasicManagedProject => managed.defaultPublishRepository
+				case _ => None
+			}
+	}
 	/** Includes the Provided configuration on the Compile classpath.  This can be overridden by setting
 	* includeProvidedWithCompile to false.*/
 	override def managedClasspath(config: Configuration, useDefaultFallback: Boolean) =
@@ -298,10 +308,17 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 		dependencies.foreach(dep => dep match { case mp: ManagedProject => interDependencies += mp.projectID; case _ => () })
 		interDependencies.readOnly
 	}
-	protected def makePomAction = makePomTask(outputPath / "pom.xml", deliverProjectDependencies, updateOptions)
+	protected def makePomAction = makePomTask(outputPath / (defaultPomBaseName + ".pom"), deliverProjectDependencies, updateOptions)
 	protected def deliverLocalAction = deliverTask(publishLocalConfiguration, updateOptions)
 	protected def publishLocalAction = publishTask(publishLocalConfiguration, updateOptions) dependsOn(deliverLocal)
 	protected def publishLocalConfiguration = new DefaultPublishConfiguration("local", "release")
+	protected def deliverAction = deliverTask(publishConfiguration, updateOptions)
+	protected def publishAction = publishTask(publishConfiguration, updateOptions) dependsOn(deliver)
+	protected def publishConfiguration =
+	{
+		val repository = defaultPublishRepository.getOrElse(error("Repository to publish to not specified."))
+		new DefaultPublishConfiguration(repository, "release")
+	}
 	protected class DefaultPublishConfiguration(val resolverName: String, val status: String) extends PublishConfiguration
 	{
 		def this(resolver: Resolver, status: String) = this(resolver.name, status)
@@ -324,6 +341,8 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	lazy val makePom = makePomAction
 	lazy val deliverLocal = deliverLocalAction
 	lazy val publishLocal = publishLocalAction
+	lazy val deliver = deliverAction
+	lazy val publish = publishAction
 	lazy val cleanLib = cleanLibAction
 	lazy val cleanCache = cleanCacheAction
 }
@@ -462,12 +481,15 @@ trait ReflectiveConfigurations extends Project
 trait ReflectiveRepositories extends Project
 {
 	def repositories: Set[Resolver] =
+	{
+		val reflective = Set(reflectiveRepositories.values.toList: _*)
 		info.parent match
 		{
-			case Some(p: ReflectiveRepositories) => p.repositories ++ reflectiveRepositories
-			case None => reflectiveRepositories
+			case Some(p: ReflectiveRepositories) => p.repositories ++ reflective
+			case None => reflective
 		}
-	def reflectiveRepositories: Set[Resolver] = Set(Reflective.reflectiveMappings[Resolver](this).values.toList: _*)
+	}
+	def reflectiveRepositories: Map[String, Resolver] = Reflective.reflectiveMappings[Resolver](this)
 }
 
 trait ReflectiveManagedProject extends ReflectiveProject with ReflectiveRepositories with ReflectiveLibraryDependencies with ReflectiveConfigurations

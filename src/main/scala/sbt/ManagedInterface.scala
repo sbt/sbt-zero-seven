@@ -146,7 +146,7 @@ object Resolver
 		def apply(name: String, port: Int): RepositoryType = apply(name, None, Some(port))
 		def apply(name: String, hostname: String, port: Int): RepositoryType = apply(name, Some(hostname), Some(port))
 		def apply(name: String, hostname: Option[String], port: Option[Int]): RepositoryType =
-			construct(name, SshConnection(None, hostname, port), Patterns(Nil, Nil, true))
+			construct(name, SshConnection(None, hostname, port), defaultPatterns)
 	}
 	object ssh extends Define[SshRepository]
 	{
@@ -156,6 +156,13 @@ object Resolver
 	{
 		protected def construct(name: String, connection: SshConnection, patterns: Patterns) = SftpRepository(name, connection, patterns)
 	}
+	object file
+	{
+		def apply(name: String) = FileRepository(name, defaultFileConfiguration, defaultPatterns)
+	}
+	def defaultFileConfiguration = FileConfiguration(true, None)
+	def emptyPatterns = Patterns(Nil, Nil, true)
+	def defaultPatterns = emptyPatterns
 }
 
 object Configurations
