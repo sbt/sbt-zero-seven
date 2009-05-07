@@ -149,7 +149,7 @@ trait ManagedProject extends ClasspathProject
 		
 	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, log) }
 	
-	def projectID: ModuleID = ModuleID(organization, normalizedName, version.toString, None)
+	def projectID: ModuleID = ModuleID(organization, normalizedName, version.toString)
 	def managedDependencyPath: Path
 	/** The managed classpath for the given configuration, using the default configuration if this configuration
 	* does not exist in the managed library directory.*/
@@ -304,6 +304,7 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	protected def publishLocalConfiguration = new DefaultPublishConfiguration("local", "release")
 	protected class DefaultPublishConfiguration(val resolverName: String, val status: String) extends PublishConfiguration
 	{
+		def this(resolver: Resolver, status: String) = this(resolver.name, status)
 		protected def deliveredPathPattern = outputPath / "[artifact]-[revision].[ext]"
 		def deliveredPattern = deliveredPathPattern.relativePath
 		def srcArtifactPatterns: Iterable[String] =

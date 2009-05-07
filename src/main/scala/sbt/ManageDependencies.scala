@@ -25,7 +25,8 @@ import plugins.parser.m2.{PomModuleDescriptorParser,PomModuleDescriptorWriter}
 import plugins.parser.xml.XmlModuleDescriptorParser
 import plugins.repository.{BasicResource, Resource}
 import plugins.repository.url.URLResource
-import plugins.resolver.{DependencyResolver, ChainResolver, IBiblioResolver}
+import plugins.resolver.{ChainResolver, DependencyResolver, IBiblioResolver}
+import plugins.resolver.{AbstractPatternsBasedResolver, AbstractSshBasedResolver, FileSystemResolver, SFTPResolver, SshResolver}
 import util.{Message, MessageLogger}
 
 final class IvyScala(val scalaVersion: String, val configurations: Iterable[Configuration], val checkExplicit: Boolean, val filterImplicit: Boolean) extends NotNull
@@ -205,7 +206,7 @@ object ManageDependencies
 							{
 								val mod = new DefaultModuleDescriptor(toID(module), "release", null, false)
 								mod.setLastModified(System.currentTimeMillis)
-								configurations.foreach(config => mod.addConfiguration(config.toIvyConfiguration))
+								configurations.foreach(config => mod.addConfiguration(toIvyConfiguration(config)))
 								mod
 							}
 						val defaultConf = defaultConfiguration getOrElse Configurations.config(ModuleDescriptor.DEFAULT_CONFIGURATION)
@@ -437,7 +438,7 @@ object ManageDependencies
 		for(dependency <- dependencies)
 		{
 			//println("Adding dependency " + dependency + " (default:  " + parser.getDefaultConf + ")")
-			val dependencyDescriptor = new DefaultDependencyDescriptor(moduleID, toID(dependency), false, false, true)
+			val dependencyDescriptor = new DefaultDependencyDescriptor(moduleID, toID(dependency), false, dependency.isChanging, dependency.isTransitive)
 			dependency.configurations match
 			{
 				case None => // The configuration for this dependency was not explicitly specified, so use the default
@@ -461,7 +462,7 @@ object ManageDependencies
 	{
 		val newDefault = new ChainResolver
 		newDefault.setName("redefined-public")
-		resolvers.foreach(r => newDefault.add(getResolver(r)))
+		resolvers.foreach(r => newDefault.add(ConvertResolver(r)))
 		newDefault.add(settings.getDefaultResolver)
 		settings.addResolver(newDefault)
 		settings.setDefaultResolver(newDefault.getName)
@@ -471,20 +472,13 @@ object ManageDependencies
 			resolvers.foreach(r => log.debug("\t" + r.toString))
 		}
 	}
-	/** Converts the given sbt resolver into an Ivy resolver..*/
-	private def getResolver(r: Resolver) =
-		r match
-		{
-			case repo: MavenRepository =>
-			{
-				val resolver = new IBiblioResolver
-				resolver.setName(repo.name)
-				resolver.setM2compatible(true)
-				resolver.setChangingPattern(""".*\-SNAPSHOT""")
-				resolver.setRoot(repo.root)
-				resolver
-			}
-		}
+	private def toIvyConfiguration(configuration: Configuration) =
+	{
+		import org.apache.ivy.core.module.descriptor.{Configuration => IvyConfig}
+		import IvyConfig.Visibility._
+		import configuration._
+		new IvyConfig(name, if(isPublic) PUBLIC else PRIVATE, description, extendsConfigs.map(_.name).toArray, transitive, null)
+	}
 	/** Converts the given sbt module id into an Ivy ModuleRevisionId.*/
 	private def toID(m: ModuleID) =
 	{
@@ -527,6 +521,77 @@ object ManageDependencies
 		}
 }
 
+private object ConvertResolver
+{
+	/** Converts the given sbt resolver into an Ivy resolver..*/
+	def apply(r: Resolver) =
+	{
+		r match
+		{
+			case repo: MavenRepository =>
+			{
+				val resolver = new IBiblioResolver
+				resolver.setName(repo.name)
+				resolver.setM2compatible(true)
+				resolver.setChangingPattern(""".*\-SNAPSHOT""")
+				resolver.setRoot(repo.root)
+				resolver
+			}
+			case repo: SshRepository =>
+			{
+				val resolver = new SshResolver
+				initializeSSHResolver(resolver, repo)
+				repo.publishPermissions.foreach(perm => resolver.setPublishPermissions(perm))
+				resolver
+			}
+			case repo: SftpRepository =>
+			{
+				val resolver = new SFTPResolver
+				initializeSSHResolver(resolver, repo)
+				resolver
+			}
+			case repo: FileRepository =>
+			{
+				val resolver = new FileSystemResolver
+				initializePatterns(resolver, repo.patterns)
+				import repo.configuration.{isLocal, isTransactional}
+				resolver.setLocal(isLocal)
+				isTransactional.foreach(value => resolver.setTransactional(value.toString))
+				resolver
+			}
+		}
+	}
+	private def initializeSSHResolver(resolver: AbstractSshBasedResolver, repo: SshBasedRepository)
+	{
+		resolver.setName(repo.name)
+		resolver.setPassfile(null)
+		initializePatterns(resolver, repo.patterns)
+		initializeConnection(resolver, repo.connection)
+	}
+	private def initializeConnection(resolver: AbstractSshBasedResolver, connection: RepositoryHelpers.SshConnection)
+	{
+		import resolver._
+		import connection._
+		hostname.foreach(setHost)
+		port.foreach(setPort)
+		authentication foreach
+			{
+				case RepositoryHelpers.PasswordAuthentication(user, password) =>
+					setUser(user)
+					setUserPassword(password)
+				case RepositoryHelpers.KeyFileAuthentication(file, password) =>
+					setKeyFile(file)
+					setKeyFilePassword(password)
+			}
+	}
+	private def initializePatterns(resolver: AbstractPatternsBasedResolver, patterns: RepositoryHelpers.Patterns)
+	{
+		resolver.setM2compatible(patterns.isMavenCompatible)
+		patterns.ivyPatterns.foreach(resolver.addIvyPattern)
+		patterns.artifactPatterns.foreach(resolver.addArtifactPattern)
+	}
+}
+
 private object DefaultConfigurationMapping extends PomModuleDescriptorWriter.ConfigurationScopeMapping(new java.util.HashMap)
 {
 	override def getScope(confs: Array[String]) =
@@ -544,57 +609,6 @@ private object DefaultConfigurationMapping extends PomModuleDescriptorWriter.Con
 	override def isOptional(confs: Array[String]) = confs.isEmpty || (confs.length == 1 && confs(0) == Configurations.Optional.name)
 }
 
-sealed abstract class Manager extends NotNull
-/** This explicitly requests auto detection as a dependency manager.  It will first check for a 'pom.xml' file and if that does not exist, an 'ivy.xml' file.
-* Ivy is configured using the detected file or uses defaults.*/
-final class AutoDetectManager(val module: ModuleID) extends Manager
-/** This explicitly requests that the Maven pom 'pom' be used to determine dependencies.  An Ivy configuration file to use may be specified in
-* 'configuration', since Ivy currently cannot extract Maven repositories from a pom file. Otherwise, defaults are used.*/
-final class MavenManager(val configuration: Option[Path], val pom: Path) extends Manager
-/** This explicitly requests that the Ivy file 'dependencies' be used to determine dependencies.  An Ivy configuration file to use may be specified in
-* 'configuration'.  Otherwise, defaults are used.*/
-final class IvyManager(val configuration: Option[Path], val dependencies: Path) extends Manager
-/** This manager directly specifies the dependencies, resolvers, and configurations through sbt wrapper classes and through an in-memory
-* Ivy XML file. */
-sealed trait SbtManager extends Manager
-{
-	def module: ModuleID
-	def resolvers: Iterable[Resolver]
-	def dependencies: Iterable[ModuleID]
-	def autodetectUnspecified: Boolean
-	def dependenciesXML: scala.xml.NodeSeq
-	def configurations: Iterable[Configuration]
-	def defaultConfiguration: Option[Configuration]
-}
-final class SimpleManager private[sbt] (val dependenciesXML: scala.xml.NodeSeq, val autodetectUnspecified: Boolean,
-	val module: ModuleID, val resolvers: Iterable[Resolver], val configurations: Iterable[Configuration],
-	val defaultConfiguration: Option[Configuration], val dependencies: ModuleID*) extends SbtManager
-
-final case class ModuleID(organization: String, name: String, revision: String, configurations: Option[String]) extends NotNull
-{
-	def this(organization: String, name: String, revision: String) = this(organization, name, revision, None)
-	override def toString = organization + ":" + name + ":" + revision
-}
-sealed trait Resolver extends NotNull
-{
-	def name: String
-}
-sealed case class MavenRepository(name: String, root: String) extends Resolver
-{
-	override def toString = name + ": " + root
-}
-import Resolver._
-object ScalaToolsReleases extends MavenRepository(ScalaToolsReleasesName, ScalaToolsReleasesRoot)
-object ScalaToolsSnapshots extends MavenRepository(ScalaToolsSnapshotsName, ScalaToolsSnapshotsRoot)
-object DefaultMavenRepository extends MavenRepository("Maven2 Repository", IBiblioResolver.DEFAULT_M2_ROOT)
-
-object Resolver
-{
-	val ScalaToolsReleasesName = "Scala-Tools Maven2 Repository"
-	val ScalaToolsSnapshotsName = "Scala-Tools Maven2 Snapshots Repository"
-	val ScalaToolsReleasesRoot = "http://scala-tools.org/repo-releases"
-	val ScalaToolsSnapshotsRoot = "http://scala-tools.org/repo-snapshots"
-}
 /** Represents an Ivy configuration. */
 final class Configuration(val name: String, val description: String, val isPublic: Boolean, val extendsConfigs: List[Configuration], val transitive: Boolean) extends NotNull {
 	require(name != null && !name.isEmpty)
@@ -602,32 +616,10 @@ final class Configuration(val name: String, val description: String, val isPubli
 	def this(name: String) = this(name, "", true, Nil, true)
 	def describedAs(newDescription: String) = new Configuration(name, newDescription, isPublic, extendsConfigs, transitive)
 	def extend(configs: Configuration*) = new Configuration(name, description, isPublic, configs.toList ::: extendsConfigs, transitive)
-	def notTransitive = new Configuration(name, description, isPublic, extendsConfigs, false)
+	def notTransitive = intransitive
+	def intransitive = new Configuration(name, description, isPublic, extendsConfigs, false)
 	def hide = new Configuration(name, description, false, extendsConfigs, transitive)
 	override def toString = name
-	import org.apache.ivy.core.module.descriptor.{Configuration => IvyConfig}
-	import IvyConfig.Visibility._
-	def toIvyConfiguration = new IvyConfig(name, if(isPublic) PUBLIC else PRIVATE, description, extendsConfigs.map(_.name).toArray, transitive, null)
-}
-object Configurations
-{
-	def config(name: String) = new Configuration(name)
-	def defaultMavenConfigurations = Compile :: Runtime :: Test :: Provided :: System :: Optional :: Sources :: Javadoc :: Nil
-	
-	lazy val Default = config("default")
-	lazy val Compile = config("compile")
-	lazy val IntegrationTest = config("it")
-	lazy val Provided = config("provided")
-	lazy val Javadoc = config("javadoc")
-	lazy val Runtime = config("runtime")
-	lazy val Test = config("test") hide
-	lazy val Sources = config("sources")
-	lazy val System = config("system")
-	lazy val Optional = config("optional")
-
-	lazy val CompilerPlugin = config("plugin")
-	
-	private[sbt] def removeDuplicates(configs: Iterable[Configuration]) = Set(scala.collection.mutable.Map(configs.map(config => (config.name, config)).toSeq: _*).values.toList: _*)
 }
 /** Interface between Ivy logging and sbt logging. */
 private final class IvyLogger(log: Logger) extends MessageLogger

@@ -58,6 +58,7 @@ src/main/scala/sbt/LineReader.scala -text
 src/main/scala/sbt/Logger.scala -text
 src/main/scala/sbt/Main.scala -text
 src/main/scala/sbt/ManageDependencies.scala -text
+src/main/scala/sbt/ManagedInterface.scala -text
 src/main/scala/sbt/ModuleUtilities.scala -text
 src/main/scala/sbt/NameFilter.scala -text
 src/main/scala/sbt/Pack.scala -text
