@@ -62,8 +62,9 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	def mainClasses = (mainCompilePath ##) ** "*.class"
 	/** A PathFinder that selects all the classes compiled from the test sources.*/
 	def testClasses = (testCompilePath ##) ** "*.class"
-	
-	override def defaultPomBaseName = defaultJarBaseName
+
+	lazy val mainArtifact = defaultMainArtifact
+	protected def defaultMainArtifact = Artifact(artifactID, "jar", "jar")
 	
 	import Project._
 	
@@ -230,11 +231,11 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	override protected def publishAction = super.publishAction dependsOn(`package`)
 	
 	protected def packageAction = packageTask(mainClasses +++ mainResources, outputPath, defaultJarName, packageOptions).dependsOn(compile) describedAs PackageDescription
-	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath, defaultJarBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription
-	protected def packageDocsAction = packageTask(mainDocPath ##, outputPath, defaultJarBaseName + "-docs.jar", Recursive).dependsOn(doc) describedAs DocPackageDescription
-	protected def packageSrcAction = packageTask(packageSourcePaths, outputPath, defaultJarBaseName + "-src.jar") describedAs SourcePackageDescription
-	protected def packageTestSrcAction = packageTask(packageTestSourcePaths, outputPath, defaultJarBaseName + "-test-src.jar") describedAs TestSourcePackageDescription
-	protected def packageProjectAction = zipTask(packageProjectPaths, outputPath, defaultJarBaseName + "-project.zip") describedAs ProjectPackageDescription
+	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath, artifactBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription
+	protected def packageDocsAction = packageTask(mainDocPath ##, outputPath, artifactBaseName + "-docs.jar", Recursive).dependsOn(doc) describedAs DocPackageDescription
+	protected def packageSrcAction = packageTask(packageSourcePaths, outputPath, artifactBaseName + "-src.jar") describedAs SourcePackageDescription
+	protected def packageTestSrcAction = packageTask(packageTestSourcePaths, outputPath, artifactBaseName + "-test-src.jar") describedAs TestSourcePackageDescription
+	protected def packageProjectAction = zipTask(packageProjectPaths, outputPath, artifactBaseName + "-project.zip") describedAs ProjectPackageDescription
 	
 	protected def docAllAction = (doc && docTest) describedAs DocAllDescription
 	protected def packageAllAction = task { None } dependsOn(`package`, packageTest, packageSrc, packageTestSrc, packageDocs) describedAs PackageAllDescription
@@ -310,6 +311,8 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	
 	override protected def packageAction = packageTask(descendents(temporaryWarPath ##, "*"), outputPath,
 		defaultWarName, Nil) dependsOn(prepareWebapp) describedAs PackageWarDescription
+
+	override protected def defaultMainArtifact = Artifact(artifactID, "war", "war")
 }
 
 object BasicScalaProject
@@ -384,8 +387,8 @@ object BasicWebScalaProject
 trait BasicProjectPaths extends Project
 {
 	import BasicProjectPaths._
-	
-	def defaultJarBaseName = name + "-" + version.toString
+	def artifactBaseName: String
+	def defaultJarBaseName: String = artifactBaseName
 	def defaultJarName = defaultJarBaseName + ".jar"
 	def defaultWarName = defaultJarBaseName + ".war"
 	

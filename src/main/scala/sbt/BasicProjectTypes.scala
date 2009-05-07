@@ -130,7 +130,7 @@ trait ManagedProject extends ClasspathProject
 			val publishConfig = publishConfiguration
 			import publishConfig._
 			withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) =>
-			ManageDependencies.publish(ivyConf, resolverName, srcArtifactPatterns, deliveredPattern, configurations) }
+				ManageDependencies.publish(ivyConf, resolverName, srcArtifactPatterns, deliveredPattern, configurations) }
 		}
 	def deliverTask(deliverConfiguration: => PublishConfiguration, options: => Seq[ManagedOption]) =
 		withIvyTask
@@ -138,18 +138,29 @@ trait ManagedProject extends ClasspathProject
 			val deliverConfig = deliverConfiguration
 			import deliverConfig._
 			withConfigurations("", managedDependencyPath, options) { (ivyConf, updateConf) =>
-			ManageDependencies.deliver(ivyConf, updateConf, status, deliveredPattern, extraDependencies, configurations) }
+				deliveredPattern match
+				{
+					case Some(delivered) => ManageDependencies.deliver(ivyConf, updateConf, status, delivered, extraDependencies, configurations)
+					case None => Some("Delivered pattern not specified.")
+				}
+			}
 		}
-	def makePomTask(output: Path, extraDependencies: Iterable[ModuleID], options: => Seq[ManagedOption]) =
-		withIvyTask(withConfigurations("", managedDependencyPath: Path, options) { (ivyConf, ignore) =>
+	def makePomTask(output: => Path, extraDependencies: => Iterable[ModuleID], options: => Seq[ManagedOption]) =
+		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) =>
 			ManageDependencies.makePom(ivyConf, extraDependencies, output.asFile) })
 		
 	def cleanCacheTask(managedDependencyPath: Path, options: => Seq[ManagedOption]) =
 		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) => ManageDependencies.cleanCache(ivyConf) })
 		
 	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, log) }
+
+	def moduleID: String = normalizedName
+	def projectID: ModuleID = ModuleID(organization, moduleID, version.toString)
+
+	def artifactID = moduleID
+	def artifactBaseName = artifactID + "-" + version.toString
+	def artifacts: Iterable[Artifact]
 	
-	def projectID: ModuleID = ModuleID(organization, normalizedName, version.toString)
 	def managedDependencyPath: Path
 	/** The managed classpath for the given configuration, using the default configuration if this configuration
 	* does not exist in the managed library directory.*/
@@ -194,8 +205,9 @@ trait PublishConfiguration extends NotNull
 	/** The name of the resolver to which publishing should be done.*/
 	def resolverName: String
 	/** The Ivy pattern used to determine the delivered Ivy file location.  An example is
-	* (outputPath / "[artifact]-[revision].[ext]").relativePath */
-	def deliveredPattern: String
+	* (outputPath / "[artifact]-[revision].[ext]").relativePath
+	* If the Ivy pattern should not be published, this should be None. */
+	def deliveredPattern: Option[String]
 	/** Ivy patterns used to find artifacts for publishing.  An example pattern is
 	* (outputPath / "[artifact]-[revision].[ext]").relativePath */
 	def srcArtifactPatterns: Iterable[String]
@@ -207,14 +219,18 @@ trait PublishConfiguration extends NotNull
 	/**  The configurations to include in the publish/deliver action: specify none for all configurations. */
 	def configurations: Option[Iterable[Configuration]]
 }
-	
+object ManagedStyle extends Enumeration
+{
+	val Maven, Ivy, Auto = Value
+}
+import ManagedStyle.{Auto, Ivy, Maven, Value => ManagedType}
 trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject with BasicDependencyPaths
 {
 	import BasicManagedProject._
 	/** The dependency manager that represents inline declarations.  The default manager packages the information
 	* from 'ivyXML', 'projectID', 'repositories', and 'libraryDependencies' and does not typically need to be
 	* be overridden. */
-	def manager = new SimpleManager(ivyXML, true, projectID, repositories, ivyConfigurations, defaultConfiguration, libraryDependencies.toList: _*)
+	def manager = new SimpleManager(ivyXML, true, projectID, repositories, ivyConfigurations, defaultConfiguration, artifacts, libraryDependencies.toList: _*)
 	
 	/** The pattern for Ivy to use when retrieving dependencies into the local project.  Classpath management
 	* depends on the first directory being [conf] and the extension being [ext].*/
@@ -240,17 +256,26 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 		else
 			reflective
 	}
-	def defaultPomBaseName: String = "pom"
 	def useIntegrationTestConfiguration = false
 	def defaultConfiguration = if(useMavenConfigurations) Some(Configurations.Compile) else None
-	def useMavenConfigurations = false
+	def useMavenConfigurations = if(managedStyle == Maven) true else false
+	def managedStyle: ManagedType = Auto
+	protected implicit final val defaultPatterns: RepositoryHelpers.Patterns =
+	{
+		managedStyle match
+		{
+			case Maven => Resolver.mavenStylePatterns
+			case Ivy => Resolver.ivyStylePatterns
+			case Auto => Resolver.defaultPatterns
+		}
+	}
 	/** The options provided to the 'update' action.  This is by default the options in 'baseUpdateOptions'.
 	* If 'manager' has any dependencies, resolvers, or inline Ivy XML (which by default happens when inline
 	* dependency management is used), it is passed as the dependency manager.*/
 	def updateOptions: Seq[ManagedOption] =
 	{
 		val m = manager
-		if(m.dependencies.isEmpty && m.resolvers.isEmpty && ivyXML.isEmpty)
+		if(m.dependencies.isEmpty && m.resolvers.isEmpty && ivyXML.isEmpty && m.artifacts.isEmpty)
 			baseUpdateOptions
 		else
 			LibraryManager(m) :: baseUpdateOptions
@@ -308,22 +333,29 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 		dependencies.foreach(dep => dep match { case mp: ManagedProject => interDependencies += mp.projectID; case _ => () })
 		interDependencies.readOnly
 	}
-	protected def makePomAction = makePomTask(outputPath / (defaultPomBaseName + ".pom"), deliverProjectDependencies, updateOptions)
+	protected def makePomAction = makePomTask(pomPath, deliverProjectDependencies, updateOptions)
 	protected def deliverLocalAction = deliverTask(publishLocalConfiguration, updateOptions)
 	protected def publishLocalAction = publishTask(publishLocalConfiguration, updateOptions) dependsOn(deliverLocal)
-	protected def publishLocalConfiguration = new DefaultPublishConfiguration("local", "release")
+	protected def publishLocalConfiguration = new DefaultPublishConfiguration("local", "release", true)
 	protected def deliverAction = deliverTask(publishConfiguration, updateOptions)
-	protected def publishAction = publishTask(publishConfiguration, updateOptions) dependsOn(deliver)
+	protected def publishAction =
+	{
+		val dependency = if(managedStyle == Maven) makePom else deliver
+		publishTask(publishConfiguration, updateOptions) dependsOn(dependency)
+	}
 	protected def publishConfiguration =
 	{
 		val repository = defaultPublishRepository.getOrElse(error("Repository to publish to not specified."))
-		new DefaultPublishConfiguration(repository, "release")
+		val publishIvy = managedStyle != Maven
+		new DefaultPublishConfiguration(repository, "release", publishIvy)
 	}
-	protected class DefaultPublishConfiguration(val resolverName: String, val status: String) extends PublishConfiguration
+	protected class DefaultPublishConfiguration(val resolverName: String, val status: String, val publishIvy: Boolean) extends PublishConfiguration
 	{
-		def this(resolver: Resolver, status: String) = this(resolver.name, status)
+		def this(resolver: Resolver, status: String, publishIvy: Boolean) = this(resolver.name, status, publishIvy)
+		def this(resolver: Resolver, status: String) = this(resolver.name, status, true)
+		
 		protected def deliveredPathPattern = outputPath / "[artifact]-[revision].[ext]"
-		def deliveredPattern = deliveredPathPattern.relativePath
+		def deliveredPattern = if(publishIvy) Some(deliveredPathPattern.relativePath) else None
 		def srcArtifactPatterns: Iterable[String] =
 		{
 			val pathPatterns =
@@ -357,18 +389,21 @@ object BasicManagedProject
 		"Deletes the cache of artifacts downloaded for automatically managed dependencies."
 }
 
-trait BasicDependencyPaths extends Project
+trait BasicDependencyPaths extends ManagedProject
 {
 	import BasicDependencyPaths._
 	def dependencyDirectoryName = DefaultDependencyDirectoryName
 	def managedDirectoryName = DefaultManagedDirectoryName
+	def pomName = artifactBaseName + PomExtension
 	def dependencyPath = path(dependencyDirectoryName)
 	def managedDependencyPath = path(managedDirectoryName)
+	def pomPath = outputPath / pomName
 }
 object BasicDependencyPaths
 {
 	val DefaultManagedDirectoryName = "lib_managed"
 	val DefaultDependencyDirectoryName = "lib"
+	val PomExtension = ".pom"
 }
 
 object StringUtilities
@@ -475,7 +510,21 @@ trait ReflectiveConfigurations extends Project
 	def ivyConfigurations: Iterable[Configuration] = reflectiveIvyConfigurations
 	def reflectiveIvyConfigurations: Set[Configuration] = Configurations.removeDuplicates(Reflective.reflectiveMappings[Configuration](this).values.toList)
 }
-
+trait ReflectiveArtifacts extends ManagedProject
+{
+	def managedStyle: ManagedType
+	def artifacts: Set[Artifact] =
+	{
+		val reflective = reflectiveArtifacts
+		managedStyle match
+		{
+			case Maven =>reflective ++ List(Artifact(artifactID, "pom", "pom"))
+			case Ivy => reflective
+			case Auto => Set.empty
+		}
+	}
+	def reflectiveArtifacts: Set[Artifact] = Set(Reflective.reflectiveMappings[Artifact](this).values.toList: _*)
+}
 /** A Project that determines its library dependencies by reflectively finding all vals with a type
 * that conforms to ModuleID.*/
 trait ReflectiveRepositories extends Project
@@ -492,4 +541,4 @@ trait ReflectiveRepositories extends Project
 	def reflectiveRepositories: Map[String, Resolver] = Reflective.reflectiveMappings[Resolver](this)
 }
 
-trait ReflectiveManagedProject extends ReflectiveProject with ReflectiveRepositories with ReflectiveLibraryDependencies with ReflectiveConfigurations
+trait ReflectiveManagedProject extends ReflectiveProject with ReflectiveArtifacts with ReflectiveRepositories with ReflectiveLibraryDependencies with ReflectiveConfigurations

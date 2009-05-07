@@ -198,7 +198,7 @@ object ManageDependencies
 						val extra = if(flags.addScalaTools) ScalaToolsReleases :: resolvers.toList else resolvers
 						addResolvers(ivy.getSettings, extra, log)
 					}
-					if(dependencies.isEmpty && dependenciesXML.isEmpty && autodetectUnspecified)
+					if(dependencies.isEmpty && dependenciesXML.isEmpty && artifacts.isEmpty && autodetectUnspecified)
 						autodetectDependencies(toID(module))
 					else
 					{
@@ -213,6 +213,7 @@ object ManageDependencies
 						log.debug("Using inline dependencies specified in Scala" + (if(dependenciesXML.isEmpty) "." else " and XML."))
 						for(parser <- parseXMLDependencies(wrapped(module, dependenciesXML), moduleID, defaultConf.name).right) yield
 						{
+							addArtifacts(moduleID, artifacts)
 							addDependencies(moduleID, dependencies, parser)
 							addMainArtifact(moduleID)
 							(moduleID, parser.getDefaultConf)
@@ -379,7 +380,7 @@ object ManageDependencies
 		withIvy(ivyConfig)(doDeliver)
 	}
 	// todo: map configurations, extra dependencies
-	def publish(ivyConfig: IvyConfiguration, resolverName: String, srcArtifactPatterns: Iterable[String], deliveredIvyPattern: String, configurations: Option[Iterable[Configuration]]) =
+	def publish(ivyConfig: IvyConfiguration, resolverName: String, srcArtifactPatterns: Iterable[String], deliveredIvyPattern: Option[String], configurations: Option[Iterable[Configuration]]) =
 	{
 		def doPublish(ivy: Ivy, md: ModuleDescriptor, default: String) =
 			Control.trapUnit("Could not publish: ", ivyConfig.log)
@@ -387,7 +388,8 @@ object ManageDependencies
 				val revID = md.getModuleRevisionId
 				val patterns = new java.util.ArrayList[String]
 				srcArtifactPatterns.foreach(pattern => patterns.add(pattern))
-				val options = (new PublishOptions).setSrcIvyPattern(deliveredIvyPattern).setOverwrite(true)
+				val options = (new PublishOptions).setOverwrite(true)
+				deliveredIvyPattern.foreach(options.setSrcIvyPattern)
 				addConfigurations(configurations, options)
 				ivy.publish(revID, patterns, resolverName, options)
 				None
@@ -450,6 +452,23 @@ object ManageDependencies
 			moduleID.addDependency(dependencyDescriptor)
 		}
 	}
+	private def addArtifacts(moduleID: DefaultModuleDescriptor, artifacts: Iterable[Artifact])
+	{
+		val allConfigurations = moduleID.getPublicConfigurationsNames
+		for(artifact <- artifacts)
+		{
+			val configurationStrings =
+			{
+				val artifactConfigurations = artifact.configurations
+				if(artifactConfigurations.isEmpty)
+					allConfigurations
+				else
+					artifactConfigurations.map(_.name)
+			}
+			val ivyArtifact = toIvyArtifact(moduleID, artifact, configurationStrings)
+			configurationStrings.foreach(configuration => moduleID.addArtifact(configuration, ivyArtifact))
+		}
+	}
 	private def toURL(file: File) = file.toURI.toURL
 	/** Adds the ivy.xml main artifact. */
 	private def addMainArtifact(moduleID: DefaultModuleDescriptor)
@@ -485,6 +504,12 @@ object ManageDependencies
 	{
 		import m._
 		ModuleRevisionId.newInstance(organization, name, revision)
+	}
+	private def toIvyArtifact(moduleID: ModuleDescriptor, a: Artifact, configurations: Iterable[String]): MDArtifact =
+	{
+		val artifact = new MDArtifact(moduleID, a.name, a.`type`, a.extension)
+		configurations.foreach(artifact.addConfiguration)
+		artifact
 	}
 	/** An implementation of Ivy's Resource class that provides the Ivy file from a byte array.  This is used to support
 	* inline Ivy file XML.*/
@@ -611,18 +636,6 @@ private object DefaultConfigurationMapping extends PomModuleDescriptorWriter.Con
 	override def isOptional(confs: Array[String]) = confs.isEmpty || (confs.length == 1 && confs(0) == Configurations.Optional.name)
 }
 
-/** Represents an Ivy configuration. */
-final class Configuration(val name: String, val description: String, val isPublic: Boolean, val extendsConfigs: List[Configuration], val transitive: Boolean) extends NotNull {
-	require(name != null && !name.isEmpty)
-	require(description != null)
-	def this(name: String) = this(name, "", true, Nil, true)
-	def describedAs(newDescription: String) = new Configuration(name, newDescription, isPublic, extendsConfigs, transitive)
-	def extend(configs: Configuration*) = new Configuration(name, description, isPublic, configs.toList ::: extendsConfigs, transitive)
-	def notTransitive = intransitive
-	def intransitive = new Configuration(name, description, isPublic, extendsConfigs, false)
-	def hide = new Configuration(name, description, false, extendsConfigs, transitive)
-	override def toString = name
-}
 /** Interface between Ivy logging and sbt logging. */
 private final class IvyLogger(log: Logger) extends MessageLogger
 {

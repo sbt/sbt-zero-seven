@@ -29,10 +29,11 @@ sealed trait SbtManager extends Manager
 	def dependenciesXML: NodeSeq
 	def configurations: Iterable[Configuration]
 	def defaultConfiguration: Option[Configuration]
+	def artifacts: Iterable[Artifact]
 }
 final class SimpleManager private[sbt] (val dependenciesXML: NodeSeq, val autodetectUnspecified: Boolean,
 	val module: ModuleID, val resolvers: Iterable[Resolver], val configurations: Iterable[Configuration],
-	val defaultConfiguration: Option[Configuration], val dependencies: ModuleID*) extends SbtManager
+	val defaultConfiguration: Option[Configuration], val artifacts: Iterable[Artifact], val dependencies: ModuleID*) extends SbtManager
 
 final case class ModuleID(organization: String, name: String, revision: String, configurations: Option[String], isChanging: Boolean, isTransitive: Boolean) extends NotNull
 {
@@ -141,12 +142,12 @@ object Resolver
 	sealed abstract class Define[RepositoryType <: SshBasedRepository] extends NotNull
 	{
 		protected def construct(name: String, connection: SshConnection, patterns: Patterns): RepositoryType
-		def apply(name: String): RepositoryType = apply(name, None, None)
-		def apply(name: String, hostname: String): RepositoryType = apply(name, Some(hostname), None)
-		def apply(name: String, port: Int): RepositoryType = apply(name, None, Some(port))
-		def apply(name: String, hostname: String, port: Int): RepositoryType = apply(name, Some(hostname), Some(port))
-		def apply(name: String, hostname: Option[String], port: Option[Int]): RepositoryType =
-			construct(name, SshConnection(None, hostname, port), defaultPatterns)
+		def apply(name: String)(implicit basePatterns: Patterns): RepositoryType = apply(name, None, None)
+		def apply(name: String, hostname: String)(implicit basePatterns: Patterns): RepositoryType = apply(name, Some(hostname), None)
+		def apply(name: String, port: Int)(implicit basePatterns: Patterns): RepositoryType = apply(name, None, Some(port))
+		def apply(name: String, hostname: String, port: Int)(implicit basePatterns: Patterns): RepositoryType = apply(name, Some(hostname), Some(port))
+		def apply(name: String, hostname: Option[String], port: Option[Int])(implicit basePatterns: Patterns): RepositoryType =
+			construct(name, SshConnection(None, hostname, port), basePatterns)
 	}
 	object ssh extends Define[SshRepository]
 	{
@@ -158,11 +159,26 @@ object Resolver
 	}
 	object file
 	{
-		def apply(name: String) = FileRepository(name, defaultFileConfiguration, defaultPatterns)
+		def apply(name: String): FileRepository = FileRepository(name, defaultFileConfiguration, ivyStylePatterns)
+		def apply(name: String, baseDirectory: File)(implicit basePatterns: Patterns): FileRepository =
+		{
+			require(baseDirectory.isDirectory)
+			val baseURI = baseDirectory.toURI.normalize
+
+			def resolve(pattern: String) = baseURI.resolve(new java.net.URI(null, null, pattern, null)).getPath
+			def resolveAll(patterns: Seq[String]) = patterns.map(resolve)
+			import basePatterns.{artifactPatterns, ivyPatterns, isMavenCompatible}
+			
+			val resolvedInitialPatterns = Patterns(resolveAll(ivyPatterns), resolveAll(artifactPatterns), isMavenCompatible)
+			FileRepository(name, defaultFileConfiguration, resolvedInitialPatterns)
+		}
 	}
 	def defaultFileConfiguration = FileConfiguration(true, None)
-	def emptyPatterns = Patterns(Nil, Nil, true)
-	def defaultPatterns = emptyPatterns
+	def mavenStylePatterns = Patterns(Nil, mavenStyleBasePattern :: Nil, true)
+	def ivyStylePatterns = Patterns(Nil, Nil, false)
+
+	def defaultPatterns = mavenStylePatterns
+	def mavenStyleBasePattern = "[organisation]/[module]/[revision]/[artifact]-[revision](-[classifier]).[ext]"
 }
 
 object Configurations
@@ -184,4 +200,24 @@ object Configurations
 	lazy val CompilerPlugin = config("plugin")
 	
 	private[sbt] def removeDuplicates(configs: Iterable[Configuration]) = Set(scala.collection.mutable.Map(configs.map(config => (config.name, config)).toSeq: _*).values.toList: _*)
+}
+/** Represents an Ivy configuration. */
+final class Configuration(val name: String, val description: String, val isPublic: Boolean, val extendsConfigs: List[Configuration], val transitive: Boolean) extends NotNull
+{
+	require(name != null && !name.isEmpty)
+	require(description != null)
+	def this(name: String) = this(name, "", true, Nil, true)
+	def describedAs(newDescription: String) = new Configuration(name, newDescription, isPublic, extendsConfigs, transitive)
+	def extend(configs: Configuration*) = new Configuration(name, description, isPublic, configs.toList ::: extendsConfigs, transitive)
+	def notTransitive = intransitive
+	def intransitive = new Configuration(name, description, isPublic, extendsConfigs, false)
+	def hide = new Configuration(name, description, false, extendsConfigs, transitive)
+	override def toString = name
+}
+
+final case class Artifact(name: String, `type`: String, extension: String, configurations: Iterable[Configuration]) extends NotNull
+object Artifact
+{
+	def apply(name: String): Artifact = Artifact(name, "jar", "jar")
+	def apply(name: String, `type`: String, extension: String): Artifact = Artifact(name, `type`, extension, Nil)
 }

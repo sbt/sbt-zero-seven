@@ -293,10 +293,10 @@ trait WebstartPaths extends BasicProjectPaths with WebstartOptions
 	def jnlpFileName = DefaultJnlpFileName
 	def webstartLibName = DefaultWebstartLibName
 	def webstartDirectoryName = DefaultWebstartDirectoryName
-	def webstartZipName = defaultJarBaseName + ".zip"
+	def webstartZipName = artifactBaseName + ".zip"
 	
 	val DefaultWebstartDirectoryName = "webstart"
 	val DefaultJnlpName = "jnlp"
-	def DefaultJnlpFileName = defaultJarBaseName + ".jnlp"
+	def DefaultJnlpFileName = artifactBaseName + ".jnlp"
 	val DefaultWebstartLibName = "lib"
 }
