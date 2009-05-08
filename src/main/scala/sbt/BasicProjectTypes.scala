@@ -130,7 +130,8 @@ trait ManagedProject extends ClasspathProject
 			val publishConfig = publishConfiguration
 			import publishConfig._
 			withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) =>
-				ManageDependencies.publish(ivyConf, resolverName, srcArtifactPatterns, deliveredPattern, configurations) }
+				val delivered = if(publishIvy) Some(deliveredPattern) else None
+				ManageDependencies.publish(ivyConf, resolverName, srcArtifactPatterns, delivered, configurations) }
 		}
 	def deliverTask(deliverConfiguration: => PublishConfiguration, options: => Seq[ManagedOption]) =
 		withIvyTask
@@ -138,11 +139,7 @@ trait ManagedProject extends ClasspathProject
 			val deliverConfig = deliverConfiguration
 			import deliverConfig._
 			withConfigurations("", managedDependencyPath, options) { (ivyConf, updateConf) =>
-				deliveredPattern match
-				{
-					case Some(delivered) => ManageDependencies.deliver(ivyConf, updateConf, status, delivered, extraDependencies, configurations)
-					case None => Some("Delivered pattern not specified.")
-				}
+				ManageDependencies.deliver(ivyConf, updateConf, status, deliveredPattern, extraDependencies, configurations)
 			}
 		}
 	def makePomTask(output: => Path, extraDependencies: => Iterable[ModuleID], options: => Seq[ManagedOption]) =
@@ -205,9 +202,8 @@ trait PublishConfiguration extends NotNull
 	/** The name of the resolver to which publishing should be done.*/
 	def resolverName: String
 	/** The Ivy pattern used to determine the delivered Ivy file location.  An example is
-	* (outputPath / "[artifact]-[revision].[ext]").relativePath
-	* If the Ivy pattern should not be published, this should be None. */
-	def deliveredPattern: Option[String]
+	* (outputPath / "[artifact]-[revision].[ext]").relativePath. */
+	def deliveredPattern: String
 	/** Ivy patterns used to find artifacts for publishing.  An example pattern is
 	* (outputPath / "[artifact]-[revision].[ext]").relativePath */
 	def srcArtifactPatterns: Iterable[String]
@@ -218,6 +214,8 @@ trait PublishConfiguration extends NotNull
 	def status: String
 	/**  The configurations to include in the publish/deliver action: specify none for all configurations. */
 	def configurations: Option[Iterable[Configuration]]
+	/** True if the Ivy file should be published. */
+	def publishIvy: Boolean
 }
 object ManagedStyle extends Enumeration
 {
@@ -258,7 +256,7 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	}
 	def useIntegrationTestConfiguration = false
 	def defaultConfiguration = if(useMavenConfigurations) Some(Configurations.Compile) else None
-	def useMavenConfigurations = if(managedStyle == Maven) true else false
+	def useMavenConfigurations = false
 	def managedStyle: ManagedType = Auto
 	protected implicit final val defaultPatterns: RepositoryHelpers.Patterns =
 	{
@@ -340,8 +338,8 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	protected def deliverAction = deliverTask(publishConfiguration, updateOptions)
 	protected def publishAction =
 	{
-		val dependency = if(managedStyle == Maven) makePom else deliver
-		publishTask(publishConfiguration, updateOptions) dependsOn(dependency)
+		val dependencies = deliver :: (if(managedStyle == Maven) makePom :: Nil else Nil)
+		publishTask(publishConfiguration, updateOptions) dependsOn(dependencies : _*)
 	}
 	protected def publishConfiguration =
 	{
@@ -355,7 +353,7 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 		def this(resolver: Resolver, status: String) = this(resolver.name, status, true)
 		
 		protected def deliveredPathPattern = outputPath / "[artifact]-[revision].[ext]"
-		def deliveredPattern = if(publishIvy) Some(deliveredPathPattern.relativePath) else None
+		def deliveredPattern = deliveredPathPattern.relativePath
 		def srcArtifactPatterns: Iterable[String] =
 		{
 			val pathPatterns =
