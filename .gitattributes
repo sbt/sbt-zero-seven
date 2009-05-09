@@ -200,6 +200,7 @@ src/test/resources/sbt-test-resources/tests/Class.forName/test -text
 src/test/resources/sbt-test-resources/tests/extend/changes/ScalaCheck.scala -text
 src/test/resources/sbt-test-resources/tests/extend/changes/TestFailure.scala -text
 src/test/resources/sbt-test-resources/tests/extend/changes/TestProject2.scala -text
+src/test/resources/sbt-test-resources/tests/extend/changes/TestProject3.scala -text
 src/test/resources/sbt-test-resources/tests/extend/changes/TestSuccess.scala -text
 src/test/resources/sbt-test-resources/tests/extend/project/build.properties -text
 src/test/resources/sbt-test-resources/tests/extend/project/build/src/TestProject.scala -text

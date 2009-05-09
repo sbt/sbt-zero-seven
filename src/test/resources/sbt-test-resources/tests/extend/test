@@ -50,7 +50,7 @@ $ copy-file changes/TestFailure.scala src/test/scala/TestFailure.scala
 
 # replace the project definition with one that tests a child project
 # reload, and update
-$ copy-file changes/TestProject2.scala project/build/src/TestProject.scala
+$ copy-file changes/TestProject3.scala project/build/src/TestProject.scala
 [success]
 $ reload
 [success]
@@ -63,6 +63,7 @@ $ copy-file changes/TestSuccess.scala src/test/scala/TestSuccess.scala
 [success]
 > test
 [success]
+# Copy a source containing a successful test that the framework should mark as failing
 $ copy-file changes/TestFailure.scala src/test/scala/TestFailure.scala
 [success]
 > test
