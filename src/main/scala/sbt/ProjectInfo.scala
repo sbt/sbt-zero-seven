@@ -10,6 +10,9 @@ final case class ProjectInfo(projectDirectory: File, dependencies: Iterable[Proj
 {
 	val projectPath = new ProjectDirectory(projectDirectory)
 	val builderPath = projectPath / ProjectInfo.MetadataDirectoryName
+	def bootPath = builderPath / Project.BootDirectoryName
+	def builderProjectPath = builderPath / Project.BuilderProjectDirectoryName
+	def builderProjectOutputPath = builderProjectPath / Project.DefaultOutputDirectoryName
 }
 
 private[sbt] sealed trait SetupResult extends NotNull

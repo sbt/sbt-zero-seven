@@ -24,7 +24,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		{
 			val applications = mainCompileConditional.analysis.allApplications.toList
 			impl.SelectMainClass(promptIfMultipleChoices, applications) orElse
-			warnIfMultiple(applications, log)
+				(if(!promptIfMultipleChoices) warnIfMultiple(applications, log) else None)
 		}
 	def manifestClassPath: Option[String] = None
 	def dependencies = info.dependencies ++ subProjects.values.toList
@@ -37,12 +37,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	/** Declares all sources to be packaged by the package-test-src action.*/
 	def packageTestSourcePaths = descendents((testScalaSourcePath +++ testResourcesPath) ##, "*")
 	/** Declares all paths to be packaged by the package-project action.*/
-	def packageProjectPaths =
-	{
-		val children = (info.projectPath ##) * (AllPassFilter -- defaultExcludes) --- (packageProjectRootExcludes ** AllPassFilter)
-		descendents(children, "*")
-	}
-	protected def packageProjectRootExcludes: PathFinder = outputPath +++ managedDependencyPath +++ bootPath
+	def packageProjectPaths = descendents( (info.projectPath ##), "*") --- (packageProjectExcludes ** "*")
+	protected def packageProjectExcludes: PathFinder = outputPath +++ managedDependencyPath +++ info.bootPath +++ info.builderProjectOutputPath
 	
 	def mainScalaSources = descendents(mainScalaSourcePath, "*.scala")
 	def mainJavaSources = descendents(mainJavaSourcePath, "*.java")

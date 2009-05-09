@@ -350,7 +350,8 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	protected class DefaultPublishConfiguration(val resolverName: String, val status: String, val publishIvy: Boolean) extends PublishConfiguration
 	{
 		def this(resolver: Resolver, status: String, publishIvy: Boolean) = this(resolver.name, status, publishIvy)
-		def this(resolver: Resolver, status: String) = this(resolver.name, status, true)
+		def this(resolverName: String, status: String) = this(resolverName, status, true)
+		def this(resolver: Resolver, status: String) = this(resolver.name, status)
 		
 		protected def deliveredPathPattern = outputPath / "[artifact]-[revision].[ext]"
 		def deliveredPattern = deliveredPathPattern.relativePath

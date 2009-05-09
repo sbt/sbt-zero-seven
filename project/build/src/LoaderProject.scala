@@ -12,9 +12,8 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 	val mainClassName = "sbt.boot.Boot"
 	val baseName = "sbt-launcher"
 	val proguardConfigurationPath: Path = "proguard.pro"
-	lazy val outputJar: Path = parentProject.outputPath / (baseName + "-" + version + ".jar")
-	def parentProject = info.parent.getOrElse(this)
-	def rootProjectDirectory = parentProject.info.projectPath
+	lazy val outputJar: Path = rootProject.outputPath / (baseName + "-" + version + ".jar")
+	def rootProjectDirectory = rootProject.info.projectPath
 	
 	override def mainClass = Some(mainClassName)
 	override def defaultJarBaseName = baseName + "-" + version.toString

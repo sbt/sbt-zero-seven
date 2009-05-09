@@ -23,7 +23,7 @@ trait NameFilter extends FileFilter with NotNull
 	def unary_- : NameFilter = new SimpleFilter( name => !accept(name) )
 }
 object HiddenFileFilter extends FileFilter {
-	def accept(file: File) = file.isHidden
+	def accept(file: File) = file.isHidden && file.getName != "."
 }
 object ExistsFileFilter extends FileFilter {
 	def accept(file: File) = file.exists
