@@ -94,8 +94,7 @@ trait WebstartScalaProject extends ScalaProject
 		
 			import FileUtilities._
 			
-			def fileToPath(file: File): Path = new ProjectDirectory(file) // hack, don't do this normally
-			val jars = (webstartLibraries.get ++ webstartExtraLibraries.map(fileToPath)).filter(ClasspathUtilities.isArchive)
+			val jars = (webstartLibraries.get ++ webstartExtraLibraries.map(Path.fromFile)).filter(ClasspathUtilities.isArchive)
 			def process(jars: Iterable[Path]) = for(jar <- jars if jar.asFile.getName.endsWith(".jar")) yield relativize(jar)
 			
 			thread(signAndPack(webstartMainJar :: Nil, webstartOutputDirectory)) { mainJars =>

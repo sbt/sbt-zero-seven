@@ -70,6 +70,12 @@ private final class BaseDirectory(private[sbt] val path: Path) extends Path
 	def relativePath = ""
 	private[sbt] def prependTo(s: String) = "." + sep + s
 }
+private[sbt] final class FilePath(val asFile: File) extends Path
+{
+	override def toString = absolutePath
+	def relativePath = asFile.getName
+	private[sbt] def prependTo(s: String) = absolutePath + sep + s
+}
 private[sbt] final class ProjectDirectory(val asFile: File) extends Path
 {
 	override def toString = "."
@@ -153,6 +159,7 @@ object Path
 		path match
 		{
 			case pd: ProjectDirectory => None
+			case fp: FilePath => None
 			case rp: RelativePath => baseAncestor(rp.parentPath)
 			case b: BaseDirectory => Some(b.path)
 		}
@@ -197,7 +204,7 @@ object Path
 		else
 			None
 	}
-	def fromFile(file: File): Path = new ProjectDirectory(file)
+	def fromFile(file: File): Path = new FilePath(file)
 }
 
 /** A path finder constructs a set of paths.  The set is evaluated by a call to the <code>get</code>

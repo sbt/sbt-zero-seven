@@ -22,7 +22,7 @@ final class BuilderProject(val info: ProjectInfo, override protected val logImpl
 	def dependencies = Nil
 	
 	def projectClasspath = compilePath +++ libraries +++
-		Path.lazyPathFinder { new ProjectDirectory(FileUtilities.sbtJar) :: Nil }
+		Path.lazyPathFinder { Path.fromFile(FileUtilities.sbtJar) :: Nil }
 
 	val compileConditional =
 		new CompileConditional(compileConfiguration)
