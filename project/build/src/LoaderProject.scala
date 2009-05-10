@@ -80,10 +80,14 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 			val (externalJars, libraryJars) = externalDependencies.toList.partition(jar => Path.relativize(rootProjectDirectory, jar).isDefined)
 			log.debug("proguard configuration library jars locations: " + libraryJars.mkString(", "))
 			// pull out Ivy in order to exclude resources inside
-			val (ivyJars, otherExternalJars) = externalJars.partition(_.getName.startsWith("ivy"))
+			val (ivyJars, externalJarsNoIvy) = externalJars.partition(_.getName.startsWith("ivy"))
 			log.debug("proguard configuration ivy jar location: " + ivyJars.mkString(", "))
+			// the loader uses JLine, so there is a dependency on the compiler (because JLine is distributed with the compiler,
+			//   it finds the JLine classes from the compiler jar instead of the jline jar on the classpath), but we don't want to
+			//    include the version of JLine from the compiler.
+			val includeExternalJars = externalJarsNoIvy.filter(jar => !isJarX(jar, "scala-compiler"))
 			// exclude properties files and manifests from scala-library jar
-			val inJars = (defaultJar :: otherExternalJars.map( _ + "(!META-INF/**,!*.properties,!jline/**)")).map("-injars " + _).mkString("\n")
+			val inJars = (defaultJar :: includeExternalJars.map( _ + "(!META-INF/**,!*.properties)")).map("-injars " + _).mkString("\n")
 			
 			withJar(ivyJars, "Ivy") { ivyJar =>
 				withJar(jlineJars, "JLine") { jlineJar =>
