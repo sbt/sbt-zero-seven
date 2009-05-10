@@ -26,7 +26,6 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 	val defaultConfig = config("default")
 	val toolsConfig = config("tools")
 	val ivy = "org.apache.ivy" % "ivy" % "2.0.0"
-	val jcraft = "com.jcraft" % "jsch" % "0.1.31"
 	val proguardJar = "net.sf.proguard" % "proguard" % "4.3" % "tools->default"
 	
 	/******** Proguard *******/
@@ -50,9 +49,6 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 			val ivyKeepResolvers =
 				"org.apache.ivy.plugins.resolver.URLResolver" ::
 				"org.apache.ivy.plugins.resolver.IBiblioResolver" ::
-				"org.apache.ivy.plugins.resolver.SshResolver" ::
-				"org.apache.ivy.plugins.resolver.SFTPResolver" ::
-				"org.apache.ivy.plugins.resolver.FileSystemResolver" ::
 				Nil
 			// the template for the proguard configuration file
 			val outTemplate = """
@@ -62,7 +58,6 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 				|-dontwarn
 				|-libraryjars %s
 				|-injars %s(!META-INF/**,!fr/**,!**/antlib.xml,!**/*.png)
-				|-injars %s(!META-INF/**)
 				|-injars %s(!META-INF/**)
 				|%s
 				|-outjars %s
@@ -78,7 +73,6 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 			val ivyKeepOptions = ivyKeepResolvers.map("-keep public class " + _  + allPublic).mkString("\n")
 			val runtimeClasspath = runClasspath.get.map(_.asFile).toList
 			val jlineJars = runtimeClasspath.filter(isJLineJar)
-			val jschJars = runtimeClasspath.filter(isJschJar)
 			val externalDependencies = (mainCompileConditional.analysis.allExternals).map(_.getAbsoluteFile).filter(_.getName.endsWith(".jar"))
 			log.debug("proguard configuration external dependencies: \n\t" + externalDependencies.mkString("\n\t"))
 			// partition jars from the external jar dependencies of this project by whether they are located in the project directory
@@ -93,14 +87,12 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 			
 			withJar(ivyJars, "Ivy") { ivyJar =>
 				withJar(jlineJars, "JLine") { jlineJar =>
-					withJar(jschJars, "Jsch"){ jschJar =>
-						val proguardConfiguration =
-							outTemplate.stripMargin.format(libraryJars.mkString(File.pathSeparator),
-								ivyJar.getAbsolutePath, jlineJar.getAbsolutePath, jschJar.getAbsolutePath,
-								inJars, outputJar.absolutePath, ivyKeepOptions, keepJLine, mainClassName)
-						log.debug("Proguard configuration written to " + proguardConfigurationPath)
-						FileUtilities.write(proguardConfigurationPath.asFile, proguardConfiguration, log)
-					}
+					val proguardConfiguration =
+						outTemplate.stripMargin.format(libraryJars.mkString(File.pathSeparator),
+							ivyJar.getAbsolutePath, jlineJar.getAbsolutePath,
+							inJars, outputJar.absolutePath, ivyKeepOptions, keepJLine, mainClassName)
+					log.debug("Proguard configuration written to " + proguardConfigurationPath)
+					FileUtilities.write(proguardConfigurationPath.asFile, proguardConfiguration, log)
 				}
 			}
 		}
@@ -110,9 +102,8 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 			case Nil => Some(name + " not present (try running update)")
 			case jar :: _ => f(jar)
 		}
-	private def isJLineJar(file: File) = isXJar(file, "jline")
-	private def isJschJar(file: File) = isXJar(file, "jsch")
-	private def isXJar(file: File, x: String) =
+	private def isJLineJar(file: File) = isJarX(file, "jline")
+	private def isJarX(file: File, x: String) =
 	{
 		val name = file.getName
 		name.startsWith(x) && name.endsWith(".jar")

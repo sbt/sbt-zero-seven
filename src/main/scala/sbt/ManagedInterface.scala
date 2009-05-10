@@ -4,7 +4,7 @@
 package sbt
 
 import java.io.File
-import java.net.URL
+import java.net.{URI, URL}
 import scala.xml.NodeSeq
 import org.apache.ivy.plugins.resolver.IBiblioResolver
 
@@ -142,12 +142,18 @@ object Resolver
 	sealed abstract class Define[RepositoryType <: SshBasedRepository] extends NotNull
 	{
 		protected def construct(name: String, connection: SshConnection, patterns: Patterns): RepositoryType
-		def apply(name: String)(implicit basePatterns: Patterns): RepositoryType = apply(name, None, None)
-		def apply(name: String, hostname: String)(implicit basePatterns: Patterns): RepositoryType = apply(name, Some(hostname), None)
-		def apply(name: String, port: Int)(implicit basePatterns: Patterns): RepositoryType = apply(name, None, Some(port))
-		def apply(name: String, hostname: String, port: Int)(implicit basePatterns: Patterns): RepositoryType = apply(name, Some(hostname), Some(port))
-		def apply(name: String, hostname: Option[String], port: Option[Int])(implicit basePatterns: Patterns): RepositoryType =
-			construct(name, SshConnection(None, hostname, port), basePatterns)
+		def apply(name: String)(implicit basePatterns: Patterns): RepositoryType =
+			apply(name, None, None, None)
+		def apply(name: String, hostname: String)(implicit basePatterns: Patterns): RepositoryType =
+			apply(name, Some(hostname), None, None)
+		def apply(name: String, hostname: String, basePath: String)(implicit basePatterns: Patterns): RepositoryType =
+			apply(name, Some(hostname), None, Some(basePath))
+		def apply(name: String, hostname: String, port: Int)(implicit basePatterns: Patterns): RepositoryType =
+			apply(name, Some(hostname), Some(port), None)
+		def apply(name: String, hostname: String, port: Int, basePath: String)(implicit basePatterns: Patterns): RepositoryType =
+			apply(name, Some(hostname), Some(port), Some(basePath))
+		def apply(name: String, hostname: Option[String], port: Option[Int], basePath: Option[String])(implicit basePatterns: Patterns): RepositoryType =
+			construct(name, SshConnection(None, hostname, port), resolvePatterns(basePath, basePatterns))
 	}
 	object ssh extends Define[SshRepository]
 	{
@@ -164,15 +170,24 @@ object Resolver
 		{
 			require(baseDirectory.isDirectory)
 			val baseURI = baseDirectory.toURI.normalize
-
-			def resolve(pattern: String) = baseURI.resolve(new java.net.URI(null, null, pattern, null)).getPath
-			def resolveAll(patterns: Seq[String]) = patterns.map(resolve)
-			import basePatterns.{artifactPatterns, ivyPatterns, isMavenCompatible}
-			
-			val resolvedInitialPatterns = Patterns(resolveAll(ivyPatterns), resolveAll(artifactPatterns), isMavenCompatible)
+			val resolvedInitialPatterns = resolvePatterns(baseURI, basePatterns)
 			FileRepository(name, defaultFileConfiguration, resolvedInitialPatterns)
 		}
 	}
+	private def resolvePatterns(base: Option[String], patterns: Patterns): Patterns =
+		base match
+		{
+			case Some(path) => resolvePatterns(pathURI(path), patterns)
+			case None => patterns
+		}
+	private def resolvePatterns(base: URI, basePatterns: Patterns): Patterns =
+	{
+		def resolve(pattern: String) = base.resolve(pathURI(pattern)).getPath
+		def resolveAll(patterns: Seq[String]) = patterns.map(resolve)
+		Patterns(resolveAll(basePatterns.ivyPatterns), resolveAll(basePatterns.artifactPatterns), basePatterns.isMavenCompatible)
+	}
+	private def pathURI(path: String) = new URI(null, null, path, null)
+	
 	def defaultFileConfiguration = FileConfiguration(true, None)
 	def mavenStylePatterns = Patterns(Nil, mavenStyleBasePattern :: Nil, true)
 	def ivyStylePatterns = Patterns(Nil, Nil, false)

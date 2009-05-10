@@ -59,6 +59,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 		<dependencies>
 			<!-- Dependencies that are the same across all Scala versions -->
 			<dependency org="org.apache.ivy" name="ivy" rev="2.0.0" transitive="false" conf={depConf(base)}/>
+			<dependency org="com.jcraft" name="jsch" rev="0.1.31" transitive="false" conf={depConf(base)}/>
 			{testDependency("scalacheck", "1.5", false, base)}
 			<dependency org="org.mortbay.jetty" name="jetty" rev="6.1.14" transitive="true" conf={depConf(optional(base))}/>
 
