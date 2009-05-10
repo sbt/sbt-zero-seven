@@ -70,6 +70,7 @@ object RepositoryHelpers
 	{
 		def copy(authentication: Option[SshAuthentication]) = SshConnection(authentication, hostname, port)
 	}
+	/** Configuration specific to an Ivy filesystem resolver. */
 	final case class FileConfiguration(isLocal: Boolean, isTransactional: Option[Boolean]) extends NotNull
 	{
 		def transactional() = FileConfiguration(isLocal, Some(true))
@@ -83,17 +84,24 @@ object RepositoryHelpers
 import RepositoryHelpers.{Patterns, SshConnection, FileConfiguration}
 import RepositoryHelpers.{KeyFileAuthentication, PasswordAuthentication, SshAuthentication}
 
+/** sbt interface to an Ivy repository based on patterns, which is most Ivy repositories.*/
 sealed abstract class PatternsBasedRepository extends Resolver
 {
 	type RepositoryType <: PatternsBasedRepository
+	/** Should be implemented to create a new copy of this repository but with `patterns` as given.*/
 	protected def copy(patterns: Patterns): RepositoryType
 
+	/** The object representing the configured patterns for this repository. */
 	def patterns: Patterns
 	
+	/** Enables maven 2 compatibility for this repository. */
 	def mavenStyle() = copy(patterns.mavenStyle())
+	/** Adds the given patterns for resolving/publishing Ivy files.*/
 	def ivys(ivyPatterns: String*): RepositoryType = copy(patterns.withIvys(ivyPatterns))
+	/** Adds the given patterns for resolving/publishing artifacts.*/
 	def artifacts(artifactPatterns: String*): RepositoryType = copy(patterns.withArtifacts(artifactPatterns))
 }
+/** sbt interface for an Ivy filesystem repository.  More convenient construction is done using Resolver.file.  */
 final case class FileRepository(name: String, configuration: FileConfiguration, patterns: Patterns) extends PatternsBasedRepository
 {
 	type RepositoryType = FileRepository
@@ -102,24 +110,32 @@ final case class FileRepository(name: String, configuration: FileConfiguration, 
 	def transactional() = copy(configuration.transactional())
 	def nonlocal() = copy(configuration.nonlocal())
 }
+/** sbt interface for an Ivy ssh-based repository (ssh and sftp).  Requires the Jsch library.. */
 sealed abstract class SshBasedRepository extends PatternsBasedRepository
 {
 	type RepositoryType <: SshBasedRepository
 	protected def copy(connection: SshConnection): RepositoryType
 	private def copy(authentication: SshAuthentication): RepositoryType = copy(connection.copy(Some(authentication)))
 	
+	/** The object representing the configured ssh connection for this repository. */
 	def connection: SshConnection
 	
+	/** Configures this to use the specified user name and password when connecting to the remote repository. */
 	def as(user: String, password: String): RepositoryType = copy(new PasswordAuthentication(user, password))
+	/** Configures this to use the specified keyfile and password for the keyfile when connecting to the remote repository. */
 	def as(keyfile: File, password: String): RepositoryType = copy(new KeyFileAuthentication(keyfile, password))
 }
+/** sbt interface for an Ivy repository over ssh.  More convenient construction is done using Resolver.ssh.  */
 final case class SshRepository(name: String, connection: SshConnection, patterns: Patterns, publishPermissions: Option[String]) extends SshBasedRepository
 {
 	type RepositoryType = SshRepository
 	protected def copy(patterns: Patterns): SshRepository = SshRepository(name, connection, patterns, publishPermissions)
 	protected def copy(connection: SshConnection): SshRepository = SshRepository(name, connection, patterns, publishPermissions)
-	def withPermissions(publishPermissions: Option[String]) = SshRepository(name, connection, patterns, publishPermissions)
+	/** Defines the permissions to set when publishing to this repository. */
+	def withPermissions(publishPermissions: String): SshRepository = withPermissions(Some(publishPermissions))
+	def withPermissions(publishPermissions: Option[String]): SshRepository = SshRepository(name, connection, patterns, publishPermissions)
 }
+/** sbt interface for an Ivy repository over sftp.  More convenient construction is done using Resolver.sftp.  */
 final case class SftpRepository(name: String, connection: SshConnection, patterns: Patterns) extends SshBasedRepository
 {
 	type RepositoryType = SftpRepository
@@ -139,33 +155,56 @@ object Resolver
 	val ScalaToolsReleasesRoot = "http://scala-tools.org/repo-releases"
 	val ScalaToolsSnapshotsRoot = "http://scala-tools.org/repo-snapshots"
 
+	/** A base class for defining factories for interfaces to Ivy repositories that require a hostname , port, and patterns.  */
 	sealed abstract class Define[RepositoryType <: SshBasedRepository] extends NotNull
 	{
+		/** Subclasses should implement this method to */
 		protected def construct(name: String, connection: SshConnection, patterns: Patterns): RepositoryType
+		/** Constructs this repository type with the given `name`.  `basePatterns` are the initial patterns to use.  A ManagedProject
+		* has an implicit defining these initial patterns based on a setting for either Maven or Ivy style patterns.*/
 		def apply(name: String)(implicit basePatterns: Patterns): RepositoryType =
 			apply(name, None, None, None)
+		/** Constructs this repository type with the given `name` and `hostname`.  `basePatterns` are the initial patterns to use.
+		* A ManagedProject has an implicit defining these initial patterns based on a setting for either Maven or Ivy style patterns.*/
 		def apply(name: String, hostname: String)(implicit basePatterns: Patterns): RepositoryType =
 			apply(name, Some(hostname), None, None)
+		/** Constructs this repository type with the given `name`, `hostname`, and the `basePath` against which the initial
+		* patterns will be resolved.  `basePatterns` are the initial patterns to use.
+		* A ManagedProject has an implicit defining these initial patterns based on a setting for either Maven or Ivy style patterns.*/
 		def apply(name: String, hostname: String, basePath: String)(implicit basePatterns: Patterns): RepositoryType =
 			apply(name, Some(hostname), None, Some(basePath))
+		/** Constructs this repository type with the given `name`, `hostname`, and `port`.  `basePatterns` are the initial patterns to use.
+		* A ManagedProject has an implicit defining these initial patterns based on a setting for either Maven or Ivy style patterns.*/
 		def apply(name: String, hostname: String, port: Int)(implicit basePatterns: Patterns): RepositoryType =
 			apply(name, Some(hostname), Some(port), None)
+		/** Constructs this repository type with the given `name`, `hostname`, `port`, and the `basePath` against which the initial
+		* patterns will be resolved.  `basePatterns` are the initial patterns to use.
+		* A ManagedProject has an implicit defining these initial patterns based on a setting for either Maven or Ivy style patterns.*/
 		def apply(name: String, hostname: String, port: Int, basePath: String)(implicit basePatterns: Patterns): RepositoryType =
 			apply(name, Some(hostname), Some(port), Some(basePath))
+		/** Constructs this repository type with the given `name`, `hostname`, `port`, and the `basePath` against which the initial
+		* patterns will be resolved.  `basePatterns` are the initial patterns to use.  All but the `name` are optional (use None).
+		* A ManagedProject has an implicit defining these initial patterns based on a setting for either Maven or Ivy style patterns.*/
 		def apply(name: String, hostname: Option[String], port: Option[Int], basePath: Option[String])(implicit basePatterns: Patterns): RepositoryType =
 			construct(name, SshConnection(None, hostname, port), resolvePatterns(basePath, basePatterns))
 	}
+	/** A factory to construct an interface to an Ivy SSH resolver.*/
 	object ssh extends Define[SshRepository]
 	{
 		protected def construct(name: String, connection: SshConnection, patterns: Patterns) = SshRepository(name, connection, patterns, None)
 	}
+	/** A factory to construct an interface to an Ivy SFTP resolver.*/
 	object sftp extends Define[SftpRepository]
 	{
 		protected def construct(name: String, connection: SshConnection, patterns: Patterns) = SftpRepository(name, connection, patterns)
 	}
+	/** A factory to construct an interface to an Ivy filesytem resolver. */
 	object file
 	{
+		/** Constructs a file resolver with the given name.  The patterns to use must be explicitly specified
+		* using the `ivys` or `artifacts` methods on the constructed resolver object.*/
 		def apply(name: String): FileRepository = FileRepository(name, defaultFileConfiguration, ivyStylePatterns)
+		/** Constructs a file resolver with the given name and base directory. */
 		def apply(name: String, baseDirectory: File)(implicit basePatterns: Patterns): FileRepository =
 		{
 			require(baseDirectory.isDirectory)
@@ -174,18 +213,22 @@ object Resolver
 			FileRepository(name, defaultFileConfiguration, resolvedInitialPatterns)
 		}
 	}
+	/** If `base` is None, `patterns` is returned unchanged.
+	* Otherwise, the ivy file and artifact patterns in `patterns` are resolved against the given base. */
 	private def resolvePatterns(base: Option[String], patterns: Patterns): Patterns =
 		base match
 		{
 			case Some(path) => resolvePatterns(pathURI(path), patterns)
 			case None => patterns
 		}
+	/** Resolves the ivy file and artifact patterns in `patterns` against the given base. */
 	private def resolvePatterns(base: URI, basePatterns: Patterns): Patterns =
 	{
 		def resolve(pattern: String) = base.resolve(pathURI(pattern)).getPath
 		def resolveAll(patterns: Seq[String]) = patterns.map(resolve)
 		Patterns(resolveAll(basePatterns.ivyPatterns), resolveAll(basePatterns.artifactPatterns), basePatterns.isMavenCompatible)
 	}
+	/** Constructs a `URI` with the path component set to `path` and the other components set to null.*/
 	private def pathURI(path: String) = new URI(null, null, path, null)
 	
 	def defaultFileConfiguration = FileConfiguration(true, None)
