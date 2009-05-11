@@ -112,18 +112,26 @@ final class MultiLogger(delegates: List[Logger]) extends BasicLogger
 final class BufferedLogger(delegate: Logger) extends Logger
 {
 	import scala.actors.Actor
-	private[this] val buffers = new WeakHashMap[Actor, Buffer[LogEvent]]
+	private[this] val buffers = new WeakHashMap[Either[Thread, Actor], Buffer[LogEvent]]
 	/* The recording depth part is to enable a weak nesting of recording calls.  When recording is
 	*  nested (recordingDepth >= 2), calls to play/playAll add the buffers for actors to the serial buffer
 	*  (no actor) and calls to clear/clearAll clear actor buffers only. */
 	private[this] def recording = recordingDepth > 0
 	private[this] var recordingDepth = 0
 	
-	private[this] def bufferForActor(a: Actor) = buffers.getOrElseUpdate(a, new ListBuffer[LogEvent])
-	private[this] def buffer = bufferForActor(Actor.self)
-	private[this] def serialBuffer = bufferForActor(null)
+	private[this] val mainThread = Thread.currentThread
+	private[this] def getBuffer(key: Either[Thread, Actor]) = buffers.getOrElseUpdate(key, new ListBuffer[LogEvent])
+	private[this] def buffer = getBuffer(key)
+	private[this] def key =
+		Actor.self match
+		{
+			case null => Left(Thread.currentThread)
+			case a => Right(a)
+		}
+	private[this] def mainKey = Left(mainThread)
+	private[this] def serialBuffer = getBuffer(Left(mainThread))
 
-	private[this] def inActor = Actor.self != null
+	private[this] def inActor = Actor.self != null || Thread.currentThread != mainThread
 	
 	/** Enables buffering. */
 	def startRecording() { synchronized { recordingDepth += 1 } }
@@ -147,12 +155,13 @@ final class BufferedLogger(delegate: Logger) extends Logger
 			}
 			else if(recordingDepth > 1)
 			{
-				for((key, buffer) <- buffers if key != null)
+				val mainKeyL = mainKey
+				for((key, buffer) <- buffers if key != mainKeyL)
 					serialBuffer ++= buffer
 			}
 		}
 	/** Clears buffered events for the current actor.  It does not disable buffering. */
-	def clear(): Unit = synchronized { if(recordingDepth == 1 || inActor) buffers.removeKey(Actor.self) }
+	def clear(): Unit = synchronized { if(recordingDepth == 1 || inActor) buffers.removeKey(key) }
 	/** Clears buffered events for all actors and disables buffering. */
 	def stop(): Unit =
 		synchronized
@@ -171,7 +180,7 @@ final class BufferedLogger(delegate: Logger) extends Logger
 			{
 				val serial = serialBuffer
 				buffers.clear()
-				buffers(null) = serial
+				buffers(mainKey) = serial
 			}
 		}
 	def runAndFlush[T](f: => T): T =

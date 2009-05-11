@@ -5,7 +5,7 @@ package sbt.boot
 
 import java.io.{File, FileWriter, PrintWriter, Writer}
 
-import org.apache.ivy.{core, plugins, util, Ivy}
+import org.apache.ivy.{core, plugins, util}
 import core.LogOptions
 import core.cache.DefaultRepositoryCacheManager
 import core.event.EventManager

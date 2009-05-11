@@ -440,7 +440,6 @@ object ManageDependencies
 	{
 		for(dependency <- dependencies)
 		{
-			//println("Adding dependency " + dependency + " (default:  " + parser.getDefaultConf + ")")
 			val dependencyDescriptor = new DefaultDependencyDescriptor(moduleID, toID(dependency), false, dependency.isChanging, dependency.isTransitive)
 			dependency.configurations match
 			{

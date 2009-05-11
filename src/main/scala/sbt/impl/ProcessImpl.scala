@@ -85,7 +85,13 @@ private abstract class AbstractProcessBuilder extends ProcessBuilder
 	def run(log: Logger): Process = run(BasicIO(log))
 	
 	def ! = run().exitValue()
-	def !(log: Logger) = run(log).exitValue()
+	def !(log: Logger) =
+	{
+		val log2 = new BufferedLogger(log)
+		log2.startRecording()
+		try { run(log2).exitValue() }
+		finally { log2.playAll(); log2.clearAll() }
+	}
 	def !(io: ProcessIO) = run(io).exitValue()
 
 	def canPipeTo = false
