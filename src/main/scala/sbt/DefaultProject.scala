@@ -85,7 +85,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	def cleanOptions: Seq[CleanOption] =
 		ClearAnalysis(mainCompileConditional.analysis) ::
 		ClearAnalysis(testCompileConditional.analysis) ::
-		Nil
+		historyPath.map(history => Preserve(history)).toList
 		
 	def packageOptions: Seq[PackageOption] =
 		manifestClassPath.map(cp => ManifestAttributes( (Attributes.Name.CLASS_PATH, cp) )).toList :::

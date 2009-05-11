@@ -12,6 +12,20 @@ import java.nio.channels.FileChannel
 import java.util.jar.{Attributes, JarEntry, JarFile, JarOutputStream, Manifest}
 import java.util.zip.{GZIPOutputStream, ZipEntry, ZipInputStream, ZipOutputStream}
 
+final class Preserved private[sbt](toRestore: scala.collection.Map[File, Path], temp: File) extends NotNull
+{
+	def restore(log: Logger) =
+	{
+		try
+		{
+			Control.lazyFold(toRestore.toList) { case (src, dest) =>
+				FileUtilities.copyFile(src, dest.asFile, log)
+			}
+		}
+		finally { FileUtilities.clean(Path.fromFile(temp) :: Nil, true, log) }
+	}
+}
+
 /** A collection of file related methods. */
 object FileUtilities
 {
@@ -23,6 +37,22 @@ object FileUtilities
 
 	/** Splits a String around path separator characters. */
 	private[sbt] def pathSplit(s: String) = PathSeparatorPattern.split(s)
+	
+	def preserve(paths: Iterable[Path], log: Logger): Either[String, Preserved] =
+	{
+		for(tmp <- createTemporaryDirectory(log).right) yield
+		{
+			val pathMap = new scala.collection.mutable.HashMap[File, Path]
+			val destinationDirectory = Path.fromFile(tmp)
+			for(source <- paths)
+			{
+				val toPath = Path.fromString(destinationDirectory, source.relativePath)
+				copyFile(source, toPath, log)
+				pathMap(toPath.asFile) = source
+			}
+			new Preserved(pathMap.readOnly, tmp)
+		}
+	}
 	
 	/** Gzips the file 'in' and writes it to 'out'.  'in' cannot be the same file as 'out'. */
 	def gzip(in: Path, out: Path, log: Logger): Option[String] =

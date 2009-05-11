@@ -19,6 +19,7 @@ trait ScalaProject extends Project with FileTasks
 	trait TestOption extends ActionOption
 	trait CleanOption extends ActionOption
 	case class ClearAnalysis(analysis: TaskAnalysis[_, _, _]) extends CleanOption
+	case class Preserve(paths: PathFinder) extends CleanOption
 	
 	case class ExcludeTests(tests: Iterable[String]) extends TestOption
 	case class TestListeners(listeners: Iterable[TestReportListener]) extends TestOption
@@ -103,13 +104,19 @@ trait ScalaProject extends Project with FileTasks
 	def cleanTask(paths: PathFinder, options: => Seq[CleanOption]): Task =
 		task
 		{
-			val pathClean = FileUtilities.clean(paths.get, log)
-			for(ClearAnalysis(analysis) <- options)
-			{
-				analysis.clear()
-				analysis.save()
+			val cleanOptions = options
+			val preservePaths = for(Preserve(preservePaths) <- cleanOptions; toPreserve <- preservePaths.get) yield toPreserve
+			Control.thread(FileUtilities.preserve(preservePaths, log))
+			{ preserved =>
+				val pathClean = FileUtilities.clean(paths.get, log)
+				for(ClearAnalysis(analysis) <- cleanOptions)
+				{
+					analysis.clear()
+					analysis.save()
+				}
+				val restored = preserved.restore(log)
+				pathClean orElse restored
 			}
-			pathClean
 		}
 		
 	def syncTask(sourceDirectory: Path, destinationDirectory: Path): Task =
