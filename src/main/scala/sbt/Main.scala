@@ -93,10 +93,26 @@ object Main
 			project.log.info("   with sbt " + sbtVersion + " and Scala " + scalaVersion)
 		if(args.length == 0)
 		{
-			project.log.info("No actions specified, interactive session started. Execute 'help' for more information.")
-			val doNext = interactive(project)
-			printTime(project, startTime, "session")
-			doNext
+			CrossBuild.load() match
+			{
+				case None =>
+					project.log.info("No actions specified, interactive session started. Execute 'help' for more information.")
+					val doNext = interactive(project)
+					printTime(project, startTime, "session")
+					doNext
+				case Some(cross) =>
+					val setScalaVersion =
+						(newVersion: String) =>
+						{
+							project.scalaVersion() = newVersion
+							project.saveEnvironment()
+						}
+					if(handleAction(project, cross.command))
+						cross.versionComplete(setScalaVersion)
+					else
+						cross.error(setScalaVersion)
+					new Exit(RebootExitCode)
+			}
 		}
 		else
 		{
@@ -141,6 +157,7 @@ object Main
 	val ContinuousCompileCommand = "cc"
 	/** The prefix used to identify a request to execute the remaining input on source changes.*/
 	val ContinuousExecutePrefix = "~"
+	val CrossBuildPrefix = "+"
 	
 	/** The number of seconds between polling by the continuous compile command.*/
 	val ContinuousCompilePollDelaySeconds = 1
@@ -161,7 +178,7 @@ object Main
 	private def interactive(baseProject: Project): RunCompleteAction =
 	{
 		val projectNames = baseProject.topologicalSort.map(_.name)
-		val prefixes = "~" :: Nil
+		val prefixes = ContinuousExecutePrefix :: Nil
 		val completors = new Completors(ProjectAction, projectNames, interactiveCommands, List(GetAction, SetAction), prefixes)
 		val reader = new JLineReader(baseProject.historyPath, completors, baseProject.log)
 		def updateTaskCompletions(project: Project)
@@ -191,6 +208,13 @@ object Main
 						Reload
 					else if(RebootCommand == trimmed)
 						new Exit(RebootExitCode)
+					else if(trimmed.startsWith(CrossBuildPrefix))
+					{
+						if(startCrossBuild(currentProject, trimmed.substring(1).trim))
+							new Exit(RebootExitCode)
+						else
+							loop(currentProject)
+					}
 					else if(trimmed.startsWith(ProjectAction + " "))
 					{
 						val projectName = trimmed.substring(ProjectAction.length + 1)
@@ -242,7 +266,7 @@ object Main
 	{
 		printCmd("<action name>", "Executes the project specified action.")
 		printCmd("<method name> <parameter>*", "Executes the project specified method.")
-		printCmd("~ <command>", "Executes the project specified action or method whenever source files change.")
+		printCmd(ContinuousExecutePrefix + " <command>", "Executes the project specified action or method whenever source files change.")
 		printCmd(ShowActions, "Shows all available actions.")
 		printCmd(RebootCommand, "Changes to scala.version or sbt.version are processed and the project definition is reloaded.")
 		printCmd(HelpAction, "Displays this help message.")
@@ -268,6 +292,37 @@ object Main
 	private def listProject(p: Project) = printProject("\t", p)
 	private def printProject(prefix: String, p: Project): Unit =
 		Console.println(prefix + p.name + " " + p.version)
+
+	private def startCrossBuild(project: Project, action: String) =
+	{
+		if(checkBooted && checkAction(project, action))
+		{
+			val againstScalaVersions = project.crossScalaVersions
+			if(againstScalaVersions.isEmpty)
+			{
+				Console.println("Project does not declare any Scala versions to cross-build against.")
+				false
+			}
+			else
+			{
+				val currentScalaVersion = Project.crossScalaVersion
+				CrossBuild(currentScalaVersion, againstScalaVersions, action)
+				true
+			}
+		}
+		else
+			false
+	}
+	private def checkBooted =
+	{
+		if(Project.booted)
+			true
+		else
+		{
+			Console.println("Cross-building is not supported when the loader is not used.")
+			false
+		}
+	}
 	
 	/** Handles the given command string provided by batch mode execution..*/
 	private def handleBatchCommand(project: Project)(command: String): Option[String] =
@@ -537,5 +592,62 @@ object Main
 	private def setArgumentError(log: Logger) { log.error("Invalid arguments for 'set': expected property name and new value.") }
 	private def getArgumentError(log: Logger) { log.error("Invalid arguments for 'get': expected property name.") }
 	private def setProjectError(log: Logger) { log.error("Invalid arguments for 'project': expected project name.") }
-	
+}
+private class CrossBuild(val initialScalaVersion: String, val remainingScalaVersions: Set[String], val command: String)
+{
+	def error(setScalaVersion: String => Option[String]) =
+	{
+		CrossBuild.clear()
+		setScalaVersion(initialScalaVersion)
+	}
+	def versionComplete(setScalaVersion: String => Option[String]) =
+	{
+		val remaining = remainingScalaVersions - Project.crossScalaVersion
+		if(remaining.isEmpty)
+		{
+			CrossBuild.clear()
+			setScalaVersion(initialScalaVersion)
+		}
+		else
+		{
+			CrossBuild.setProperties(initialScalaVersion, remaining, command)
+			setScalaVersion(remaining.toSeq.first)
+		}
+	}
+}
+private object CrossBuild
+{
+	private val InitialScalaVersionKey = "sbt.initial.scala.version"
+	private val RemainingScalaVersionsKey = "sbt.remaining.scala.versions"
+	private val CrossCommandKey = "sbt.cross.build.command"
+	private def setProperties(initialScalaVersion: String, remainingScalaVersions: Set[String], command: String)
+	{
+		System.setProperty(InitialScalaVersionKey, initialScalaVersion)
+		System.setProperty(RemainingScalaVersionsKey, remainingScalaVersions.mkString(" "))
+		System.setProperty(CrossCommandKey, command)
+	}
+	private def getProperty(key: String) =
+	{
+		val value = System.getProperty(key)
+		if(value == null)
+			""
+		else
+			value.trim
+	}
+	private def clear() { setProperties("", Set.empty, "") }
+	def load() =
+	{
+		val initial = getProperty(InitialScalaVersionKey)
+		val command = getProperty(CrossCommandKey)
+		val remaining = getProperty(RemainingScalaVersionsKey)
+		if(initial.isEmpty || command.isEmpty || remaining.isEmpty)
+			None
+		else
+			Some(new CrossBuild(initial, Set(remaining.split(" ") : _*), command))
+	}
+	def apply(initialScalaVersion: String, remainingScalaVersions: Set[String], command: String) =
+	{
+		setProperties(initialScalaVersion, remainingScalaVersions, command)
+		new CrossBuild(initialScalaVersion, remainingScalaVersions, command)
+	}
 }

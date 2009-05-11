@@ -193,7 +193,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	final def envBackingPath = info.builderPath / Project.DefaultEnvBackingName
 	/** The path to the file that provides persistence for history. */
 	def historyPath = Some(outputPath / ".history")
-	def outputPath = path(outputDirectoryName)
+	def outputPath = crossPath(outputDirectoryName)
 	def outputDirectoryName = DefaultOutputDirectoryName
 	
 	private def getProject(result: LoadResult, path: Path): Project =
@@ -214,6 +214,16 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	final val scalaVersion = propertyOptional[String]("")
 	final val sbtVersion = propertyOptional[String]("")
 	final val projectInitialize = propertyOptional[Boolean](false)
+
+	def crossPath(base: Path) =
+	{
+		val scalaV = crossScalaVersion
+		if(scalaV.isEmpty)
+			base
+		else
+			base / ("scala_" + scalaV)
+	}
+	def crossScalaVersions = scala.collection.immutable.Set.empty[String]
 	
 	protected final override def parentEnvironment = info.parent
 	
@@ -251,6 +261,16 @@ object Project
 		log.setLevel(Level.Debug)
 		log.enableTrace(true)
 		log
+	}
+
+	private[sbt] def booted = java.lang.Boolean.getBoolean("sbt.boot")
+	private[sbt] def crossScalaVersion =
+	{
+		val v = System.getProperty("sbt.scala.version")
+		if(v == null)
+			""
+		else
+			v.trim
 	}
 	
 	/** Loads the project in the current working directory.*/

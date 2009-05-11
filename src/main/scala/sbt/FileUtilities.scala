@@ -134,7 +134,7 @@ object FileUtilities
 			else if(sourceFile.exists)
 			{
 				log.debug("\tAdding " + source + " as " + source.relativePath + " ...")
-				val nextEntry = createEntry(source.relativePath)
+				val nextEntry = createEntry(source.relativePath("/"))
 				nextEntry.setTime(sourceFile.lastModified)
 				output.putNextEntry(nextEntry)
 				transferAndClose(new FileInputStream(sourceFile), output, log)

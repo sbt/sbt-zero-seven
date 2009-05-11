@@ -394,8 +394,8 @@ trait BasicDependencyPaths extends ManagedProject
 	def dependencyDirectoryName = DefaultDependencyDirectoryName
 	def managedDirectoryName = DefaultManagedDirectoryName
 	def pomName = artifactBaseName + PomExtension
-	def dependencyPath = path(dependencyDirectoryName)
-	def managedDependencyPath = path(managedDirectoryName)
+	def dependencyPath = crossPath(dependencyDirectoryName)
+	def managedDependencyPath = crossPath(managedDirectoryName)
 	def pomPath = outputPath / pomName
 }
 object BasicDependencyPaths

@@ -66,5 +66,5 @@ protected class MainProject(val info: ProjectInfo) extends CrossCompileProject
 		
 	val ScriptedClassName = "scripted.ScriptedTests"
 	
-	val filter = (group: String, name: String) => group == "java"//name == "multi"
+	val filter = (group: String, name: String) => group == "extend"//name == "multi"
 }

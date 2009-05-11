@@ -26,6 +26,7 @@ object Boot
 {
 	def main(args: Array[String])
 	{
+		System.setProperty("sbt.boot", true.toString)
 		checkProxy()
 		try { boot(args) }
 		catch
@@ -171,6 +172,7 @@ private class Setup extends NotNull
 		(scalaFailed +++ sbtFailed) match
 		{
 			case Success =>
+				System.setProperty("sbt.scala.version", scalaVersion)
 				val classpath = getJars(scalaDirectory, sbtDirectory)
 				new URLClassLoader(classpath.toArray, new BootFilteredLoader)
 			case f: Failure =>
