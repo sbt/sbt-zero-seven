@@ -57,14 +57,16 @@ $ reload
 > update
 [success]
 
-
+# remove sources in the parent project
+$ delete src
+[success]
 # Copy a source containing a failing test that the framework should mark as succeeding
-$ copy-file changes/TestSuccess.scala src/test/scala/TestSuccess.scala
+$ copy-file changes/TestSuccess.scala child/src/test/scala/TestSuccess.scala
 [success]
 > test
 [success]
 # Copy a source containing a successful test that the framework should mark as failing
-$ copy-file changes/TestFailure.scala src/test/scala/TestFailure.scala
+$ copy-file changes/TestFailure.scala child/src/test/scala/TestFailure.scala
 [success]
 > test
 [failure]

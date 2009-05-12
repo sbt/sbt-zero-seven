@@ -101,16 +101,8 @@ object Main
 					printTime(project, startTime, "session")
 					doNext
 				case Some(cross) =>
-					val setScalaVersion =
-						(newVersion: String) =>
-						{
-							project.scalaVersion() = newVersion
-							project.saveEnvironment()
-						}
-					if(handleAction(project, cross.command))
-						cross.versionComplete(setScalaVersion)
-					else
-						cross.error(setScalaVersion)
+					crossBuildNext(project, cross)
+					printTime(project, startTime, "cross-build")
 					new Exit(RebootExitCode)
 			}
 		}
@@ -127,6 +119,19 @@ object Main
 			printTime(project, startTime, "build")
 			new Exit(exitCode)
 		}
+	}
+	private def crossBuildNext(project: Project, cross: CrossBuild)
+	{
+		val setScalaVersion =
+			(newVersion: String) =>
+			{
+				project.scalaVersion() = newVersion
+				project.saveEnvironment()
+			}
+		if(handleAction(project, cross.command))
+			cross.versionComplete(setScalaVersion)
+		else
+			cross.error(setScalaVersion)
 	}
 	
 	/** The name of the command that loads a console with access to the current project through the variable 'project'.*/

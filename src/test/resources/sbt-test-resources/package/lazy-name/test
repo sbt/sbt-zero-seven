@@ -1,7 +1,7 @@
 > package
 [success]
 
-$ exists "target/Lazy Package Name-0.1.1.jar"
+$ exists "target/lazy-package-name-0.1.1.jar"
 [success]
 
 > clean
@@ -13,7 +13,7 @@ $ exists "target/Lazy Package Name-0.1.1.jar"
 > package
 [success]
 
-$ exists "target/Lazy Package Name-0.1.2.jar"
+$ exists "target/lazy-package-name-0.1.2.jar"
 [success]
 
 > increment-version
@@ -22,5 +22,5 @@ $ exists "target/Lazy Package Name-0.1.2.jar"
 > package
 [success]
 
-$ exists "target/Lazy Package Name-0.1.3.jar"
+$ exists "target/lazy-package-name-0.1.3.jar"
 [success]

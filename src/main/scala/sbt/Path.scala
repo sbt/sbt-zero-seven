@@ -48,8 +48,8 @@ sealed abstract class Path extends PathFinder with NotNull
 	def asURL = asFile.toURI.toURL
 	/** The string representation of this path relative to the base directory.  The project directory is the
 	* default base directory if one is not specified explicitly using the <code>##</code> operator.*/
-	lazy val relativePath: String = relativePath(sep.toString)
-	def relativePath(separator: String): String
+	lazy val relativePath: String = relativePathString(sep.toString)
+	def relativePathString(separator: String): String
 	def absolutePath: String = asFile.getAbsolutePath
 	private[sbt] def prependTo(s: String): String
 	
@@ -68,19 +68,19 @@ private final class BaseDirectory(private[sbt] val path: Path) extends Path
 	override def ## : Path = this
 	override def toString = path.toString
 	def asFile = path.asFile
-	def relativePath(separator: String) = ""
+	def relativePathString(separator: String) = ""
 	private[sbt] def prependTo(s: String) = "." + sep + s
 }
 private[sbt] final class FilePath(val asFile: File) extends Path
 {
 	override def toString = absolutePath
-	def relativePath(separator: String) = asFile.getName
+	def relativePathString(separator: String) = asFile.getName
 	private[sbt] def prependTo(s: String) = absolutePath + sep + s
 }
 private[sbt] final class ProjectDirectory(val asFile: File) extends Path
 {
 	override def toString = "."
-	def relativePath(separator: String) = ""
+	def relativePathString(separator: String) = ""
 	private[sbt] def prependTo(s: String) = "." + sep + s
 }
 private[sbt] final class RelativePath(val parentPath: Path, val component: String) extends Path
@@ -89,9 +89,9 @@ private[sbt] final class RelativePath(val parentPath: Path, val component: Strin
 	override def toString = parentPath prependTo component
 	lazy val asFile = new File(parentPath.asFile, component)
 	private[sbt] def prependTo(s: String) =  parentPath prependTo (component + sep + s)
-	def relativePath(separator: String) =
+	def relativePathString(separator: String) =
 	{
-		val parentRelative = parentPath.relativePath(separator)
+		val parentRelative = parentPath.relativePathString(separator)
 		if(parentRelative.isEmpty)
 			component
 		else
@@ -110,7 +110,7 @@ object Path
 	/** Constructs a String representation of <code>Path</code>s.  The relative path String of each <code>Path</code> is
 	* separated by the platform's path separator.*/
 	def makeRelativeString(paths: Iterable[Path]): String = makeRelativeString(paths, sep.toString)
-	def makeRelativeString(paths: Iterable[Path], separator: String): String = paths.map(_.relativePath(separator)).mkString(pathSeparator)
+	def makeRelativeString(paths: Iterable[Path], separator: String): String = paths.map(_.relativePathString(separator)).mkString(pathSeparator)
 	
 	def splitString(projectPath: Path, value: String): Iterable[Path] =
 	{

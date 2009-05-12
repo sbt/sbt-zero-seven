@@ -237,7 +237,7 @@ private object WebstartScalaProject
 		}
 	}
 	private def jarResource(isMain: Boolean)(jar: Path): WebstartJarResource =
-		new WebstartJarResource(jar.asFile.getName, jar.relativePath("/"), isMain)
+		new WebstartJarResource(jar.asFile.getName, jar.relativePathString("/"), isMain)
 	private def jarResources(mainJars: Iterable[Path], libraries: Iterable[Path]): Seq[WebstartJarResource] =
 		mainJars.map(jarResource(true)).toList ::: libraries.map(jarResource(false)).toList
 	

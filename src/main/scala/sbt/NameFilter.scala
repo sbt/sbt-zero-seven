@@ -51,6 +51,10 @@ object AllPassFilter extends NameFilter
 {
 	def accept(name: String) = true
 }
+object NothingFilter extends NameFilter
+{
+	def accept(name: String) = false
+}
 
 object GlobFilter
 {

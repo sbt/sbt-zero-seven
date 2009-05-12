@@ -1,10 +1,10 @@
 > package
 [success]
 
-$ "exists" "./target/Jar Manifest Test-0.2.jar"
+$ "exists" "./target/jar-manifest-test-0.2.jar"
 [success]
 
-$ exec java -jar "./target/Jar Manifest Test-0.2.jar"
+$ exec java -jar "./target/jar-manifest-test-0.2.jar"
 [success]
 
 > run
