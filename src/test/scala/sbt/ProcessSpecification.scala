@@ -1,93 +1,91 @@
 package sbt
 
-import java.io.{File, InputStream, OutputStream, OutputStreamWriter, PrintWriter}
-import org.scalacheck.Properties
+import java.io.File
+import org.scalacheck.{Prop, Properties}
+import Prop._
 
-import TestedProcess._
-/* TODO: rewrite for new process code
+import Process._
+
 object ProcessSpecification extends Properties("Process I/O")
 {
-	specify("Correct exit code", (exitCode: Byte) => checkExit(exitCode))
-	specify("Process reads standard in", (times: Int, line: String) => writeToProcess(Math.abs(times), strip(line)))
-	specify("Process writes standard out", (times: Int) => readProcess(Math.abs(times), Some(OutLine), None))
-	specify("Process writes standard error", (times: Int) => readProcess(Math.abs(times), None, Some(ErrorLine)))
-	specify("Process writes standard out and error", (times: Int) => readProcess(Math.abs(times), Some(OutLine), Some(ErrorLine)))
+	private val log = new ConsoleLogger
 	
+	specify("Correct exit code", (exitCode: Byte) => checkExit(exitCode))
+	specify("#&& correct", (exitCodes: Array[Byte]) => checkBinary(exitCodes)(_ #&& _)(_ && _))
+	specify("#|| correct", (exitCodes: Array[Byte]) => checkBinary(exitCodes)(_ #|| _)(_ || _))
+	specify("Pipe to output file", (data: Array[Byte]) => checkFileOut(data))
+	specify("Pipe to input file", (data: Array[Byte]) => checkFileIn(data))
+	specify("Pipe to process", (data: Array[Byte]) => checkPipe(data))
+
+	private def checkBinary(codes: Array[Byte])(reduceProcesses: (ProcessBuilder, ProcessBuilder) => ProcessBuilder)(reduceExit: (Boolean, Boolean) => Boolean) =
+	{
+		(codes.length > 1) ==>
+		{
+			val unsignedCodes = codes.map(unsigned)
+			val exitCode = unsignedCodes.map(code => Process(process("sbt.exit " + code))).reduceLeft(reduceProcesses) !
+			val expectedExitCode = unsignedCodes.map(toBoolean).reduceLeft(reduceExit)
+			toBoolean(exitCode) == expectedExitCode
+		}
+	}
+	private def toBoolean(exitCode: Int) = exitCode == 0
 	private def checkExit(code: Byte) =
 	{
 		val exitCode = unsigned(code)
-		run(keyValue(Exit, exitCode) :: Nil, exitCode)
+		(process("sbt.exit " + exitCode) !) == exitCode
 	}
-
-	private def readProcess(count: Int, lineOut: Option[String], lineErr: Option[String]) =
+	private def checkFileOut(data: Array[Byte]) =
 	{
-		def read(line: Option[String]) =
-			line match
-			{
-				case None => ProcessIO.processFully(System.out.println)_
-				case Some(l) => readLines(List.make(count, l))
-			}
-		def arg(key: String, include: Boolean) =
-			if(include) keyValue(key,count) :: Nil
-			else Nil
-		val args = arg(WriteOut, lineOut.isDefined) ::: arg(WriteError, lineErr.isDefined)
-		setupRun(args, 0)
-			{ _.withIO(new ProcessIO(ProcessIO.close, read(lineOut), read(lineErr))) }
+		withData(data) { (temporaryFile, temporaryFile2) =>
+			val catCommand = process("sbt.cat " + temporaryFile.getAbsolutePath)
+			catCommand #> temporaryFile2
+		}
 	}
-	private def keyValue(key: String, value: Int) = key + "=" + value
-	private def strip(line: String) = line.replaceAll("[\n\r]","")
-	private def writeToProcess(count: Int, line: String) =
+	private def checkFileIn(data: Array[Byte]) =
 	{
-		setupRun(keyValue(TestedProcess.ReadLines, count) :: Nil, 0)
-			{ _.withIO(ProcessIO.standard(writeLines(line, count))) }
+		withData(data) { (temporaryFile, temporaryFile2) =>
+			val catCommand = process("sbt.cat")
+			temporaryFile #> catCommand #> temporaryFile2
+		}
 	}
-	private def writeLines(line: String, times: Int)(o: OutputStream)
+	private def checkPipe(data: Array[Byte]) =
 	{
-		val out = new PrintWriter(new OutputStreamWriter(o))
-		def writeLines(remaining: Int)
+		withData(data) { (temporaryFile, temporaryFile2) =>
+			val catCommand = process("sbt.cat")
+			temporaryFile #> catCommand #| catCommand #> temporaryFile2
+		}
+	}
+	private def temp() = File.createTempFile("sbt", "")
+	private def withData(data: Array[Byte])(f: (File, File) => ProcessBuilder) =
+	{
+		val temporaryFile1 = temp()
+		val temporaryFile2 = temp()
+		try
 		{
-			if(remaining > 0)
+			FileUtilities.write(temporaryFile1, data, log)
+			val process = f(temporaryFile1, temporaryFile2)
+			( process ! ) == 0 &&
 			{
-				out.println(line)
-				writeLines(remaining - 1)
+				val result =
+					for(b1 <- FileUtilities.readBytes(temporaryFile1, log).right; b2 <- FileUtilities.readBytes(temporaryFile2, log).right) yield
+						b1 deepEquals b2
+				result.fold(error, x => x)
 			}
 		}
-		try { writeLines(if(line.isEmpty) 0 else times) }
-		finally { out.close() }
+		finally
+		{
+			temporaryFile1.delete()
+			temporaryFile2.delete()
+		}
 	}
-
 	private def unsigned(b: Byte): Int = ((b: Int) +256) % 256
-	private def run(args: List[String], expectedExitCode: Int) = setupRun(args, expectedExitCode)(s => s)
-	private def setupRun(args: List[String], expectedExitCode: Int)(setup: ProcessRunner => ProcessRunner) =
+	private def process(command: String) =
 	{
-		val ignore = TestedProcess // just for the compile dependency so that this test is rerun when TestedProcess changes, not used otherwise
+		val ignore = echo // just for the compile dependency so that this test is rerun when TestedProcess.scala changes, not used otherwise
 		
-		val thisClasspath = List(getSource[ScalaObject], getSource[sbt.SourceTag]).mkString(File.pathSeparator)
-		val runner = setup(Process("java", "-cp" :: thisClasspath :: "sbt.TestedProcess" :: args))
-		val exitCode = runner !
-		exitCode == expectedExitCode
+		val thisClasspath = List(getSource[ScalaObject], getSource[sbt.Logger], getSource[sbt.SourceTag]).mkString(File.pathSeparator)
+		"java -cp " + thisClasspath + " " + command
 	}
 	private def getSource[T](implicit mf: scala.reflect.Manifest[T]): String =
 		(new File(mf.erasure.getProtectionDomain.getCodeSource.getLocation.toURI)).getAbsolutePath
-		
-	private def readLines(expected: List[String]): InputStream => Unit =
-	{
-		def next(errorOrRemaining: Either[String, List[String]], line: String) =
-		{
-			errorOrRemaining.right.flatMap
-			{
-				_ match
-				{
-					case Nil => Left("Expected end of input, got '" + line + "'")
-					case head :: tail =>
-						if(head == line)
-							Right(tail)
-						else
-							Left("Expected '" + head + "', got '" + line+ "'")
-				}
-			}
-		}
-		ProcessIO.fold(next, Right(expected))
-	}
 }
-private trait SourceTag*/
+private trait SourceTag

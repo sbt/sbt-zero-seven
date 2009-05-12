@@ -73,7 +73,7 @@ trait Conditional[Source, Product, External] extends NotNull
 		val directlyModifiedCount = modified.size
 		for((external, info) <- externalInfo(analysis.allExternals))
 		{
-			val dependentSources = analysis.externalDependencies(external).get
+			val dependentSources = analysis.externalDependencies(external).getOrElse(Set.empty)
 			if(info.available)
 			{
 				val dependencyLastModified = info.lastModified
