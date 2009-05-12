@@ -5,6 +5,10 @@ Parts of the Scala library are distributed with sbt:
 Copyright 2002-2008 EPFL, Lausanne
 Licensed under BSD-style license (see licenses/LICENSE_Scala)
 
+JLine is distributed with sbt:
+Copyright (c) 2002-2006, Marc Prud'hommeaux <mwp1@cornell.edu>
+Licensed under BSD-style license (see licenses/LICENSE_JLine)
+
 Apache Ivy, licensed under the Apache License, Version 2.0
 (see licenses/LICENSE_Apache) is distributed with sbt and
 requires the following notice:
