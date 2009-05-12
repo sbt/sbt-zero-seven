@@ -2,7 +2,7 @@ import sbt._
 
 class TestProject3(info: ProjectInfo) extends ParentProject(info)
 {
-	lazy val child = project("Main", "child", new ChildProject(_))
+	lazy val child = project("child", "Main", new ChildProject(_))
 	class ChildProject(info: ProjectInfo) extends DefaultProject(info)
 	{
 		override def testFrameworks = framework.FrameworkScalaCheck :: Nil

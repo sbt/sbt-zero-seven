@@ -14,7 +14,7 @@ object PathSpecification extends Properties("Path")
 	log.setLevel(Level.Warn)
 	
 	implicit val pathComponent: Arbitrary[String] =
-		Arbitrary(for(id <- Gen.identifier if id.length > 0 && id.length <= MaxFilenameLength) yield id) // TODO: make a more specific Arbitrary
+		Arbitrary(for(id <- Gen.identifier) yield trim(id)) // TODO: make a more specific Arbitrary
 	implicit val projectDirectory: Arbitrary[ProjectDirectory] = Arbitrary(Gen.value(new ProjectDirectory(new File("."))))
 	implicit val arbPath: Arbitrary[Path] = Arbitrary(genPath)
 	
@@ -74,7 +74,7 @@ object PathSpecification extends Properties("Path")
 				FileUtilities.touch(fileForComponents(dir, a ::: b), log) match
 				{
 					case None => Right(Some( f(new ProjectDirectory(dir)) ))
-					case Some(err) => Right(None)
+					case Some(err) => Left(err)
 				}
 			})
 		result match
@@ -95,13 +95,15 @@ object PathSpecification extends Properties("Path")
 			b <- arbitrary[Option[List[String]]])
 		yield
 		{
-			val base = pathForComponents(projectPath, a)
+			val base = pathForComponents(projectPath, trim(a))
 			b match
 			{
 				case None => base
-				case Some(relative) => pathForComponents(base ##, relative)
+				case Some(relative) => pathForComponents(base ##, trim(relative))
 			}
 		}
-		
-	val MaxFilenameLength = 100
+	private def trim(components: List[String]): List[String] = components.take(MaxComponentCount)
+	private def trim(component: String): String = component.substring(0, Math.min(component.length, MaxFilenameLength))
+	val MaxFilenameLength = 20
+	val MaxComponentCount = 6
 }
