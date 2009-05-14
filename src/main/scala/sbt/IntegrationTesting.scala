@@ -65,6 +65,8 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 	def integrationTestSources = descendents(integrationTestScalaSourcePath, "*.scala")
 	def integrationTestLabel = "integration-test"
 	def integrationTestCompileConfiguration = new IntegrationTestCompileConfig
+	
+	protected def integrationTestDependencies = new LibraryDependencies(this, integrationTestCompileConditional)
 
 	def integrationTestFrameworks = testFrameworks
 	override def useIntegrationTestConfiguration = false

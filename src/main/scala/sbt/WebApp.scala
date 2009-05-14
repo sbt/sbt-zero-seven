@@ -38,7 +38,7 @@ object JettyRun extends ExitHook
 			def runJetty() =
 			{
 				val baseLoader = this.getClass.getClassLoader
-				val loader: ClassLoader = new FilteredLoader(classpathURLs.toArray, baseLoader, "org.mortbay." :: "javax.servlet." :: Nil)
+				val loader: ClassLoader = new SelectiveLoader(classpathURLs.toArray, baseLoader, "org.mortbay." :: "javax.servlet." :: Nil)
 				val lazyLoader = new LazyFrameworkLoader(implClassName, Array(FileUtilities.sbtJar.toURI.toURL), loader, baseLoader)
 				val runner = ModuleUtilities.getObject(implClassName, lazyLoader).asInstanceOf[JettyRun]
 				runner(configuration, log)

@@ -56,6 +56,8 @@ abstract class BasicTestRunner extends TestRunner
 
 object TestFramework
 {
+	private val ScalaCompilerJarPackages = "scala.tools.nsc." :: "jline." :: "ch.epfl.lamp." :: Nil
+
 	private[sbt] def safeForeach[T](it: Iterable[T], log: Logger)(f: T => Unit): Unit = it.foreach(i => Control.trapAndLog(log){ f(i) } )
 	import scala.collection.{Map, Set}
 	def runTests(frameworks: Iterable[TestFramework], classpath: Iterable[Path], tests: Iterable[TestDefinition], log: Logger, listeners: Iterable[TestReportListener]): Option[String] =
@@ -89,7 +91,8 @@ object TestFramework
 	}
 	private def doRunTests(classpath: Iterable[Path], tests: Map[TestFramework, Set[String]], log: Logger, listeners: Iterable[TestReportListener]): Option[String] =
 	{
-		val loader: ClassLoader = new IntermediateLoader(classpath.map(_.asURL).toSeq.toArray, getClass.getClassLoader)
+		val filterCompilerLoader = new FilteredLoader(getClass.getClassLoader, ScalaCompilerJarPackages)
+		val loader: ClassLoader = new IntermediateLoader(classpath.map(_.asURL).toSeq.toArray, filterCompilerLoader)
 		val oldLoader = Thread.currentThread.getContextClassLoader
 		Thread.currentThread.setContextClassLoader(loader)
 		val testsListeners = listeners.filter(_.isInstanceOf[TestsListener]).map(_.asInstanceOf[TestsListener])

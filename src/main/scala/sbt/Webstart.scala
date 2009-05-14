@@ -25,7 +25,7 @@ trait WebstartOptions extends NotNull
 	/** The libraries needed for webstart.  Note that only jars are used; directories are discarded.*/
 	def webstartLibraries: PathFinder
 	/** Libraries external to the project needed for webstart.  This is mainly for scala libraries.*/
-	def webstartExtraLibraries: Iterable[File]
+	def webstartExtraLibraries: PathFinder
 	/** Resources to copy to the webstart output directory.*/
 	def webstartResources: PathFinder
 	/** If defined, this specifies where to create a zip of the webstart output directory.  It cannot be
@@ -94,7 +94,7 @@ trait WebstartScalaProject extends ScalaProject
 		
 			import FileUtilities._
 			
-			val jars = (webstartLibraries.get ++ webstartExtraLibraries.map(Path.fromFile)).filter(ClasspathUtilities.isArchive)
+			val jars = (webstartLibraries +++ webstartExtraLibraries).get.filter(ClasspathUtilities.isArchive)
 			def process(jars: Iterable[Path]) = for(jar <- jars if jar.asFile.getName.endsWith(".jar")) yield relativize(jar)
 			
 			thread(signAndPack(webstartMainJar :: Nil, webstartOutputDirectory)) { mainJars =>
@@ -266,7 +266,7 @@ abstract class BasicWebstartProject extends BasicScalaProject with WebstartScala
 {
 	def webstartSignConfiguration: Option[SignConfiguration] = None
 	
-	def webstartExtraLibraries = scalaJars
+	def webstartExtraLibraries = mainDependencies.scalaJars
 	def webstartLibraries = runClasspath +++ jarsOfProjectDependencies
 	def webstartResources = descendents(jnlpResourcesPath ##, AllPassFilter)
 

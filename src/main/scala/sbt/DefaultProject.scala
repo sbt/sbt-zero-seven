@@ -10,6 +10,7 @@ class DefaultWebProject(val info: ProjectInfo) extends BasicWebScalaProject
 
 import BasicScalaProject._
 import ScalaProject.{optionsAsString, javaOptionsAsString}
+import java.io.File
 import java.util.jar.Attributes
 
 /** This class defines concrete instances of actions from ScalaProject using overridable paths,
@@ -146,25 +147,20 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	* also adds the resource directories appropriate to the configuration.*/
 	def fullUnmanagedClasspath(config: Configuration) =
 	{
-		if(config == CompilerPlugin)
-			unmanagedClasspath
-		else
+		config match
 		{
-			val base =  mainCompilePath +++ mainResourcesPath +++ unmanagedClasspath
-			config match
-			{
-				case Test => testCompilePath +++ testResourcesPath +++ base
-				case _ => base
-			}
+			case CompilerPlugin => unmanagedClasspath
+			case Test => testUnmanagedClasspath
+			case _ => mainUnmanagedClasspath
 		}
 	}
+	protected def mainUnmanagedClasspath = mainCompilePath +++ mainResourcesPath +++ unmanagedClasspath +++ mainDependencies.scalaCompiler
+	protected def testUnmanagedClasspath = testCompilePath +++ testResourcesPath  +++ testDependencies.scalaCompiler +++ mainUnmanagedClasspath
 	
-	protected def scalaJars: Iterable[java.io.File] =
-	{
-		val externalJars = mainCompileConditional.analysis.allExternals.filter(ClasspathUtilities.isArchive)
-		externalJars.filter(BasicScalaProject.ScalaJarNames contains _.getName)
-	}
-		
+	@deprecated protected def scalaJars: Iterable[File] = mainDependencies.scalaJars.get.map(_.asFile)
+	protected def mainDependencies = new LibraryDependencies(this, mainCompileConditional)
+	protected def testDependencies = new LibraryDependencies(this, testCompileConditional)
+
 	/** The list of test frameworks to use for testing.  Note that adding frameworks to this list
 	* for an active project currently requires an explicit 'clean' to properly update the set of tests to
 	* run*/
@@ -284,7 +280,7 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	
 	lazy val prepareWebapp = prepareWebappAction
 	protected def prepareWebappAction =
-		prepareWebappTask(descendents(webappPath ##, "*") +++ extraWebappFiles, temporaryWarPath, runClasspath, scalaJars) dependsOn(compile)
+		prepareWebappTask(descendents(webappPath ##, "*") +++ extraWebappFiles, temporaryWarPath, runClasspath, mainDependencies.scalaJars) dependsOn(compile)
 	/** Additional files to include in the web application. */
 	protected def extraWebappFiles: PathFinder = Path.emptyPathFinder
 	
@@ -358,7 +354,9 @@ object BasicScalaProject
 	val ReleaseDescription =
 		"Compiles, tests, generates documentation, packages, and increments the version."
 		
-	lazy val ScalaJarNames = Set("scala-library.jar", "scala-compiler.jar")
+	val ScalaLibraryJarName = "scala-library.jar"
+	val ScalaCompilerJarName = "scala-compiler.jar"
+	val ScalaJarNames = Set(ScalaCompilerJarName, ScalaLibraryJarName)
 	
 	private def warnIfMultiple(applications: List[String], log: Logger) =
 	{
@@ -458,4 +456,36 @@ object WebProjectPaths
 {
 	val DefaultWebappDirectoryName = "webapp"
 	val DefaultJettyContextPath = "/"
+}
+/** Analyzes the dependencies of a project after compilation.  All methods except `snapshot` return a
+* `PathFinder`.  The underlying calculations are repeated for each call to PathFinder.get. */
+final class LibraryDependencies(project: Project, conditional: CompileConditional) extends NotNull
+{
+	/** Libraries located in unmanaged or managed dependency paths.*/
+	def libraries: PathFinder = pathFinder(snapshot.libraries)
+	/** Libraries located outside of the project.*/
+	def external: PathFinder = pathFinder(snapshot.external)
+	/** The Scala library jar.*/
+	def scalaLibrary: PathFinder = pathFinder(snapshot.scalaLibrary)
+	/** The Scala compiler jar.*/
+	def scalaCompiler: PathFinder = pathFinder(snapshot.scalaCompiler)
+	/** All dependencies.*/
+	def all: PathFinder = pathFinder(snapshot.all)
+	/** The Scala library and compiler jars.*/
+	def scalaJars: PathFinder = pathFinder(snapshot.scalaJars)
+
+	/** Returns an object that has all analyzed dependency information frozen at the time of this method call. */
+	def snapshot = new Dependencies
+	
+	private def rootProjectDirectory = project.rootProject.info.projectPath
+
+	class Dependencies
+	{
+		val all = conditional.analysis.allExternals.filter(ClasspathUtilities.isArchive).map(_.getAbsoluteFile)
+		val (allLibraries, external) = all.toList.partition(jar => Path.relativize(rootProjectDirectory, jar).isDefined)
+		val (scalaJars, libraries) = allLibraries.partition(jar => ScalaJarNames.contains(jar.getName))
+		val (scalaLibrary, scalaCompiler) = scalaJars.partition(_.getName == ScalaLibraryJarName)
+	}
+
+	private def pathFinder(it: => Iterable[File]) = Path.lazyPathFinder(it.map(Path.fromFile))
 }

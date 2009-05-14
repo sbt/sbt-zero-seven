@@ -120,11 +120,27 @@ private class IntermediateLoader(urls: Array[URL], parent: ClassLoader) extends 
 			selfLoadClass(className)
 	}
 }
-private class FilteredLoader(urls: Array[URL], parent: ClassLoader, filter: ClassFilter) extends URLClassLoader(urls, parent) with NotNull
+/** Delegates class loading to `parent` for all classes included by `filter`.  An attempt to load classes excluded by `filter`
+* results in a `ClassNotFoundException`.*/
+private class FilteredLoader(parent: ClassLoader, filter: ClassFilter) extends ClassLoader(parent) with NotNull
 {
-	def this(urls: Array[URL], parent: ClassLoader, includePackages: Iterable[String]) =
-		this(urls, parent, new ClassFilter { def include(className: String) = includePackages.exists(className.startsWith) })
 	require(parent != null) // included because a null parent is legitimate in Java
+	def this(parent: ClassLoader, excludePackages: Iterable[String]) = this(parent, new ExcludePackagesFilter(excludePackages))
+	
+	@throws(classOf[ClassNotFoundException])
+	override final def loadClass(className: String, resolve: Boolean): Class[_] =
+	{
+		if(filter.include(className))
+			super.loadClass(className, resolve)
+		else
+			throw new ClassNotFoundException(className)
+	}
+}
+private class SelectiveLoader(urls: Array[URL], parent: ClassLoader, filter: ClassFilter) extends URLClassLoader(urls, parent) with NotNull
+{
+	require(parent != null) // included because a null parent is legitimate in Java
+	def this(urls: Array[URL], parent: ClassLoader, includePackages: Iterable[String]) = this(urls, parent, new IncludePackagesFilter(includePackages))
+	
 	@throws(classOf[ClassNotFoundException])
 	override final def loadClass(className: String, resolve: Boolean): Class[_] =
 	{
@@ -142,6 +158,19 @@ private class FilteredLoader(urls: Array[URL], parent: ClassLoader, filter: Clas
 private trait ClassFilter
 {
 	def include(className: String): Boolean
+}
+private abstract class PackageFilter(packages: Iterable[String]) extends ClassFilter
+{
+	require(packages.forall(_.endsWith(".")))
+	protected final def matches(className: String): Boolean = packages.exists(className.startsWith)
+}
+private class ExcludePackagesFilter(exclude: Iterable[String]) extends PackageFilter(exclude)
+{
+	def include(className: String): Boolean = !matches(className)
+}
+private class IncludePackagesFilter(include: Iterable[String]) extends PackageFilter(include)
+{
+	def include(className: String): Boolean = matches(className)
 }
 
 private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], parent: ClassLoader, grandparent: ClassLoader)
