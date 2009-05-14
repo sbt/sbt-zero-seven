@@ -207,7 +207,6 @@ object Resolver
 		/** Constructs a file resolver with the given name and base directory. */
 		def apply(name: String, baseDirectory: File)(implicit basePatterns: Patterns): FileRepository =
 		{
-			require(baseDirectory.isDirectory)
 			val baseURI = baseDirectory.toURI.normalize
 			val resolvedInitialPatterns = resolvePatterns(baseURI, basePatterns)
 			FileRepository(name, defaultFileConfiguration, resolvedInitialPatterns)

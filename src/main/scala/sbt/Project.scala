@@ -215,13 +215,14 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	final val sbtVersion = propertyOptional[String]("")
 	final val projectInitialize = propertyOptional[Boolean](false)
 
-	def crossPath(base: Path) =
+	def crossPath(base: Path) = withCrossVersion(base / scalaCrossString(_), base)
+	private[sbt] def withCrossVersion[T](withVersion: String => T, notEnabled: => T): T =
 	{
 		val scalaV = crossScalaVersion
-		if(scalaV.isEmpty)
-			base
+		if(scalaV.isEmpty || crossScalaVersions.isEmpty)
+			notEnabled
 		else
-			base / ("scala_" + scalaV)
+			withVersion(scalaV)
 	}
 	def crossScalaVersions = scala.collection.immutable.Set.empty[String]
 	
@@ -263,6 +264,7 @@ object Project
 		log
 	}
 
+	private[sbt] def scalaCrossString(v: String) = "scala_" + v
 	private[sbt] def booted = java.lang.Boolean.getBoolean("sbt.boot")
 	private[sbt] def crossScalaVersion =
 	{
