@@ -21,6 +21,8 @@ final class BuilderProject(val info: ProjectInfo, override protected val logImpl
 	override def methods = Map.empty
 	def dependencies = Nil
 	
+	override protected def disableCrossPaths = false
+	
 	def projectClasspath = compilePath +++ libraries +++
 		Path.lazyPathFinder { Path.fromFile(FileUtilities.sbtJar) :: Nil }
 

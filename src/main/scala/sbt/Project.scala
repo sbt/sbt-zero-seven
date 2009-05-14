@@ -216,14 +216,15 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	final val projectInitialize = propertyOptional[Boolean](false)
 
 	def crossPath(base: Path) = withCrossVersion(base / scalaCrossString(_), base)
-	private[sbt] def withCrossVersion[T](withVersion: String => T, notEnabled: => T): T =
+	private[sbt] def withCrossVersion[T](withVersion: String => T, disabled: => T): T =
 	{
 		val scalaV = crossScalaVersion
-		if(scalaV.isEmpty || crossScalaVersions.isEmpty)
-			notEnabled
+		if(scalaV.isEmpty || disableCrossPaths)
+			disabled
 		else
 			withVersion(scalaV)
 	}
+	protected def disableCrossPaths = crossScalaVersions.isEmpty
 	def crossScalaVersions = scala.collection.immutable.Set.empty[String]
 	
 	protected final override def parentEnvironment = info.parent
