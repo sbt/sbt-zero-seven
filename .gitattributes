@@ -96,6 +96,11 @@ src/test/resources/sbt-test-resources/actions/interactive/project/build.properti
 src/test/resources/sbt-test-resources/actions/interactive/project/build/src/Marker.scala -text
 src/test/resources/sbt-test-resources/actions/interactive/project/build/src/TestProject.scala -text
 src/test/resources/sbt-test-resources/actions/interactive/test -text
+src/test/resources/sbt-test-resources/compiler-project/run-test/project/build.properties -text
+src/test/resources/sbt-test-resources/compiler-project/run-test/project/build/src/TestProject.scala -text
+src/test/resources/sbt-test-resources/compiler-project/run-test/src/main/scala/Foo.scala -text
+src/test/resources/sbt-test-resources/compiler-project/run-test/src/test/scala/FooTest.scala -text
+src/test/resources/sbt-test-resources/compiler-project/run-test/test -text
 src/test/resources/sbt-test-resources/dependency-management/inherit-repo/changes/CorrectProject.scala -text
 src/test/resources/sbt-test-resources/dependency-management/inherit-repo/changes/CorrectProject2.scala -text
 src/test/resources/sbt-test-resources/dependency-management/inherit-repo/changes/CorrectProject3.scala -text

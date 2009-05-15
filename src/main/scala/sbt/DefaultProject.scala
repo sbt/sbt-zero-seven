@@ -150,16 +150,18 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		config match
 		{
 			case CompilerPlugin => unmanagedClasspath
+			case Runtime => runUnmanagedClasspath
 			case Test => testUnmanagedClasspath
 			case _ => mainUnmanagedClasspath
 		}
 	}
-	protected def mainUnmanagedClasspath = mainCompilePath +++ mainResourcesPath +++ unmanagedClasspath +++ mainDependencies.scalaCompiler
-	protected def testUnmanagedClasspath = testCompilePath +++ testResourcesPath  +++ testDependencies.scalaCompiler +++ mainUnmanagedClasspath
+	protected def mainUnmanagedClasspath = mainCompilePath +++ mainResourcesPath +++ unmanagedClasspath
+	protected def runUnmanagedClasspath = mainUnmanagedClasspath +++ mainDependencies.scalaCompiler
+	protected def testUnmanagedClasspath = testCompilePath +++ testResourcesPath  +++ testDependencies.scalaCompiler +++ runUnmanagedClasspath
 	
-	@deprecated protected def scalaJars: Iterable[File] = mainDependencies.scalaJars.get.map(_.asFile)
-	protected def mainDependencies = new LibraryDependencies(this, mainCompileConditional)
-	protected def testDependencies = new LibraryDependencies(this, testCompileConditional)
+	@deprecated protected final def scalaJars: Iterable[File] = mainDependencies.scalaJars.get.map(_.asFile)
+	final def mainDependencies = new LibraryDependencies(this, mainCompileConditional)
+	final def testDependencies = new LibraryDependencies(this, testCompileConditional)
 
 	/** The list of test frameworks to use for testing.  Note that adding frameworks to this list
 	* for an active project currently requires an explicit 'clean' to properly update the set of tests to
@@ -354,10 +356,6 @@ object BasicScalaProject
 	val ReleaseDescription =
 		"Compiles, tests, generates documentation, packages, and increments the version."
 		
-	val ScalaLibraryJarName = "scala-library.jar"
-	val ScalaCompilerJarName = "scala-compiler.jar"
-	val ScalaJarNames = Set(ScalaCompilerJarName, ScalaLibraryJarName)
-	
 	private def warnIfMultiple(applications: List[String], log: Logger) =
 	{
 		if(!applications.isEmpty)
@@ -479,13 +477,28 @@ final class LibraryDependencies(project: Project, conditional: CompileConditiona
 	
 	private def rootProjectDirectory = project.rootProject.info.projectPath
 
-	class Dependencies
+	final class Dependencies
 	{
+		import LibraryDependencies._
 		val all = conditional.analysis.allExternals.filter(ClasspathUtilities.isArchive).map(_.getAbsoluteFile)
-		val (allLibraries, external) = all.toList.partition(jar => Path.relativize(rootProjectDirectory, jar).isDefined)
-		val (scalaJars, libraries) = allLibraries.partition(jar => ScalaJarNames.contains(jar.getName))
-		val (scalaLibrary, scalaCompiler) = scalaJars.partition(_.getName == ScalaLibraryJarName)
+		private[this] val (internal, externalAll) = all.toList.partition(jar => Path.relativize(rootProjectDirectory, jar).isDefined)
+		private[this] val (bootScalaJars, librariesNoScala) = internal.partition(isScalaJar)
+		private[this] val (externalScalaJars, externalNoScala) = externalAll.partition(isScalaJar)
+		val scalaJars = externalScalaJars ::: bootScalaJars
+		val (scalaLibrary, scalaCompiler) = scalaJars.partition(isScalaLibraryJar)
+		def external = externalNoScala
+		def libraries = librariesNoScala
 	}
 
 	private def pathFinder(it: => Iterable[File]) = Path.lazyPathFinder(it.map(Path.fromFile))
+}
+private object LibraryDependencies
+{
+	private val ScalaLibraryJarBaseName = "scala-library"
+	private val ScalaCompilerJarBaseName = "scala-compiler"
+	private val ScalaJarNames = Set(ScalaCompilerJarBaseName, ScalaLibraryJarBaseName)
+	private def isScalaJar(file: File) = ClasspathUtilities.isArchive(file) &&  ScalaJarNames.exists(isNamed(file))
+	private def isScalaLibraryJar(file: File) = isNamed(file)(ScalaLibraryJarBaseName)
+	private def isNamed(file: File)(name: String) = file.getName.startsWith(name)
+	
 }
