@@ -17,16 +17,28 @@ import java.util.jar.Attributes
 * options, and configuration. */
 abstract class BasicScalaProject extends ScalaProject with BasicDependencyProject with BasicProjectPaths
 {
-	/** The class to be run by the 'run' action.
+	/** The explicitly specified class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
 	def mainClass: Option[String] = None
+	/** Gets the main class to use.  This is used by package and run to determine which main
+	* class to run or include as the Main-Class attribute.
+	* If `mainClass` is explicitly specified, it is used.  Otherwise, the main class is selected from
+	* the classes with a main method as automatically detected by the analyzer plugin.
+	* `promptIfMultipleChoices` controls the behavior when multiple main classes are detected.
+	* If true, it prompts the user to select which main class to use.  If false, it prints a warning
+	* and returns no main class.*/
 	def getMainClass(promptIfMultipleChoices: Boolean) =
 		mainClass orElse
 		{
 			val applications = mainCompileConditional.analysis.allApplications.toList
 			impl.SelectMainClass(promptIfMultipleChoices, applications) orElse
-				(if(!promptIfMultipleChoices) warnIfMultiple(applications, log) else None)
+			{
+				if(!promptIfMultipleChoices && !applications.isEmpty)
+					warnMultipleMainClasses(log)
+				None
+			}
 		}
+	/** Specifies the value of the `Class-Path` attribute in the manifest of the main jar. */
 	def manifestClassPath: Option[String] = None
 	def dependencies = info.dependencies ++ subProjects.values.toList
 
@@ -41,9 +53,13 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	def packageProjectPaths = descendents( (info.projectPath ##), "*") --- (packageProjectExcludes ** "*")
 	protected def packageProjectExcludes: PathFinder = outputPath +++ managedDependencyPath +++ info.bootPath +++ info.builderProjectOutputPath
 	
+	/** The Scala sources to compile with the `compile` action. */
 	def mainScalaSources = descendents(mainScalaSourcePath, "*.scala")
+	/** The Java sources to compile with the `compile` action. */
 	def mainJavaSources = descendents(mainJavaSourcePath, "*.java")
+	/** The Scala sources to compile with the `test-compile` action. */
 	def testScalaSources = descendents(testScalaSourcePath, "*.scala")
+	/** The Java sources to compile with the `test-compile` action. */
 	def testJavaSources = descendents(testJavaSourcePath, "*.java")
 	
 	/** A PathFinder that selects all main sources.  It excludes paths that match 'defaultExcludes'.*/
@@ -60,7 +76,11 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	/** A PathFinder that selects all the classes compiled from the test sources.*/
 	def testClasses = (testCompilePath ##) ** "*.class"
 
+	/** The main artifact produced by this project. To redefine the main artifact, override `defaultMainArtifact`
+	* Additional artifacts are defined by `val`s of type `Artifact`.*/
 	lazy val mainArtifact = defaultMainArtifact
+	/** Defines the default main Artifact assigned to `mainArtifact`.  By default, this is a jar file with name given
+	* by `artifactID`.*/
 	protected def defaultMainArtifact = Artifact(artifactID, "jar", "jar")
 	
 	import Project._
@@ -155,12 +175,22 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 			case _ => mainUnmanagedClasspath
 		}
 	}
+	/** The unmanaged base classpath.  By default, the unmanaged classpaths for test and run include this classpath. */
 	protected def mainUnmanagedClasspath = mainCompilePath +++ mainResourcesPath +++ unmanagedClasspath
+	/** The unmanaged classpath for the run configuration. By default, it includes the base classpath returned by
+	* `mainUnmanagedClasspath`.*/
 	protected def runUnmanagedClasspath = mainUnmanagedClasspath +++ mainDependencies.scalaCompiler
+	/** The unmanaged classpath for the test configuration.  By default, it includes the run classpath, which includes the base
+	* classpath returned by `mainUnmanagedClasspath`.*/
 	protected def testUnmanagedClasspath = testCompilePath +++ testResourcesPath  +++ testDependencies.scalaCompiler +++ runUnmanagedClasspath
 	
+	/** @deprecated Use `mainDependencies.scalaJars`*/
 	@deprecated protected final def scalaJars: Iterable[File] = mainDependencies.scalaJars.get.map(_.asFile)
+	/** An analysis of the jar dependencies of the main Scala sources.  It is only valid after main source compilation.
+	* See the LibraryDependencies class for details. */
 	final def mainDependencies = new LibraryDependencies(this, mainCompileConditional)
+	/** An analysis of the jar dependencies of the test Scala sources.  It is only valid after test source compilation.
+	* See the LibraryDependencies class for details. */
 	final def testDependencies = new LibraryDependencies(this, testCompileConditional)
 
 	/** The list of test frameworks to use for testing.  Note that adding frameworks to this list
@@ -172,7 +202,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	
 	def mainLabel = "main"
 	def testLabel = "test"
-		
+	
 	def mainCompileConfiguration = new MainCompileConfig
 	def testCompileConfiguration = new TestCompileConfig
 	abstract class BaseCompileConfig extends CompileConfiguration
@@ -303,9 +333,11 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	* since the webapp directory will be removed by the clean.*/
 	override def cleanAction = super.cleanAction dependsOn jettyStop
 	
+	/** Redefine the `package` action to make a war file.*/
 	override protected def packageAction = packageTask(descendents(temporaryWarPath ##, "*"), outputPath,
 		defaultWarName, Nil) dependsOn(prepareWebapp) describedAs PackageWarDescription
 
+	/** Redefine the default main artifact to be a war file.*/
 	override protected def defaultMainArtifact = Artifact(artifactID, "war", "war")
 }
 
@@ -356,15 +388,11 @@ object BasicScalaProject
 	val ReleaseDescription =
 		"Compiles, tests, generates documentation, packages, and increments the version."
 		
-	private def warnIfMultiple(applications: List[String], log: Logger) =
+	private def warnMultipleMainClasses(log: Logger) =
 	{
-		if(!applications.isEmpty)
-		{
-			log.warn("No Main-Class attribute will be added automatically added:")
-			log.warn("Multiple classes with a main method were detected.  Specify main class explicitly with:")
-			log.warn("     override mainClass = Some(\"className\")")
-		}
-		None
+		log.warn("No Main-Class attribute will be added automatically added:")
+		log.warn("Multiple classes with a main method were detected.  Specify main class explicitly with:")
+		log.warn("     override mainClass = Some(\"className\")")
 	}
 }
 object BasicWebScalaProject
@@ -459,15 +487,15 @@ object WebProjectPaths
 * `PathFinder`.  The underlying calculations are repeated for each call to PathFinder.get. */
 final class LibraryDependencies(project: Project, conditional: CompileConditional) extends NotNull
 {
-	/** Libraries located in unmanaged or managed dependency paths.*/
+	/** Library jars located in unmanaged or managed dependency paths.*/
 	def libraries: PathFinder = pathFinder(snapshot.libraries)
-	/** Libraries located outside of the project.*/
+	/** Library jars located outside of the project.*/
 	def external: PathFinder = pathFinder(snapshot.external)
 	/** The Scala library jar.*/
 	def scalaLibrary: PathFinder = pathFinder(snapshot.scalaLibrary)
 	/** The Scala compiler jar.*/
 	def scalaCompiler: PathFinder = pathFinder(snapshot.scalaCompiler)
-	/** All dependencies.*/
+	/** All jar dependencies.*/
 	def all: PathFinder = pathFinder(snapshot.all)
 	/** The Scala library and compiler jars.*/
 	def scalaJars: PathFinder = pathFinder(snapshot.scalaJars)
@@ -494,11 +522,11 @@ final class LibraryDependencies(project: Project, conditional: CompileConditiona
 }
 private object LibraryDependencies
 {
-	private val ScalaLibraryJarBaseName = "scala-library"
-	private val ScalaCompilerJarBaseName = "scala-compiler"
-	private val ScalaJarNames = Set(ScalaCompilerJarBaseName, ScalaLibraryJarBaseName)
-	private def isScalaJar(file: File) = ClasspathUtilities.isArchive(file) &&  ScalaJarNames.exists(isNamed(file))
-	private def isScalaLibraryJar(file: File) = isNamed(file)(ScalaLibraryJarBaseName)
+	private val ScalaLibraryPrefix = "scala-library"
+	private val ScalaCompilerPrefix = "scala-compiler"
+	private val ScalaJarPrefixes = List(ScalaCompilerPrefix, ScalaLibraryPrefix)
+	private def isScalaJar(file: File) = ClasspathUtilities.isArchive(file) &&  ScalaJarPrefixes.exists(isNamed(file))
+	private def isScalaLibraryJar(file: File) = isNamed(file)(ScalaLibraryPrefix)
 	private def isNamed(file: File)(name: String) = file.getName.startsWith(name)
 	
 }

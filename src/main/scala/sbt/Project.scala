@@ -211,20 +211,28 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	final val projectName = propertyLocalF[String](NonEmptyStringFormat)
 	/** The property for the project's organization.  Defaults to the parent project's organization or the project name if there is no parent. */
 	final val projectOrganization = propertyOptional[String](name, true)
+	/** The property that defines the version of Scala to build this project with.  It is only used by `sbt` on startup and reboot.
+	* Note that this means that the property can be out of sync with the current version of Scala being used to build the project.*/
 	final val scalaVersion = propertyOptional[String]("")
 	final val sbtVersion = propertyOptional[String]("")
 	final val projectInitialize = propertyOptional[Boolean](false)
 
+	/** If this project is cross-building, returns `base` with an additional path component containing the scala version.
+	* Otherwise, this returns `base`.
+	* By default, cross-building is enabled when a project is loaded by the loader and crossScalaVersions is not empty.*/
 	def crossPath(base: Path) = withCrossVersion(base / scalaCrossString(_), base)
 	private[sbt] def withCrossVersion[T](withVersion: String => T, disabled: => T): T =
 	{
-		val scalaV = crossScalaVersion
-		if(scalaV.isEmpty || disableCrossPaths)
-			disabled
-		else
-			withVersion(scalaV)
+		currentScalaVersion match
+		{
+			case Some(scalaV) if !disableCrossPaths => withVersion(scalaV)
+			case _ => disabled
+		}
 	}
+	/** True if crossPaths should be the identity function.*/
 	protected def disableCrossPaths = crossScalaVersions.isEmpty
+	/** By default, this is empty and cross-building is disabled.  Overriding this to a Set of Scala versions
+	* will enable cross-building against those versions.*/
 	def crossScalaVersions = scala.collection.immutable.Set.empty[String]
 	
 	protected final override def parentEnvironment = info.parent
@@ -267,13 +275,24 @@ object Project
 
 	private[sbt] def scalaCrossString(v: String) = "scala_" + v
 	private[sbt] def booted = java.lang.Boolean.getBoolean("sbt.boot")
-	private[sbt] def crossScalaVersion =
+	private[sbt] def sbtScalaVersion =
 	{
 		val v = System.getProperty("sbt.scala.version")
 		if(v == null)
 			""
 		else
 			v.trim
+	}
+	/** Returns the current version of Scala being used to build the project.  If the sbt loader is not being
+	* used, this returns None.  Otherwise, the value returned by this method is fixed for the duration of
+	* a Project's existence.  It only changes on reboot (during which a Project is recreated).*/
+	def currentScalaVersion: Option[String] =
+	{
+		val sv = sbtScalaVersion
+		if(sv.isEmpty)
+			None
+		else
+			Some(sv)
 	}
 	
 	/** Loads the project in the current working directory.*/

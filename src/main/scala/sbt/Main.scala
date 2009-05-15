@@ -310,7 +310,7 @@ object Main
 			}
 			else
 			{
-				val currentScalaVersion = Project.crossScalaVersion
+				val currentScalaVersion = Project.sbtScalaVersion
 				CrossBuild(currentScalaVersion, againstScalaVersions, action)
 				true
 			}
@@ -607,7 +607,7 @@ private class CrossBuild(val initialScalaVersion: String, val remainingScalaVers
 	}
 	def versionComplete(setScalaVersion: String => Option[String]) =
 	{
-		val remaining = remainingScalaVersions - Project.crossScalaVersion
+		val remaining = remainingScalaVersions - Project.sbtScalaVersion
 		if(remaining.isEmpty)
 		{
 			CrossBuild.clear()
