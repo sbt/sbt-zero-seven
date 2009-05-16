@@ -46,29 +46,29 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	val testCompileConditional = new CompileConditional(testCompileConfiguration)
 
 	/** Declares all sources to be packaged by the package-src action.*/
-	def packageSourcePaths = descendents((mainScalaSourcePath +++ mainResourcesPath) ##, "*")
+	def packageSourcePaths = mainSources +++ mainResources
 	/** Declares all sources to be packaged by the package-test-src action.*/
-	def packageTestSourcePaths = descendents((testScalaSourcePath +++ testResourcesPath) ##, "*")
+	def packageTestSourcePaths = testSources +++ testResources
 	/** Declares all paths to be packaged by the package-project action.*/
 	def packageProjectPaths = descendents( (info.projectPath ##), "*") --- (packageProjectExcludes ** "*")
 	protected def packageProjectExcludes: PathFinder = outputPath +++ managedDependencyPath +++ info.bootPath +++ info.builderProjectOutputPath
 	
-	/** The Scala sources to compile with the `compile` action. */
-	def mainScalaSources = descendents(mainScalaSourcePath, "*.scala")
-	/** The Java sources to compile with the `compile` action. */
-	def mainJavaSources = descendents(mainJavaSourcePath, "*.java")
-	/** The Scala sources to compile with the `test-compile` action. */
-	def testScalaSources = descendents(testScalaSourcePath, "*.scala")
-	/** The Java sources to compile with the `test-compile` action. */
-	def testJavaSources = descendents(testJavaSourcePath, "*.java")
+	/** The Scala sources to compile with the `compile` action. By default, it excludes paths that match 'defaultExcludes'.*/
+	def mainScalaSources = descendents(mainScalaSourcePath ##, "*.scala")
+	/** The Java sources to compile with the `compile` action.. By default, it excludes paths that match 'defaultExcludes'.*/
+	def mainJavaSources = descendents(mainJavaSourcePath ##, "*.java")
+	/** The Scala sources to compile with the `test-compile` action.. By default, it excludes paths that match 'defaultExcludes'.*/
+	def testScalaSources = descendents(testScalaSourcePath ##, "*.scala")
+	/** The Java sources to compile with the `test-compile` action.. By default, it excludes paths that match 'defaultExcludes'.*/
+	def testJavaSources = descendents(testJavaSourcePath ##, "*.java")
 	
-	/** A PathFinder that selects all main sources.  It excludes paths that match 'defaultExcludes'.*/
+	/** A PathFinder that selects all main sources.*/
 	def mainSources = mainScalaSources +++ mainJavaSources
-	/** A PathFinder that selects all test sources.  It excludes paths that match 'defaultExcludes'.*/
+	/** A PathFinder that selects all test sources.*/
 	def testSources = testScalaSources +++ testJavaSources
-	/** A PathFinder that selects all main resources.  It excludes paths that match 'defaultExcludes'.*/
+	/** A PathFinder that selects all main resources.  By default, it excludes paths that match 'defaultExcludes'.*/
 	def mainResources = descendents(mainResourcesPath ##, "*")
-	/** A PathFinder that selects all test resources.  It excludes paths that match 'defaultExcludes'.*/
+	/** A PathFinder that selects all test resources. By default, it excludes paths that match 'defaultExcludes'.*/
 	def testResources = descendents(testResourcesPath ##, "*")
 	
 	/** A PathFinder that selects all the classes compiled from the main sources.*/
