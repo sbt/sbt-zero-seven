@@ -112,26 +112,26 @@ final class MultiLogger(delegates: List[Logger]) extends BasicLogger
 final class BufferedLogger(delegate: Logger) extends Logger
 {
 	import scala.actors.Actor
-	private[this] val buffers = new WeakHashMap[Either[Thread, Actor], Buffer[LogEvent]]
+	private[this] val buffers = new WeakHashMap[Actor, Buffer[LogEvent]]
 	/* The recording depth part is to enable a weak nesting of recording calls.  When recording is
 	*  nested (recordingDepth >= 2), calls to play/playAll add the buffers for actors to the serial buffer
 	*  (no actor) and calls to clear/clearAll clear actor buffers only. */
 	private[this] def recording = recordingDepth > 0
 	private[this] var recordingDepth = 0
 	
-	private[this] val mainThread = Thread.currentThread
-	private[this] def getBuffer(key: Either[Thread, Actor]) = buffers.getOrElseUpdate(key, new ListBuffer[LogEvent])
+	//private[this] val mainThread = Thread.currentThread
+	private[this] def getBuffer(key: Actor) = buffers.getOrElseUpdate(key, new ListBuffer[LogEvent])
 	private[this] def buffer = getBuffer(key)
 	private[this] def key =
 		Actor.self match
 		{
-			case null => Left(Thread.currentThread)
-			case a => Right(a)
+			case null => null//Left(Thread.currentThread)
+			case a => a
 		}
-	private[this] def mainKey = Left(mainThread)
-	private[this] def serialBuffer = getBuffer(Left(mainThread))
+	private[this] def mainKey = null//Left(mainThread)
+	private[this] def serialBuffer = getBuffer(mainKey)
 
-	private[this] def inActor = Actor.self != null || Thread.currentThread != mainThread
+	private[this] def inActor = Actor.self != null// || Thread.currentThread != mainThread
 	
 	/** Enables buffering. */
 	def startRecording() { synchronized { recordingDepth += 1 } }
