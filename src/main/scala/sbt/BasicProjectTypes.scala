@@ -273,11 +273,13 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	def updateOptions: Seq[ManagedOption] =
 	{
 		val m = manager
-		if(m.dependencies.isEmpty && m.resolvers.isEmpty && ivyXML.isEmpty && m.artifacts.isEmpty)
+		if(m.dependencies.isEmpty && m.resolvers.isEmpty && ivyXML.isEmpty && m.artifacts.isEmpty && m.configurations.isEmpty)
 			baseUpdateOptions
 		else
 			LibraryManager(m) :: baseUpdateOptions
 	}
+	def deliverOptions: Seq[ManagedOption] = updateOptions.filter { case _: CheckScalaVersion => false; case _ => true }
+	def publishOptions: Seq[ManagedOption] = deliverOptions
 	/** True if the 'provided' configuration should be included on the 'compile' classpath.  The default value is true.*/
 	def includeProvidedWithCompile = true
 	/** True if the default implicit extensions should be used when determining classpaths.  The default value is true. */
@@ -325,21 +327,24 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	protected def cleanLibAction = cleanLibTask(managedDependencyPath) describedAs CleanLibDescription
 	protected def cleanCacheAction = cleanCacheTask(managedDependencyPath, updateOptions) describedAs CleanCacheDescription
 	
-	protected def deliverProjectDependencies =
+	protected def deliverProjectDependencies: Iterable[ModuleID] =
 	{
 		val interDependencies = new scala.collection.mutable.ListBuffer[ModuleID]
 		dependencies.foreach(dep => dep match { case mp: ManagedProject => interDependencies += mp.projectID; case _ => () })
+		if(filterScalaJars)
+			interDependencies ++= deliverScalaDependencies
 		interDependencies.readOnly
 	}
+	protected def deliverScalaDependencies: Iterable[ModuleID] = Nil
 	protected def makePomAction = makePomTask(pomPath, deliverProjectDependencies, updateOptions)
-	protected def deliverLocalAction = deliverTask(publishLocalConfiguration, updateOptions)
-	protected def publishLocalAction = publishTask(publishLocalConfiguration, updateOptions) dependsOn(deliverLocal)
+	protected def deliverLocalAction = deliverTask(publishLocalConfiguration, deliverOptions)
+	protected def publishLocalAction = publishTask(publishLocalConfiguration, publishOptions) dependsOn(deliverLocal)
 	protected def publishLocalConfiguration = new DefaultPublishConfiguration("local", "release", true)
-	protected def deliverAction = deliverTask(publishConfiguration, updateOptions)
+	protected def deliverAction = deliverTask(publishConfiguration, deliverOptions)
 	protected def publishAction =
 	{
 		val dependencies = deliver :: (if(managedStyle == Maven) makePom :: Nil else Nil)
-		publishTask(publishConfiguration, updateOptions) dependsOn(dependencies : _*)
+		publishTask(publishConfiguration, publishOptions) dependsOn(dependencies : _*)
 	}
 	protected def publishConfiguration =
 	{

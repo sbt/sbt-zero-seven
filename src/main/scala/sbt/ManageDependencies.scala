@@ -198,7 +198,7 @@ object ManageDependencies
 						val extra = if(flags.addScalaTools) ScalaToolsReleases :: resolvers.toList else resolvers
 						addResolvers(ivy.getSettings, extra, log)
 					}
-					if(dependencies.isEmpty && dependenciesXML.isEmpty && artifacts.isEmpty && autodetectUnspecified)
+					if(dependencies.isEmpty && dependenciesXML.isEmpty && artifacts.isEmpty && configurations.isEmpty && autodetectUnspecified)
 						autodetectDependencies(toID(module))
 					else
 					{
@@ -221,7 +221,7 @@ object ManageDependencies
 					}
 				}
 			}
-		/** Creates a full ivy file for 'module' using the 'dependencies' XML as the part after the %lt;info&gt;...%lt;/info&gt; section. */
+		/** Creates a full ivy file for 'module' using the 'dependencies' XML as the part after the &lt;info&gt;...&lt;/info&gt; section. */
 		def wrapped(module: ModuleID, dependencies: scala.xml.NodeSeq) =
 		{
 			import module._
@@ -273,7 +273,7 @@ object ManageDependencies
 	* dependencies matches scalaVersion. */
 	private def checkDependencies(module: ModuleDescriptor, scalaVersion: String, configurations: Iterable[Configuration]): Option[String] =
 	{
-		val configSet =configurationSet(configurations)
+		val configSet = configurationSet(configurations)
 		Control.lazyFold(module.getDependencies.toList)
 		{ dep =>
 			val id = dep.getDependencyRevisionId
@@ -340,7 +340,7 @@ object ManageDependencies
 		def doMakePom(ivy: Ivy, md: ModuleDescriptor, default: String) =
 			Control.trapUnit("Could not make pom: ", config.log)
 			{
-				val module = addLateDependencies(ivy, md, Configurations.Compile.name, extraDependencies)
+				val module = addLateDependencies(ivy, md, default, extraDependencies)
 				PomModuleDescriptorWriter.write(module, DefaultConfigurationMapping, output)
 				config.log.info("Wrote " + output.getAbsolutePath)
 				None
@@ -355,7 +355,8 @@ object ManageDependencies
 		val module = toDefaultModuleDescriptor(md)
 		val parser = new CustomXmlParser.CustomParser(ivy.getSettings)
 		parser.setMd(module)
-		parser.setDefaultConf("compile->default")//defaultConfiguration)
+		val defaultConf = if(defaultConfiguration.contains("->")) defaultConfiguration else (defaultConfiguration + "->default")
+		parser.setDefaultConf(defaultConf)
 		addDependencies(module, extraDependencies, parser)
 		module
 	}

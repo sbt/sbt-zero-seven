@@ -251,8 +251,9 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	protected def defaultTestTask(testOptions: => Seq[TestOption]) =
 		testTask(testFrameworks, testClasspath, testCompileConditional.analysis, testOptions).dependsOn(testCompile) describedAs TestDescription
 		
-	override protected def publishLocalAction = super.publishLocalAction dependsOn(`package`)
-	override protected def publishAction = super.publishAction dependsOn(`package`)
+	override protected def makePomAction = super.makePomAction dependsOn(`package`)
+	override protected def deliverLocalAction = super.deliverLocalAction dependsOn(`package`)
+	override protected def deliverAction = super.deliverAction dependsOn(`package`)
 	
 	protected def packageAction = packageTask(mainClasses +++ mainResources, outputPath, defaultJarName, packageOptions).dependsOn(compile) describedAs PackageDescription
 	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath, artifactBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription
@@ -300,6 +301,12 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 				case _ => Nil
 			}
 		}
+	}
+	override def deliverScalaDependencies: Iterable[ModuleID] =
+	{
+		val snapshot = mainDependencies.snapshot
+		mapScalaModule(snapshot.scalaLibrary, ManageDependencies.ScalaLibraryID) ++
+		mapScalaModule(snapshot.scalaCompiler, ManageDependencies.ScalaCompilerID)
 	}
 	
 	/** The directories to which a project writes are listed here and is used
@@ -393,6 +400,12 @@ object BasicScalaProject
 		log.warn("No Main-Class attribute will be added automatically added:")
 		log.warn("Multiple classes with a main method were detected.  Specify main class explicitly with:")
 		log.warn("     override mainClass = Some(\"className\")")
+	}
+	private def mapScalaModule(in: Iterable[_], id: String) =
+	{
+		Project.currentScalaVersion.toList.flatMap { scalaVersion => 
+			in.map(jar => ModuleID(ManageDependencies.ScalaOrganization, id, scalaVersion))
+		}
 	}
 }
 object BasicWebScalaProject
@@ -522,9 +535,9 @@ final class LibraryDependencies(project: Project, conditional: CompileConditiona
 }
 private object LibraryDependencies
 {
-	private val ScalaLibraryPrefix = "scala-library"
-	private val ScalaCompilerPrefix = "scala-compiler"
-	private val ScalaJarPrefixes = List(ScalaCompilerPrefix, ScalaLibraryPrefix)
+	private def ScalaLibraryPrefix = ManageDependencies.ScalaLibraryID
+	private def ScalaCompilerPrefix = ManageDependencies.ScalaCompilerID
+	private def ScalaJarPrefixes = List(ScalaCompilerPrefix, ScalaLibraryPrefix)
 	private def isScalaJar(file: File) = ClasspathUtilities.isArchive(file) &&  ScalaJarPrefixes.exists(isNamed(file))
 	private def isScalaLibraryJar(file: File) = isNamed(file)(ScalaLibraryPrefix)
 	private def isNamed(file: File)(name: String) = file.getName.startsWith(name)
