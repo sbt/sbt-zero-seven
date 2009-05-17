@@ -283,11 +283,13 @@ trait WebScalaProject extends ScalaProject
 				}
 			}}}}).left.toOption
 		}
+	def jettyRunTask(warPath: => Path, defaultContextPath: => String, port: Int, classpath: PathFinder, classpathName: String, scanDirectories: Seq[File], scanInterval: Int): Task =
+		task { JettyRun(classpath.get, classpathName, warPath, defaultContextPath, port, scanDirectories, scanInterval, log) }
 	def jettyRunTask(warPath: => Path, defaultContextPath: => String, classpath: PathFinder, classpathName: String, scanDirectories: Seq[File], scanInterval: Int): Task =
-		task { JettyRun(classpath.get, classpathName, warPath, defaultContextPath, scanDirectories, scanInterval, log) }
+		jettyRunTask(warPath, defaultContextPath, JettyRun.DefaultPort, classpath, classpathName, scanDirectories, scanInterval)
 	def jettyRunTask(warPath: => Path, defaultContextPath: => String, classpath: PathFinder, classpathName: String,
 		jettyConfigurationXML: scala.xml.NodeSeq, jettyConfigurationFiles: Seq[File]): Task =
-			jettyRunTask(warPath, defaultContextPath, classpath, classpathName, jettyConfigurationXML, jettyConfigurationFiles)
+			task { JettyRun(classpath.get, classpathName, warPath, defaultContextPath, jettyConfigurationXML, jettyConfigurationFiles, log) }
 	def jettyStopTask = task { JettyRun.stop(); None }
 }
 object ScalaProject

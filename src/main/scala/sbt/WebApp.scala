@@ -9,6 +9,8 @@ import scala.xml.NodeSeq
 
 object JettyRun extends ExitHook
 {
+	val DefaultPort = 8080
+	
 	ExitHooks.register(this)
 	
 	def name = "jetty-shutdown"
@@ -25,11 +27,11 @@ object JettyRun extends ExitHook
 	}
 	def apply(classpath: Iterable[Path], classpathName: String, war: Path, defaultContextPath: String, jettyConfigurationXML: NodeSeq,
 		jettyConfigurationFiles: Seq[File], log: Logger): Option[String] =
-			run(classpathName, new JettyRunConfiguration(war, defaultContextPath, jettyConfigurationXML,
+			run(classpathName, new JettyRunConfiguration(war, defaultContextPath, DefaultPort, jettyConfigurationXML,
 				jettyConfigurationFiles, Nil, 0, toURLs(classpath)), log)
-	def apply(classpath: Iterable[Path], classpathName: String, war: Path, defaultContextPath: String, scanDirectories: Seq[File],
+	def apply(classpath: Iterable[Path], classpathName: String, war: Path, defaultContextPath: String, port: Int, scanDirectories: Seq[File],
 		scanPeriod: Int, log: Logger): Option[String] =
-			run(classpathName, new JettyRunConfiguration(war, defaultContextPath, NodeSeq.Empty, Nil, scanDirectories, scanPeriod, toURLs(classpath)), log)
+			run(classpathName, new JettyRunConfiguration(war, defaultContextPath, port, NodeSeq.Empty, Nil, scanDirectories, scanPeriod, toURLs(classpath)), log)
 	private def toURLs(paths: Iterable[Path]) = paths.map(_.asURL).toSeq
 	private def run(classpathName: String, configuration: JettyRunConfiguration, log: Logger): Option[String] =
 		synchronized
@@ -77,8 +79,9 @@ private trait JettyRun
 {
 	def apply(configuration: JettyRunConfiguration, log: Logger): Stoppable
 }
-private class JettyRunConfiguration(val war: Path, val defaultContextPath: String, val jettyConfigurationXML: NodeSeq, val jettyConfigurationFiles: Seq[File],
-		val scanDirectories: Seq[File], val scanInterval: Int, val classpathURLs: Seq[URL]) extends NotNull
+private class JettyRunConfiguration(val war: Path, val defaultContextPath: String, val port: Int,
+	val jettyConfigurationXML: NodeSeq, val jettyConfigurationFiles: Seq[File],
+	val scanDirectories: Seq[File], val scanInterval: Int, val classpathURLs: Seq[URL]) extends NotNull
 
 /* This class starts Jetty.
 * NOTE: DO NOT actively use this class.  You will see NoClassDefFoundErrors if you fail
@@ -97,6 +100,8 @@ private object LazyJettyRun extends JettyRun
 	
 	import java.lang.ref.{Reference, WeakReference}
 	
+	val DefaultMaxIdleTime = 30000
+	
 	def apply(configuration: JettyRunConfiguration, log: Logger): Stoppable =
 	{
 		import configuration._
@@ -108,7 +113,7 @@ private object LazyJettyRun extends JettyRun
 		val listener =
 			if(useDefaults)
 			{
-				configureDefaultConnector(server)
+				configureDefaultConnector(server, port)
 				def createLoader = new URLClassLoader(classpathURLs.toArray, this.getClass.getClassLoader)
 				val webapp = new WebAppContext(war.asFile.getCanonicalPath, defaultContextPath)
 				webapp.setClassLoader(createLoader)
@@ -157,11 +162,11 @@ private object LazyJettyRun extends JettyRun
 		}
 		catch { case e => server.stop(); throw e }
 	}
-	private def configureDefaultConnector(server: Server)
+	private def configureDefaultConnector(server: Server, port: Int)
 	{
 		val defaultConnector = new SelectChannelConnector
-		defaultConnector.setPort(8080)
-		defaultConnector.setMaxIdleTime(30000)
+		defaultConnector.setPort(port)
+		defaultConnector.setMaxIdleTime(DefaultMaxIdleTime)
 		server.addConnector(defaultConnector)
 	}
 	private class StopServer(serverReference: Reference[Server], scannerReferenceOpt: Option[Reference[Scanner]], oldLog: org.mortbay.log.Logger) extends Stoppable
