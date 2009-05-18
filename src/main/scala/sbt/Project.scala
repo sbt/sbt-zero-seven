@@ -192,8 +192,9 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	/** The path to the file that provides persistence for properties.*/
 	final def envBackingPath = info.builderPath / Project.DefaultEnvBackingName
 	/** The path to the file that provides persistence for history. */
-	def historyPath = Some(outputPath / ".history")
-	def outputPath = crossPath(outputDirectoryName)
+	def historyPath = Some(outputRootPath / ".history")
+	def outputPath = crossPath(outputRootPath)
+	def outputRootPath = outputDirectoryName
 	def outputDirectoryName = DefaultOutputDirectoryName
 	
 	private def getProject(result: LoadResult, path: Path): Project =

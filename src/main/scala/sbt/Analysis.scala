@@ -162,7 +162,7 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 	import CompileAnalysis._
 	private val testMap = new HashMap[Path, Set[TestDefinition]]
 	private val projectDefinitionMap = new HashMap[Path, Set[String]]
-	private val hashesMap = new HashMap[Path, Array[Byte]]
+	/*private */val hashesMap = new HashMap[Path, Array[Byte]]
 	private val applicationsMap = new HashMap[Path, Set[String]]
 	
 	override protected def mapsToClear = applicationsMap :: hashesMap :: testMap :: projectDefinitionMap :: super.mapsToClear
@@ -255,7 +255,7 @@ object MapUtilities
 	{
 		val properties = new Properties
 		for( (path, hash) <- map)
-			properties.setProperty(path.relativePath, Hash.toHex(hash))
+			properties.setProperty(path.projectRelativePath, Hash.toHex(hash))
 		PropertiesUtilities.write(properties, label, to, log)
 	}
 	
@@ -270,7 +270,7 @@ object MapUtilities
 	{
 		val properties = new Properties
 		for( (path, set) <- map)
-			properties.setProperty(path.relativePath, valuesToString(set))
+			properties.setProperty(path.projectRelativePath, valuesToString(set))
 		PropertiesUtilities.write(properties, label, to, log)
 	}
 	def writeFilePaths(map: Map[File, Set[Path]], label: String, to: Path, log: Logger) =

@@ -47,36 +47,37 @@ object Boot
 	{
 		 // prompt to create project if it doesn't exist.
 		 // will not return if user declines
-		(new Setup).checkProject()
+		(new Paths).checkProject()
+		val loaderCache = new LoaderCache
 		if(args.length == 0)
-			load(args) // interactive mode, which can only use one version of scala for a run
+			load(args, loaderCache) // interactive mode, which can only use one version of scala for a run
 		else
-			runBatch(args.toList, Nil)  // batch mode, which can reboot with a different scala version
+			runBatch(args.toList, Nil, loaderCache)  // batch mode, which can reboot with a different scala version
 	}
-	private def runBatch(args: List[String], accumulateReversed: List[String])
+	private def runBatch(args: List[String], accumulateReversed: List[String], loaderCache: LoaderCache)
 	{
-		def doLoad() = if(!accumulateReversed.isEmpty) load(accumulateReversed.reverse.toArray)
+		def doLoad() = if(!accumulateReversed.isEmpty) load(accumulateReversed.reverse.toArray, loaderCache)
 		args match
 		{
 			case Nil => doLoad()
 			case RebootCommand :: tail =>
 				doLoad()
-				runBatch(tail, Nil)
-			case notReload :: tail => runBatch(tail, notReload :: accumulateReversed)
+				runBatch(tail, Nil, loaderCache)
+			case notReload :: tail => runBatch(tail, notReload :: accumulateReversed, loaderCache)
 		}
 	}
 	/** Loads the project in the current working directory using the version of scala and sbt
 	* declared in the build. The class loader used prevents the Scala and Ivy classes used by
 	* this loader from being seen by the loaded sbt/project.*/
-	private def load(args: Array[String])
+	private def load(args: Array[String], loaderCache: LoaderCache)
 	{
-		val loader = (new Setup).loader()
+		val loader = (new Setup(loaderCache)).loader()
 		val sbtMain = Class.forName(SbtMainClass, true, loader)
 		val exitCode = run(sbtMain, args)
 		if(exitCode == NormalExitCode)
 			()
 		else if(exitCode == RebootExitCode)
-			load(args)
+			load(args, loaderCache)
 		else
 			System.exit(exitCode)
 	}
@@ -127,27 +128,28 @@ object Boot
 	private def isDefined(s: String) = s != null && !s.isEmpty
 }
 
-/** A class to handle setting up the properties and classpath of the project
-* before it is loaded. */
-private class Setup extends NotNull
+private class Paths extends NotNull
 {
-	import Setup._
-	private val ProjectDirectory = new File(ProjectDirectoryName)
-	private val BootDirectory = new File(ProjectDirectory, BootDirectoryName)
-	private val PropertiesFile = new File(ProjectDirectory, BuildPropertiesName)
+	protected final val ProjectDirectory = new File(ProjectDirectoryName)
+	protected final val BootDirectory = new File(ProjectDirectory, BootDirectoryName)
+	protected final val PropertiesFile = new File(ProjectDirectory, BuildPropertiesName)
 	
 	final def checkProject()
 	{
 		if(!ProjectDirectory.exists)
 		{
 			val line = SimpleReader.readLine("Project does not exist, create new project? (y/N) : ")
-			if(isYes(line))
+			if(Setup.isYes(line))
 				ProjectProperties(PropertiesFile, true)
 			else
 				System.exit(1)
 		}
 	}
-	
+}
+/** A class to handle setting up the properties and classpath of the project
+* before it is loaded. */
+private class Setup(loaderCache: LoaderCache) extends Paths
+{
 	/** Checks that the requested version of sbt and scala have been downloaded.
 	* It performs a simple check that the appropriate directories exist.  It does
 	* not actually verify that appropriate classes are resolvable.  It uses Ivy
@@ -156,7 +158,28 @@ private class Setup extends NotNull
 	private final def loader(forcePrompt: Seq[String]): ClassLoader =
 	{
 		val (scalaVersion, sbtVersion) = ProjectProperties.forcePrompt(PropertiesFile, forcePrompt : _*)
-		
+		loaderCache( scalaVersion, sbtVersion ) match
+		{
+			case Some(existingLoader) =>
+			{
+				setScalaVersion(scalaVersion)
+				existingLoader
+			}
+			case None =>
+			{
+				getLoader(scalaVersion, sbtVersion) match
+				{
+					case Left(retry) => loader(retry)
+					case Right(classLoader) => classLoader
+				}
+			}
+		}
+	}
+	private def getLoader(scalaVersion: String, sbtVersion: String): Either[Seq[String], ClassLoader] =
+	{
+		import Setup.{failIfMissing,getJars,isYes,needsUpdate}
+		import ProjectProperties.{ScalaVersionKey, SbtVersionKey}
+	
 		val baseDirectory = new File(BootDirectory, baseDirectoryName(scalaVersion))
 		System.setProperty(ScalaHomeProperty, baseDirectory.getAbsolutePath)
 		val scalaDirectory = new File(baseDirectory, ScalaDirectoryName)
@@ -165,24 +188,50 @@ private class Setup extends NotNull
 		val updateTargets = needsUpdate("", scalaDirectory, TestLoadScalaClasses, UpdateScala) ::: needsUpdate(sbtVersion, sbtDirectory, TestLoadSbtClasses, UpdateSbt)
 		Update(baseDirectory, sbtVersion, scalaVersion, updateTargets: _*)
 		
-		import ProjectProperties.{ScalaVersionKey, SbtVersionKey}
 		val sbtFailed = failIfMissing(sbtDirectory, TestLoadSbtClasses, "sbt " + sbtVersion, SbtVersionKey)
 		val scalaFailed = failIfMissing(scalaDirectory, TestLoadScalaClasses, "Scala " + scalaVersion, ScalaVersionKey)
 		
 		(scalaFailed +++ sbtFailed) match
 		{
 			case Success =>
-				System.setProperty("sbt.scala.version", scalaVersion)
+				setScalaVersion(scalaVersion)
 				val classpath = getJars(scalaDirectory, sbtDirectory)
-				new URLClassLoader(classpath.toArray, new BootFilteredLoader)
+				val classLoader = new URLClassLoader(classpath.toArray, new BootFilteredLoader)
+				loaderCache( scalaVersion, sbtVersion ) = classLoader
+				Right(classLoader)
 			case f: Failure =>
 				val noRetrieveMessage = "Could not retrieve " + f.label + "."
 				val getNewVersions = SimpleReader.readLine(noRetrieveMessage + " Select different version? (y/N) : ")
 				if(isYes(getNewVersions))
-					loader(f.keys)
+					Left(f.keys)
 				else
 					throw new BootException(noRetrieveMessage)
 		}
+}
+	private def setScalaVersion(scalaVersion: String) { System.setProperty("sbt.scala.version", scalaVersion) }
+}
+private final class LoaderCache
+{
+	private[this] var cachedSbtVersion: Option[String] = None
+	private[this] val loaderMap = new scala.collection.mutable.HashMap[String, ClassLoader]
+	def apply(scalaVersion: String, sbtVersion: String): Option[ClassLoader] =
+	{
+		cachedSbtVersion flatMap { currentSbtVersion =>
+			if(sbtVersion == currentSbtVersion)
+				loaderMap.get(scalaVersion)
+			else
+				None
+		}
+	}
+	def update(scalaVersion: String, sbtVersion: String, loader: ClassLoader)
+	{
+		for(currentSbtVersion <- cachedSbtVersion)
+		{
+			if(sbtVersion != currentSbtVersion)
+				loaderMap.clear()
+		}
+		cachedSbtVersion = Some(sbtVersion)
+		loaderMap(scalaVersion) = loader
 	}
 }
 private object Setup
@@ -209,7 +258,7 @@ private object Setup
 		else
 			ifFailure
 	}
-	private def isYes(so: Option[String]) =
+	def isYes(so: Option[String]) =
 		so match
 		{
 			case Some(s) =>
@@ -220,6 +269,7 @@ private object Setup
 	private def getJars(directories: File*) = directories.flatMap(file => wrapNull(file.listFiles(JarFilter))).map(_.toURI.toURL)
 	private def wrapNull(a: Array[File]): Array[File] = if(a == null) Array() else a
 }
+
 
 private object JarFilter extends FileFilter
 {

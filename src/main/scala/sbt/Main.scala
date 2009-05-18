@@ -102,7 +102,6 @@ object Main
 					doNext
 				case Some(cross) =>
 					crossBuildNext(project, cross)
-					printTime(project, startTime, "cross-build")
 					new Exit(RebootExitCode)
 			}
 		}
@@ -127,11 +126,15 @@ object Main
 			{
 				project.scalaVersion() = newVersion
 				project.saveEnvironment()
+				()
 			}
-		if(handleAction(project, cross.command))
-			cross.versionComplete(setScalaVersion)
-		else
-			cross.error(setScalaVersion)
+		val complete =
+			if(handleAction(project, cross.command))
+				cross.versionComplete(setScalaVersion)
+			else
+				cross.error(setScalaVersion)
+		if(complete)
+			printTime(project, cross.startTime, "cross-build")
 	}
 	
 	/** The name of the command that loads a console with access to the current project through the variable 'project'.*/
@@ -162,6 +165,7 @@ object Main
 	val ContinuousCompileCommand = "cc"
 	/** The prefix used to identify a request to execute the remaining input on source changes.*/
 	val ContinuousExecutePrefix = "~"
+	/** The prefix used to identify a request to execute the remaining input across multiple Scala versions.*/
 	val CrossBuildPrefix = "+"
 	
 	/** The number of seconds between polling by the continuous compile command.*/
@@ -311,7 +315,7 @@ object Main
 			else
 			{
 				val currentScalaVersion = Project.sbtScalaVersion
-				CrossBuild(currentScalaVersion, againstScalaVersions, action)
+				CrossBuild(currentScalaVersion, againstScalaVersions, action, System.currentTimeMillis)
 				true
 			}
 		}
@@ -598,25 +602,28 @@ object Main
 	private def getArgumentError(log: Logger) { log.error("Invalid arguments for 'get': expected property name.") }
 	private def setProjectError(log: Logger) { log.error("Invalid arguments for 'project': expected project name.") }
 }
-private class CrossBuild(val initialScalaVersion: String, val remainingScalaVersions: Set[String], val command: String)
+private class CrossBuild(val initialScalaVersion: String, val remainingScalaVersions: Set[String], val command: String, val startTime: Long)
 {
-	def error(setScalaVersion: String => Option[String]) =
+	def error(setScalaVersion: String => Unit) =
 	{
 		CrossBuild.clear()
 		setScalaVersion(initialScalaVersion)
+		true
 	}
-	def versionComplete(setScalaVersion: String => Option[String]) =
+	def versionComplete(setScalaVersion: String => Unit) =
 	{
 		val remaining = remainingScalaVersions - Project.sbtScalaVersion
 		if(remaining.isEmpty)
 		{
 			CrossBuild.clear()
 			setScalaVersion(initialScalaVersion)
+			true
 		}
 		else
 		{
-			CrossBuild.setProperties(initialScalaVersion, remaining, command)
+			CrossBuild.setProperties(initialScalaVersion, remaining, command, startTime.toString)
 			setScalaVersion(remaining.toSeq.first)
+			false
 		}
 	}
 }
@@ -625,11 +632,13 @@ private object CrossBuild
 	private val InitialScalaVersionKey = "sbt.initial.scala.version"
 	private val RemainingScalaVersionsKey = "sbt.remaining.scala.versions"
 	private val CrossCommandKey = "sbt.cross.build.command"
-	private def setProperties(initialScalaVersion: String, remainingScalaVersions: Set[String], command: String)
+	private val StartTimeKey = "sbt.cross.start.time"
+	private def setProperties(initialScalaVersion: String, remainingScalaVersions: Set[String], command: String, startTime: String)
 	{
 		System.setProperty(InitialScalaVersionKey, initialScalaVersion)
 		System.setProperty(RemainingScalaVersionsKey, remainingScalaVersions.mkString(" "))
 		System.setProperty(CrossCommandKey, command)
+		System.setProperty(StartTimeKey, startTime)
 	}
 	private def getProperty(key: String) =
 	{
@@ -639,20 +648,21 @@ private object CrossBuild
 		else
 			value.trim
 	}
-	private def clear() { setProperties("", Set.empty, "") }
+	private def clear() { setProperties("", Set.empty, "", "") }
 	def load() =
 	{
 		val initial = getProperty(InitialScalaVersionKey)
 		val command = getProperty(CrossCommandKey)
 		val remaining = getProperty(RemainingScalaVersionsKey)
-		if(initial.isEmpty || command.isEmpty || remaining.isEmpty)
+		val startTime = getProperty(StartTimeKey)
+		if(initial.isEmpty || command.isEmpty || remaining.isEmpty || startTime.isEmpty)
 			None
 		else
-			Some(new CrossBuild(initial, Set(remaining.split(" ") : _*), command))
+			Some(new CrossBuild(initial, Set(remaining.split(" ") : _*), command, startTime.toLong))
 	}
-	def apply(initialScalaVersion: String, remainingScalaVersions: Set[String], command: String) =
+	def apply(initialScalaVersion: String, remainingScalaVersions: Set[String], command: String, startTime: Long) =
 	{
-		setProperties(initialScalaVersion, remainingScalaVersions, command)
-		new CrossBuild(initialScalaVersion, remainingScalaVersions, command)
+		setProperties(initialScalaVersion, remainingScalaVersions, command, startTime.toString)
+		new CrossBuild(initialScalaVersion, remainingScalaVersions, command, startTime)
 	}
 }
