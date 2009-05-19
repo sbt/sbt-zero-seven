@@ -11,7 +11,7 @@ trait FileFilter extends java.io.FileFilter with NotNull
 	def || (filter: FileFilter): FileFilter = new SimpleFileFilter( file => accept(file) || filter.accept(file) )
 	def && (filter: FileFilter): FileFilter = new SimpleFileFilter( file => accept(file) && filter.accept(file) )
 	def -- (filter: FileFilter): FileFilter = new SimpleFileFilter( file => accept(file) && !filter.accept(file) )
-	def unary_-- : FileFilter = new SimpleFileFilter( file => !accept(file) )
+	def unary_- : FileFilter = new SimpleFileFilter( file => !accept(file) )
 }
 trait NameFilter extends FileFilter with NotNull
 {
@@ -20,7 +20,7 @@ trait NameFilter extends FileFilter with NotNull
 	def | (filter: NameFilter): NameFilter = new SimpleFilter( name => accept(name) || filter.accept(name) )
 	def & (filter: NameFilter): NameFilter = new SimpleFilter( name => accept(name) && filter.accept(name) )
 	def - (filter: NameFilter): NameFilter = new SimpleFilter( name => accept(name) && !filter.accept(name) )
-	def unary_- : NameFilter = new SimpleFilter( name => !accept(name) )
+	override def unary_- : NameFilter = new SimpleFilter( name => !accept(name) )
 }
 object HiddenFileFilter extends FileFilter {
 	def accept(file: File) = file.isHidden && file.getName != "."
