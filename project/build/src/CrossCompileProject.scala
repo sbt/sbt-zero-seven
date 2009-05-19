@@ -8,13 +8,13 @@ import scala.xml.NodeSeq
 abstract class CrossCompileProject extends BasicScalaProject
 {
 	/** Used for 2.8.0-SNAPSHOT*/
-	val scalaToolsSnapshots = "Scala Tools Snapshots" at "http://scala-tools.org/repo-snapshots"
+	//val scalaToolsSnapshots = "Scala Tools Snapshots" at "http://scala-tools.org/repo-snapshots"
 
 	/* The base configuration names for the versions of Scala*/
 	private val version2_7_2 = "2.7.2"
 	private val version2_7_3 = "2.7.3"
 	private val version2_7_4 = "2.7.4"
-	private val version2_8_0 = "2.8.0-SNAPSHOT"
+	//private val version2_8_0 = "2.8.0-SNAPSHOT"
 	private val base = "base"
 
 	private def developmentVersion = version2_7_2
@@ -23,9 +23,9 @@ abstract class CrossCompileProject extends BasicScalaProject
 	private val conf_2_7_2 = config(version2_7_2)
 	private val conf_2_7_3 = config(version2_7_3)
 	private val conf_2_7_4 = config(version2_7_4)
-	private val conf_2_8_0 = config(version2_8_0)
+	//private val conf_2_8_0 = config(version2_8_0)
 	// the list of all configurations to cross-compile against
-	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_8_0 :: Nil
+	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: /*conf_2_8_0 :: */Nil
 	// the names of all configurations to cross-compile against
 	private val allConfigurationsNames = allConfigurations.map(_.toString)
 
@@ -67,7 +67,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 			{ variableDependencies(version2_7_2, /*ScalaTest*/"0.9.3", /*Specs*/"1.4.0", false) }
 			{ variableDependencies(version2_7_3, /*ScalaTest*/"0.9.4", /*Specs*/"1.4.3", true) }
 			{ variableDependencies(version2_7_4, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.3", true) }
-			{ variableDependencies(version2_8_0, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.3", true) }
+			<!--{ variableDependencies(version2_8_0, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.3", true) }-->
 		</dependencies>)
 
 	/** Creates a publication (an 'artifact' element) for each Scala version */
