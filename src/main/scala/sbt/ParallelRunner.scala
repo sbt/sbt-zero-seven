@@ -3,7 +3,6 @@
  */
 package sbt
 
-import scala.actors.Actor
 import scala.collection.mutable.{ArrayBuffer, Buffer, HashMap, HashSet, ListBuffer, Map, PriorityQueue, Set}
 
 object ParallelRunner
@@ -12,99 +11,79 @@ object ParallelRunner
 	{
 		val jobScheduler = new BasicDagScheduler(node, name, (d: D) => 1)
 		val distributor = new Distributor(jobScheduler, withWork(action), maximumTasks, withWork(log))
-		distributor.start()
-		val result = (distributor !? Start).asInstanceOf[List[WorkFailure[Work[D]]]]
+		val result = distributor.run().toList
 		for( WorkFailure(work, message) <- result ) yield WorkFailure(work.data, "Error running " + name(work.data) + ": " + message)
 	}
 	private def withWork[D, T](f: D => T)(w: Work[D]) = f(w.data)
 }
 private case object Start
-final class Distributor[D](scheduler: Scheduler[D], doWork: D => Option[String], workers: Int, log: D => Logger) extends Actor with NotNull
+final class Distributor[D](scheduler: Scheduler[D], doWork: D => Option[String], workers: Int, log: D => Logger) extends NotNull
 {
-	private val running = new HashSet[Worker]
-	private val idle: Buffer[Worker] = new ArrayBuffer[Worker]
-	idle ++= Array.fromFunction( (i: Int) => { val w = new Worker; w.start(); w } )(workers)
+	require(workers > 0)
+	private[this] var running = 0
+	private[this] val complete = new java.util.concurrent.LinkedBlockingQueue[Done]
 	
-	def act
+	def run() =
 	{
-		receive {
-			case Start =>
-				reply {
-					runNext()
-					scheduler.result
-				}
-		}
-		exit()
+		runNext()
+		scheduler.result
 	}
 	private def runNext()
 	{
 		val done = next()
 		if(!done)
 		{
-			receive
-			{
-				case Done(result, worker, data) =>
-					running -= worker
-					idle += worker
-					scheduler.complete(data, result)
-					runNext()
-			}
+			completeNext()
+			runNext()
 		}
 	}
+	private def atMaximum = running >= workers
+	private def availableWorkers = Math.max(workers - running, 0)
+	private def isIdle = running == 0
 	private def next() =
 	{
-		if(idle.isEmpty)
+		if(atMaximum)
 			false
 		else if(scheduler.hasPending)
 		{
-			val available = idle.size
+			val available = availableWorkers
 			val next = scheduler.next(available)
 			val nextSize = next.size
 			if(nextSize <= 0)
-				assume(!running.isEmpty)
+				assume(!isIdle)
 			else
 			{
 				assume(nextSize > 0)
 				assume(nextSize <= available)
-				for(data <- next)
-				{
-					val worker = idle.remove(idle.size - 1)
-					running += worker
-					worker ! Run(data)
-				}
+				next.foreach(process)
 			}
 			false
-		}
-		else if(running.isEmpty)
-		{
-			idle.foreach(_ ! Shutdown)
-			true
 		}
 		else
-			false
+			isIdle
 	}
-	private class Worker extends Actor with NotNull
+	private def completeNext()
 	{
-		def act
+		val Done(result, data) = complete.take()
+		running -= 1
+		scheduler.complete(data, result)
+	}
+	private def process(data: D)
+	{
+		running += 1
+		new Worker(data).start()
+	}
+	private class Worker(data: D) extends Thread with NotNull
+	{
+		override def run()
 		{
-			while(true)
-			{
-				receive
-				{
-					case Run(data)  =>
-					{
-						val result = Control.trapUnit("", log(data))(doWork(data))
-						Distributor.this ! Done(result, this, data)
-					}
-					case Shutdown => exit()
-				}
-			}
+			val result = Control.trapUnit("", log(data))(doWork(data))
+			complete put Done(result, data)
+			println("Put: " + result)
 		}
 	}
 	
-	private case object Shutdown extends NotNull
-	private case class Run(data: D) extends NotNull
-	private case class Done(result: Option[String], worker: Worker, data: D) extends NotNull
+	private case class Done(result: Option[String], data: D) extends NotNull
 }
 final case class WorkFailure[D](work: D, message: String) extends NotNull
 {

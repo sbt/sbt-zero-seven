@@ -55,7 +55,7 @@ private final class RunTask(root: Task, rootName: String, maximumTasks: Int) ext
 		for(buffered <- bufferedLoggers)
 			Control.trap(f(buffered))
 	}
-	/** Will be called in its own actor. Runs the given task if it is not the root task.*/
+	/** Will be called in its own thread. Runs the given task if it is not the root task.*/
 	private def runIfNotRoot(action: Task): Option[String] =
 	{
 		if(isRoot(action))
@@ -64,7 +64,7 @@ private final class RunTask(root: Task, rootName: String, maximumTasks: Int) ext
 			runTask(action, expandedTaskName(action))
 	}
 	private def isRoot(t: Task) = t == expandedRoot
-	/** Will be called in its own actor except for the root task. */
+	/** Will be called in its own thread except for the root task. */
 	private def runTask(action: Task, actionName: String): Option[String] =
 	{
 		val label = if(multiProject) (action.manager.name + " / " + actionName) else actionName
