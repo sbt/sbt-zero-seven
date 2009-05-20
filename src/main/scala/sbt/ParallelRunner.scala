@@ -79,7 +79,6 @@ final class Distributor[D](scheduler: Scheduler[D], doWork: D => Option[String],
 		{
 			val result = Control.trapUnit("", log(data))(doWork(data))
 			complete put Done(result, data)
-			println("Put: " + result)
 		}
 	}
 	
