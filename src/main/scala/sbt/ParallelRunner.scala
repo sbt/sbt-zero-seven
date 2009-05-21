@@ -5,10 +5,16 @@ package sbt
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, HashMap, HashSet, ListBuffer, Map, PriorityQueue, Set}
 
+/** Interface to the Distributor/Scheduler system for running tasks with dependencies described by a directed acyclic graph.*/
 object ParallelRunner
 {
+	/** Executes work for nodes in an acyclic directed graph with root node `node`.  The name of a node is provided
+	* by the `name` function, the work to perform for a node by `action`, and the logger to use for a node by `log`.
+	* The maximum number of tasks to execute simultaneously is `maximumTasks`. */
 	def run[D <: Dag[D]](node: D, name: D => String, action: D => Option[String], maximumTasks: Int, log: D => Logger): List[WorkFailure[D]] =
 	{
+		 // Create a scheduler that gives each node a uniform cost.  This could be modified to include more information about
+		 // a node, such as the size of input files
 		val jobScheduler = new BasicDagScheduler(node, name, (d: D) => 1)
 		val distributor = new Distributor(jobScheduler, withWork(action), maximumTasks, withWork(log))
 		val result = distributor.run().toList
@@ -16,11 +22,12 @@ object ParallelRunner
 	}
 	private def withWork[D, T](f: D => T)(w: Work[D]) = f(w.data)
 }
-private case object Start
 final class Distributor[D](scheduler: Scheduler[D], doWork: D => Option[String], workers: Int, log: D => Logger) extends NotNull
 {
 	require(workers > 0)
+	/** The number of threads currently running. */
 	private[this] var running = 0
+	/** Pending notifications of completed work. */
 	private[this] val complete = new java.util.concurrent.LinkedBlockingQueue[Done]
 	
 	def run() =
@@ -64,9 +71,9 @@ final class Distributor[D](scheduler: Scheduler[D], doWork: D => Option[String],
 	}
 	private def completeNext()
 	{
-		val Done(result, data) = complete.take()
+		val done = complete.take()
 		running -= 1
-		scheduler.complete(data, result)
+		scheduler.complete(done.data, done.result)
 	}
 	private def process(data: D)
 	{
@@ -78,31 +85,41 @@ final class Distributor[D](scheduler: Scheduler[D], doWork: D => Option[String],
 		override def run()
 		{
 			val result = Control.trapUnit("", log(data))(doWork(data))
-			complete put Done(result, data)
+			complete.put( new Done(result, data) )
 		}
 	}
 	
-	private case class Done(result: Option[String], data: D) extends NotNull
+	private class Done(val result: Option[String], val data: D) extends NotNull
 }
 final case class WorkFailure[D](work: D, message: String) extends NotNull
 {
 	override def toString = message
 }
+/** Schedules work of type D.  This is a mutable-style interface that should only be used only once per instance.*/
 trait Scheduler[D] extends NotNull
 {
+	/** Notifies this scheduler that work has completed with the given result (Some with the error message or None if the work succeeded).*/
 	def complete(d: D, result: Option[String]): Unit
+	/** Returns true if there is any more work to be done, although remaining work can be blocked
+	* waiting for currently running work to complete.*/
 	def hasPending: Boolean
+	/** Returns up to 'max' units of work.  `max` is always positive.  The returned sequence cannot be empty if there is
+	* no work currently be processed.*/
 	def next(max: Int): Seq[D]
+	/** A list of failures that occurred, as reported by the `complete` method. */
 	def result: Iterable[WorkFailure[D]]
 }
 
+/** Represents a named unit of work with some cost associated with performing the work itself.*/
 private sealed abstract class Work[D](val name: String, val data: D, val cost: Int) extends Ordered[Work[D]]
 {
-	def compare(o: Work[D]) = pathCost compare o.pathCost
+	/** Compares two work units by their pathCost.*/
+	final def compare(o: Work[D]) = pathCost compare o.pathCost
+	/** A full cost of the work that includes indirect costs, such as costs of dependencies.*/
 	def pathCost: Int
-	override def toString = name + "(" + pathCost + ")"
+	override final def toString = name + "(" + pathCost + ")"
 }
-
+/** A scheduler for nodes of a directed-acyclic graph with root node `root`.*/
 private[sbt] abstract class AbstractDagScheduler[D <: Dag[D], W](root: D, name: D => String) extends Scheduler[W]
 {
 	protected val remainingDeps: Map[W, Set[W]] = new HashMap
@@ -170,12 +187,11 @@ private[sbt] abstract class AbstractDagScheduler[D <: Dag[D], W](root: D, name: 
 		getWork(node)
 	}
 }
-private class BasicDagScheduler[D <: Dag[D]](root: D, name: D => String, cost: D => Int) extends
+/** A scheduler for nodes of a directed-acyclic graph.  It requires the root of the graph, a function to obtain the
+* name of the node, and a function to obtain the cost of the node. It prioritizes work by its pathCost.*/
+private class BasicDagScheduler[D <: Dag[D]](root: D, name: D => String, cost: D => Int) extends AbstractDagScheduler[D, Work[D]](root, name)
 {
-	private val ready = new PriorityQueue[Work[D]]
-
-} with AbstractDagScheduler[D, Work[D]](root, name) {
-	
+	private[this] lazy val ready = new PriorityQueue[Work[D]]
 	def next(max: Int): List[Work[D]] =
 	{
 		require(max > 0)
@@ -191,11 +207,14 @@ private class BasicDagScheduler[D <: Dag[D]](root: D, name: D => String, cost: D
 	def hasReady = !ready.isEmpty
 	protected def workConstructor(name: String, data: D) =
 		new Work(name, data, cost(data)) {
+			// compute the cost of the longest dependency path required to execute this work
 			lazy val pathCost = reverseDeps.getOrElse(this, Nil).foldLeft(0)(_ max _.pathCost) + this.cost
 		}
 	protected override def setup()
 	{
+		// let the parent populate the dependency information
 		super.setup()
+		// force computation of the pathCost because it uses `reverseDeps`, which will change after starting
 		remainingDeps.keys.foreach(dep => dep.pathCost)
 	}
 }
