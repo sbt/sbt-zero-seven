@@ -115,7 +115,6 @@ private[sbt] class ScalaTestRunner(val log: Logger, val listeners: Seq[TestRepor
 private[sbt] class SpecsRunner(val log: Logger, val listeners: Seq[TestReportListener], val testLoader: ClassLoader) extends BasicTestRunner
 {
 	import org.specs.Specification
-	import org.specs.runner.TextFormatter
 	import org.specs.specification.{Example, Sus}
 
 	def runTest(testClassName: String): Result.Value =
@@ -135,7 +134,11 @@ private[sbt] class SpecsRunner(val log: Logger, val listeners: Seq[TestReportLis
 	
 	private def reportSpecification(spec: Specification): SpecificationReportEvent =
 	{
-		return SpecificationReportEvent(spec.successes.size, spec.failures.size, spec.errors.size, spec.skipped.size, spec.pretty, reportSystems(spec.systems), reportSpecifications(spec.subSpecifications))
+		 // this is for binary compatibility between specs 1.4.x and 1.5.0: the ancestor of Specification containing these two methods changed
+		val reflectedSpec: { def systems: Seq[Sus]; def subSpecifications: Seq[Specification] } = spec
+		
+		return SpecificationReportEvent(spec.successes.size, spec.failures.size, spec.errors.size, spec.skipped.size, spec.pretty,
+			reportSystems(reflectedSpec.systems), reportSpecifications(reflectedSpec.subSpecifications))
 	}
 	private def reportSpecifications(specifications: Seq[Specification]): Seq[SpecificationReportEvent] =
 	{
@@ -149,13 +152,27 @@ private[sbt] class SpecsRunner(val log: Logger, val listeners: Seq[TestReportLis
 	}
 	private def reportSystem(sus: Sus): SystemReportEvent =
 	{
-		def format(description: Option[Elem]): Option[Seq[String]] =
+		def format =
 		{
-			for(elem <- description) yield
-				new TextFormatter().format(elem, sus.examples).nodes.map(_.text)
+			class ElemDesc(e: Elem) { def desc = e.child }
+			implicit def elemToDesc(e: Elem): ElemDesc = new ElemDesc(e)
+			
+			for(description <- sus.literateDescription) yield
+			{
+				// for source compatibility between specs 1.4.x and 1.5.0:
+				// in specs 1.5.0, description is LiterateDescription
+				// in specs < 1.5.0, description is Elem
+				// LiterateDescription.desc is a Node
+				// Elem.child is a Seq[Node]
+				// each has a map[T](f: Node => T): Seq[T] defined so we implicitly convert
+				// an Elem e to an intermediate object that has desc defined to be e.child
+				
+				//description.child.map(_.text) // Elem equivalent
+				description.desc.map(_.text)  // LiterateDescription
+			}
 		}
 
-		SystemReportEvent(sus.description, sus.verb, sus.skippedSus, format(sus.literateDescription), reportExamples(sus.examples))
+		SystemReportEvent(sus.description, sus.verb, sus.skippedSus, format, reportExamples(sus.examples))
 	}
 	private def reportExamples(examples: Seq[Example]): Seq[ExampleReportEvent] =
 	{
