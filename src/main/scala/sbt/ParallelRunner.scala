@@ -28,64 +28,69 @@ object ParallelRunner
 final class Distributor[D](scheduler: Scheduler[D], doWork: D => Option[String], workers: Int, log: D => Logger) extends NotNull
 {
 	require(workers > 0)
-	/** The number of threads currently running. */
-	private[this] var running = 0
-	/** Pending notifications of completed work. */
-	private[this] val complete = new java.util.concurrent.LinkedBlockingQueue[Done]
-	
-	final def run(): Iterable[WorkFailure[D]]  = run(scheduler)
-	private[this] def run(scheduler: Scheduler[D]): Iterable[WorkFailure[D]] =
+	final def run(): Iterable[WorkFailure[D]]  = (new Run).run(scheduler)
+
+	/** Helper class to encapsulate the mutable state in a run.*/
+	private final class Run extends NotNull
 	{
-		val nextScheduler = next(scheduler)
-		if(isIdle && !nextScheduler.hasPending) // test if all work is complete
-			nextScheduler.failures
-		else
-			run(waitForCompletedWork(nextScheduler))
-	}
-	private def atMaximum = running >= workers
-	private def availableWorkers = Math.max(workers - running, 0)
-	private def isIdle = running == 0
-	private def next(scheduler: Scheduler[D]) =
-	{
-		if(atMaximum) // all resources full, do nothing
-			scheduler
-		else if(scheduler.hasPending)
+		/** The number of threads currently running. */
+		private[this] var running = 0
+		/** Pending notifications of completed work. */
+		private[this] val complete = new java.util.concurrent.LinkedBlockingQueue[Done]
+		
+		private[Distributor] def run(scheduler: Scheduler[D]): Iterable[WorkFailure[D]] =
 		{
-			val available = availableWorkers
-			assume(available > 0)
-			val (nextWork, newScheduler) = scheduler.next(available)
-			val nextSize = nextWork.size
-			assume(nextSize <= available)
-			if(nextSize <= 0)
-				assume(!isIdle)
+			val nextScheduler = next(scheduler)
+			if(isIdle && !nextScheduler.hasPending) // test if all work is complete
+				nextScheduler.failures
 			else
-				nextWork.foreach(process)
-			newScheduler
+				run(waitForCompletedWork(nextScheduler))
 		}
-		else // either all work is complete or the scheduler is waiting for current work to complete
-			scheduler
-	}
-	// wait on the blocking queue `complete` until some work finishes
-	private def waitForCompletedWork(scheduler: Scheduler[D]) =
-	{
-		val done = complete.take()
-		running -= 1
-		scheduler.complete(done.data, done.result)
-	}
-	private def process(data: D)
-	{
-		running += 1
-		new Worker(data).start()
-	}
-	private class Worker(data: D) extends Thread with NotNull
-	{
-		override def run()
+		private def atMaximum = running >= workers
+		private def availableWorkers = Math.max(workers - running, 0)
+		private def isIdle = running == 0
+		private def next(scheduler: Scheduler[D]) =
 		{
-			val result = Control.trapUnit("", log(data))(doWork(data))
-			complete.put( new Done(result, data) )
+			if(atMaximum) // all resources full, do nothing
+				scheduler
+			else if(scheduler.hasPending)
+			{
+				val available = availableWorkers
+				assume(available > 0)
+				val (nextWork, newScheduler) = scheduler.next(available)
+				val nextSize = nextWork.size
+				assume(nextSize <= available)
+				if(nextSize <= 0)
+					assume(!isIdle)
+				else
+					nextWork.foreach(process)
+				newScheduler
+			}
+			else // either all work is complete or the scheduler is waiting for current work to complete, so do nothing
+				scheduler
+		}
+		// wait on the blocking queue `complete` until some work finishes
+		private def waitForCompletedWork(scheduler: Scheduler[D]) =
+		{
+			val done = complete.take()
+			running -= 1
+			scheduler.complete(done.data, done.result)
+		}
+		private def process(data: D)
+		{
+			running += 1
+			new Worker(data).start()
+		}
+		private class Worker(data: D) extends Thread with NotNull
+		{
+			override def run()
+			{
+				val result = Control.trapUnit("", log(data))(doWork(data))
+				complete.put( new Done(result, data) )
+			}
 		}
 	}
-	private class Done(val result: Option[String], val data: D) extends NotNull
+	private final class Done(val result: Option[String], val data: D) extends NotNull
 }
 final case class WorkFailure[D](work: D, message: String) extends NotNull
 {
