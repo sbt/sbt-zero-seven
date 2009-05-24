@@ -100,9 +100,12 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		documentTitle(name + " " + version + " API") ::
 		windowTitle(name + " " + version + " API") ::
 		Nil
-	/** The options provided to the 'test' action.  You can specify tests to exclude here.*/
-	def testOptions: Seq[TestOption] = TestListeners(testListeners) :: TestFilter(includeTest) :: Nil
-	/** The options provided to the clean action.  You can add files to be removed here.*/
+	/** The options provided to the 'test' action..*/
+	def testOptions: Seq[TestOption] =
+		TestListeners(testListeners) ::
+		TestFilter(includeTest) ::
+		Nil
+	/** The options provided to the clean action.  You can add files to be removed and files to be preserved here.*/
 	def cleanOptions: Seq[CleanOption] =
 		ClearAnalysis(mainCompileConditional.analysis) ::
 		ClearAnalysis(testCompileConditional.analysis) ::
@@ -121,6 +124,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	}
 	
 	protected def includeTest(test: String): Boolean = true
+
 	
 	/** These are the directories that are created when a user makes a new project from sbt.*/
 	private def directoriesToCreate: List[Path] =

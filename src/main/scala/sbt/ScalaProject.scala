@@ -6,6 +6,7 @@ package sbt
 import FileUtilities._
 import java.io.File
 import java.util.jar.{Attributes, Manifest}
+import scala.collection.mutable.ListBuffer
 
 trait ScalaProject extends Project with FileTasks
 {
@@ -21,6 +22,8 @@ trait ScalaProject extends Project with FileTasks
 	case class ClearAnalysis(analysis: TaskAnalysis[_, _, _]) extends CleanOption
 	case class Preserve(paths: PathFinder) extends CleanOption
 	
+	case class TestSetup(setup: () => Option[String]) extends TestOption
+	case class TestCleanup(cleanup: () => Option[String]) extends TestOption
 	case class ExcludeTests(tests: Iterable[String]) extends TestOption
 	case class TestListeners(listeners: Iterable[TestReportListener]) extends TestOption
 	case class TestFilter(filterTest: String => Boolean) extends TestOption
@@ -131,10 +134,12 @@ trait ScalaProject extends Project with FileTasks
 		def work =
 		{
 			val (begin, work, end) = testTasks(frameworks, classpath, analysis, options)
-			val beginTask = toTask(begin)
-			val workTasks = work.map(w => toTask(w) dependsOn(beginTask))
-			val rootTask = task { None } named("test-complete") dependsOn(workTasks.toSeq : _*)
-			new SubWork[Project#Task](ParallelRunner.dagScheduler(rootTask), ParallelRunner.dagScheduler(toTask(end)))
+			val beginTasks = begin.map(toTask).toSeq // test setup tasks
+			val workTasks = work.map(w => toTask(w) dependsOn(beginTasks : _*)) // the actual tests
+			val endTasks = end.map(toTask).toSeq // tasks that perform test cleanup and are run regardless of success of tests
+			val endTask = task { None } named("test-cleanup") dependsOn(endTasks : _*)
+			val rootTask = task { None } named("test-complete") dependsOn(workTasks.toSeq : _*) // the task that depends on all test subtasks
+			new SubWork[Project#Task](ParallelRunner.dagScheduler(rootTask), ParallelRunner.dagScheduler(endTask))
 		}
 		new CompoundTask(work)
 	}
@@ -163,7 +168,6 @@ trait ScalaProject extends Project with FileTasks
 					a1.put(key, value)
 			}
 
-			import scala.collection.mutable.ListBuffer
 			val manifest = new Manifest
 			var recursive = false
 			for(option <- options)
@@ -220,9 +224,19 @@ trait ScalaProject extends Project with FileTasks
 	protected def testTasks(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]) = {
 		import scala.collection.mutable.HashSet
 
-			val testFilters = for(TestFilter(include) <- options) yield include
-			val excludeTests = for(ExcludeTests(exclude) <- options) yield exclude
-			val excludeTestsSet = HashSet.empty[String] ++ excludeTests.flatMap(x => x)
+			val testFilters = new ListBuffer[String => Boolean]
+			val excludeTestsSet = new HashSet[String]
+			val setup, cleanup = new ListBuffer[() => Option[String]]
+			val testListeners = new ListBuffer[TestReportListener]
+			
+			options.foreach {
+				case TestFilter(include) => testFilters += include
+				case ExcludeTests(exclude) => excludeTestsSet ++= exclude
+				case TestListeners(listeners) => testListeners ++= listeners
+				case TestSetup(setupFunction) => setup += setupFunction
+				case TestCleanup(cleanupFunction) => cleanup += cleanupFunction
+			}
+			
 			if(excludeTestsSet.size > 0 && log.atLevel(Level.Debug))
 			{
 				log.debug("Excluding tests: ")
@@ -230,9 +244,9 @@ trait ScalaProject extends Project with FileTasks
 			}
 			def includeTest(test: TestDefinition) = !excludeTestsSet.contains(test.testClassName) && testFilters.forall(filter => filter(test.testClassName))
 			val tests = HashSet.empty[TestDefinition] ++ analysis.allTests.filter(includeTest)
-			val listeners = (for(TestListeners(listeners) <- options) yield listeners).flatMap(x => x)
-			TestFramework.testTasks(frameworks, classpath.get, tests, log, listeners, false)
+			TestFramework.testTasks(frameworks, classpath.get, tests, log, testListeners.readOnly, false, setup.readOnly, cleanup.readOnly)
 	}
+	private def flatten[T](i: Iterable[Iterable[T]]) = i.flatMap(x => x)
 	
 	protected def testQuickMethod(testAnalysis: CompileAnalysis, options: => Seq[TestOption])(toRun: Seq[TestOption] => Task) =
 		task { tests =>

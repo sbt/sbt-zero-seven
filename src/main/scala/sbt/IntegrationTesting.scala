@@ -5,36 +5,18 @@ package sbt
 
 import ScalaProject.{optionsAsString, javaOptionsAsString}
 
-trait IntegrationTesting
+trait IntegrationTesting extends NotNull
 {
-	/** Override to provide pre-suite setup. */
+	/** Override to provide pre-test setup. */
 	protected def pretests: Option[String] = None
-	/** Override to provide post-suite cleanup. */
+	/** Override to provide post-test cleanup. */
 	protected def posttests: Option[String] = None
 }
-
 trait ScalaIntegrationTesting extends IntegrationTesting
-{
-	self: ScalaProject =>
+{ self: ScalaProject =>
 
 	protected def integrationTestTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]) =
-		task{
-			import Control._
-			trapUnit("Setup failed: ", log)(pretests) match
-			{
-				case Some(msg) => Some(msg)
-				case None => trapUnitAndFinally("Exception in framework", log)(executeIntegrationTests(frameworks, classpath, analysis, options))(
-					trapUnit("Cleanup failed: ", log)(posttests) match
-					{
-						case Some(msg) => log.error(msg)
-						case None => {}
-					}
-				)
-			}
-		}
-
-	private def executeIntegrationTests(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]): Option[String] =
-		None//doTests(frameworks, classpath, analysis, options)
+		testTask(frameworks, classpath, analysis, options)
 }
 
 /** A fully featured integration testing that may be mixed in with any subclass of <code>BasicScalaProject</code>.
@@ -55,7 +37,10 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 
 	protected def integrationTestCompileTask() = task{ integrationTestCompileConditional.run }
 
-	def integrationTestOptions: Seq[TestOption] = Nil
+	def integrationTestOptions: Seq[TestOption] = 
+		TestSetup(() => pretests) ::
+		TestCleanup(() => posttests) ::
+		testOptions.toList
 	def integrationTestCompileOptions = testCompileOptions
 	def javaIntegrationTestCompileOptions: Seq[JavaCompileOption] = testJavaCompileOptions
 	

@@ -60,27 +60,29 @@ object TestFramework
 	def runTests(frameworks: Iterable[TestFramework], classpath: Iterable[Path], tests: Iterable[TestDefinition], log: Logger,
 		listeners: Iterable[TestReportListener]) =
 	{
-		val (start, runTests, end) = testTasks(frameworks, classpath, tests, log, listeners, true)
-		start.run()
-		runTests.foreach(_.run())
-		end.run()
+		val (start, runTests, end) = testTasks(frameworks, classpath, tests, log, listeners, true, Nil, Nil)
+		def run(tasks: Iterable[NamedTestTask]) = tasks.foreach(_.run())
+		run(start)
+		run(runTests)
+		run(end)
 	}
 	
 	private val ScalaCompilerJarPackages = "scala.tools.nsc." :: "jline." :: "ch.epfl.lamp." :: Nil
 
-	private val TestStartName = "test-setup"
-	private val TestFinishName = "test-cleanup"
+	private val TestStartName = "test-start"
+	private val TestFinishName = "test-finish"
 	
 	private[sbt] def safeForeach[T](it: Iterable[T], log: Logger)(f: T => Unit): Unit = it.foreach(i => Control.trapAndLog(log){ f(i) } )
 	import scala.collection.{Map, Set}
 	def testTasks(frameworks: Iterable[TestFramework], classpath: Iterable[Path], tests: Iterable[TestDefinition], log: Logger,
-		listeners: Iterable[TestReportListener], endErrorsEnabled: Boolean): (NamedTestTask, Iterable[NamedTestTask], NamedTestTask) =
+		listeners: Iterable[TestReportListener], endErrorsEnabled: Boolean, setup: Iterable[() => Option[String]],
+		cleanup: Iterable[() => Option[String]]): (Iterable[NamedTestTask], Iterable[NamedTestTask], Iterable[NamedTestTask]) =
 	{
 		val mappedTests = testMap(frameworks, tests)
 		if(mappedTests.isEmpty)
-			(new NamedTestTask(TestStartName, None), Nil, new NamedTestTask(TestFinishName, { log.info("No tests to run."); None }) )
+			(new NamedTestTask(TestStartName, None) :: Nil, Nil, new NamedTestTask(TestFinishName, { log.info("No tests to run."); None }) :: Nil )
 		else
-			createTestTasks(classpath, mappedTests, log, listeners, endErrorsEnabled)
+			createTestTasks(classpath, mappedTests, log, listeners, endErrorsEnabled, setup, cleanup)
 	}
 	private def testMap(frameworks: Iterable[TestFramework], tests: Iterable[TestDefinition]): Map[TestFramework, Set[String]] =
 	{
@@ -100,8 +102,12 @@ object TestFramework
 		}
 		map.readOnly
 	}
+	private def createTasks(work: Iterable[() => Option[String]], baseName: String) =
+		work.toList.zipWithIndex.map{ case (work, index) => new NamedTestTask(baseName + " " + (index+1), work()) }
+		
 	private def createTestTasks(classpath: Iterable[Path], tests: Map[TestFramework, Set[String]], log: Logger,
-		listeners: Iterable[TestReportListener], endErrorsEnabled: Boolean) =
+		listeners: Iterable[TestReportListener], endErrorsEnabled: Boolean, setup: Iterable[() => Option[String]],
+		cleanup: Iterable[() => Option[String]]) =
 	{
 		val filterCompilerLoader = new FilteredLoader(getClass.getClassLoader, ScalaCompilerJarPackages)
 		val loader: ClassLoader = new IntermediateLoader(classpath.map(_.asURL).toSeq.toArray, filterCompilerLoader)
@@ -115,7 +121,7 @@ object TestFramework
 			def apply() = synchronized { value }
 			def update(v: Result.Value): Unit = synchronized { if(value != Error) value = v }
 		}
-		val startTask = new NamedTestTask(TestStartName, {foreachListenerSafe(_.doInit); None})
+		val startTask = new NamedTestTask(TestStartName, {foreachListenerSafe(_.doInit); None}) :: createTasks(setup, "Test setup")
 		val testTasks =
 			tests flatMap { case (framework, testClassNames) =>
 			
@@ -156,7 +162,7 @@ object TestFramework
 				}
 			}
 		}
-		val endTask = new NamedTestTask(TestFinishName, end() )
+		val endTask = new NamedTestTask(TestFinishName, end() ) :: createTasks(cleanup, "Test cleanup")
 		(startTask, testTasks, endTask)
 	}
 }
