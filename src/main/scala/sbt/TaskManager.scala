@@ -19,6 +19,8 @@ trait TaskManager{
 	/** Creates a method task that executes the given action when invoked. */
 	def task(action: Array[String] => ManagedTask) = new MethodTask(None, action, Nil)
 	
+	def taskName(t: Task): String
+	
 	/** A method task is an action that has parameters.  Note that it is not a Task, though,
 	* because it requires arguments to perform its work.  It therefore cannot be a dependency of
 	* a Task..*/
@@ -32,31 +34,49 @@ trait TaskManager{
 		def completeWith(add: Iterable[String]) = new MethodTask(description, action, (add ++ completions).toList)
 	}
 	
-	class Task(val description : Option[String], val dependencies : List[ManagedTask], val interactive: Boolean,
-		action : => Option[String]) extends Dag[ManagedTask] with Described
+	sealed class Task(val explicitName: Option[String], val description : Option[String], val dependencies : List[ManagedTask],
+		 val interactive: Boolean, action : => Option[String]) extends Dag[ManagedTask] with Described
 	{
+		def this(description : Option[String], dependencies : List[ManagedTask], interactive: Boolean, action : => Option[String]) =
+			this(None, description, dependencies, interactive, action)
 		checkTaskDependencies(dependencies)
 		def manager: ManagerType = TaskManager.this
+		def name = explicitName.getOrElse(taskName(this))
+		def named(name: String) = construct(Some(name), description,dependencies, interactive, action)
+		override def toString = "Task " + name
 		
 		/** Creates a new task, identical to this task, except with the additional dependencies specified.*/
 		def dependsOn(tasks : ManagedTask*) = setDependencies(tasks.toList ::: dependencies)
 		private[sbt] def setDependencies(dependencyList: List[ManagedTask]) =
 		{
 			checkTaskDependencies(dependencyList)
-			new Task(description, dependencyList, interactive, action)
+			construct(explicitName, description, dependencyList, interactive, action)
 		}
 		/** Creates a new task, identical to this task, except with the given description.*/
-		def describedAs(description : String) = new Task(Some(description), dependencies, interactive, action);
+		def describedAs(description : String) = construct(explicitName, Some(description), dependencies, interactive, action);
 		private[sbt] def invoke = action;
 	
-		final def setInteractive = new Task(description, dependencies, true, action)
+		final def setInteractive = construct(explicitName, description, dependencies, true, action)
 		final def run = runSequentially(topologicalSort)
 		final def runDependenciesOnly = runSequentially(topologicalSort.dropRight(1))
 		private def runSequentially(tasks: List[ManagedTask]) = Control.lazyFold(tasks)(_.invoke)
 	
 		def &&(that : Task) =
-			new Task(None, dependencies ::: that.dependencies, interactive || that.interactive, this.invoke.orElse(that.invoke))
+			construct(explicitName, None, dependencies ::: that.dependencies, interactive || that.interactive, this.invoke.orElse(that.invoke))
+		
+		protected def construct(explicitName: Option[String], description: Option[String], dependencies: List[ManagedTask], interactive: Boolean,
+			action : => Option[String]): Task = new Task(explicitName, description, dependencies, interactive, action)
 	}
+	final class CompoundTask private (explicitName: Option[String], description : Option[String], dependencies : List[ManagedTask], interactive: Boolean,
+		action : => Option[String], createWork: => SubWork[Project#Task]) extends Task(description, dependencies, interactive, action)
+		with CompoundWork[Project#Task]
+	{
+		def this(createWork: => SubWork[Project#Task]) = this(None, None, Nil, false, None, createWork)
+		override protected def construct(explicitName: Option[String], description: Option[String], dependencies: List[ManagedTask],
+			interactive: Boolean, action : => Option[String]) = new CompoundTask(explicitName, description, dependencies, interactive, action, createWork)
+		def work = createWork
+	}
+	
 	private def checkTaskDependencies(dependencyList: List[ManagedTask])
 	{
 		val nullDependencyIndex = dependencyList.findIndexOf(_ == null)

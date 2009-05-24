@@ -127,7 +127,18 @@ trait ScalaProject extends Project with FileTasks
 	def testTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: TestOption*): Task =
 		testTask(frameworks, classpath, analysis, options)
 	def testTask(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]): Task =
-		task{ doTests(frameworks, classpath, analysis, options) }
+	{
+		def work =
+		{
+			val (begin, work, end) = testTasks(frameworks, classpath, analysis, options)
+			val beginTask = toTask(begin)
+			val workTasks = work.map(w => toTask(w) dependsOn(beginTask))
+			val rootTask = task { None } named("test-complete") dependsOn(workTasks.toSeq : _*)
+			new SubWork[Project#Task](ParallelRunner.dagScheduler(rootTask), ParallelRunner.dagScheduler(toTask(end)))
+		}
+		new CompoundTask(work)
+	}
+	private def toTask(testTask: NamedTestTask) = task(testTask.run()) named(testTask.name)
 
 	def graphTask(outputDirectory: Path, analysis: CompileAnalysis): Task = task { DotGraph(analysis, outputDirectory, log) }
 	def scaladocTask(label: String, sources: PathFinder, outputDirectory: Path, classpath: PathFinder, options: ScaladocOption*): Task =
@@ -206,7 +217,7 @@ trait ScalaProject extends Project with FileTasks
 		}
 	}
 	protected def incrementImpl(v: BasicVersion): Version = v.incrementMicro
-	protected def doTests(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]): Option[String] = {
+	protected def testTasks(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]) = {
 		import scala.collection.mutable.HashSet
 
 			val testFilters = for(TestFilter(include) <- options) yield include
@@ -220,7 +231,7 @@ trait ScalaProject extends Project with FileTasks
 			def includeTest(test: TestDefinition) = !excludeTestsSet.contains(test.testClassName) && testFilters.forall(filter => filter(test.testClassName))
 			val tests = HashSet.empty[TestDefinition] ++ analysis.allTests.filter(includeTest)
 			val listeners = (for(TestListeners(listeners) <- options) yield listeners).flatMap(x => x)
-			TestFramework.runTests(frameworks, classpath.get, tests, log, listeners)
+			TestFramework.testTasks(frameworks, classpath.get, tests, log, listeners, false)
 	}
 	
 	protected def testQuickMethod(testAnalysis: CompileAnalysis, options: => Seq[TestOption])(toRun: Seq[TestOption] => Task) =

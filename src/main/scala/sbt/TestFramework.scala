@@ -54,22 +54,33 @@ abstract class BasicTestRunner extends TestRunner
 	protected def safeListenersCall(call: (TestReportListener) => Unit) = TestFramework.safeForeach(listeners, log)(call)
 }
 
+final class NamedTestTask(val name: String, action: => Option[String]) extends NotNull { def run() = action }
 object TestFramework
 {
+	def runTests(frameworks: Iterable[TestFramework], classpath: Iterable[Path], tests: Iterable[TestDefinition], log: Logger,
+		listeners: Iterable[TestReportListener]) =
+	{
+		val (start, runTests, end) = testTasks(frameworks, classpath, tests, log, listeners, true)
+		start.run()
+		runTests.foreach(_.run())
+		end.run()
+	}
+	
 	private val ScalaCompilerJarPackages = "scala.tools.nsc." :: "jline." :: "ch.epfl.lamp." :: Nil
 
+	private val TestStartName = "test-setup"
+	private val TestFinishName = "test-cleanup"
+	
 	private[sbt] def safeForeach[T](it: Iterable[T], log: Logger)(f: T => Unit): Unit = it.foreach(i => Control.trapAndLog(log){ f(i) } )
 	import scala.collection.{Map, Set}
-	def runTests(frameworks: Iterable[TestFramework], classpath: Iterable[Path], tests: Iterable[TestDefinition], log: Logger, listeners: Iterable[TestReportListener]): Option[String] =
+	def testTasks(frameworks: Iterable[TestFramework], classpath: Iterable[Path], tests: Iterable[TestDefinition], log: Logger,
+		listeners: Iterable[TestReportListener], endErrorsEnabled: Boolean): (NamedTestTask, Iterable[NamedTestTask], NamedTestTask) =
 	{
 		val mappedTests = testMap(frameworks, tests)
 		if(mappedTests.isEmpty)
-		{
-			log.info("No tests to run.")
-			None
-		}
+			(new NamedTestTask(TestStartName, None), Nil, new NamedTestTask(TestFinishName, { log.info("No tests to run."); None }) )
 		else
-			Control.trapUnit("", log) { doRunTests(classpath, mappedTests, log, listeners) }
+			createTestTasks(classpath, mappedTests, log, listeners, endErrorsEnabled)
 	}
 	private def testMap(frameworks: Iterable[TestFramework], tests: Iterable[TestDefinition]): Map[TestFramework, Set[String]] =
 	{
@@ -89,63 +100,64 @@ object TestFramework
 		}
 		map.readOnly
 	}
-	private def doRunTests(classpath: Iterable[Path], tests: Map[TestFramework, Set[String]], log: Logger, listeners: Iterable[TestReportListener]): Option[String] =
+	private def createTestTasks(classpath: Iterable[Path], tests: Map[TestFramework, Set[String]], log: Logger,
+		listeners: Iterable[TestReportListener], endErrorsEnabled: Boolean) =
 	{
 		val filterCompilerLoader = new FilteredLoader(getClass.getClassLoader, ScalaCompilerJarPackages)
 		val loader: ClassLoader = new IntermediateLoader(classpath.map(_.asURL).toSeq.toArray, filterCompilerLoader)
-		val oldLoader = Thread.currentThread.getContextClassLoader
-		Thread.currentThread.setContextClassLoader(loader)
 		val testsListeners = listeners.filter(_.isInstanceOf[TestsListener]).map(_.asInstanceOf[TestsListener])
 		def foreachListenerSafe(f: TestsListener => Unit): Unit = safeForeach(testsListeners, log)(f)
 		
 		import Result.{Error,Passed,Failed}
-		var result: Result.Value = Passed
-		foreachListenerSafe(_.doInit)
-		try {
-			for((framework, testClassNames) <- tests)
+		object result
+		{
+			private[this] var value: Result.Value = Passed
+			def apply() = synchronized { value }
+			def update(v: Result.Value): Unit = synchronized { if(value != Error) value = v }
+		}
+		val startTask = new NamedTestTask(TestStartName, {foreachListenerSafe(_.doInit); None})
+		val testTasks =
+			tests flatMap { case (framework, testClassNames) =>
+			
+					val runner = framework.testRunner(loader, listeners, log)
+					for(testClassName <- testClassNames) yield
+					{
+						def runTest() =
+						{
+							val oldLoader = Thread.currentThread.getContextClassLoader
+							Thread.currentThread.setContextClassLoader(loader)
+							try {
+								runner.run(testClassName) match
+								{
+									case Error => result() = Error; Some("ERROR occurred during testing.")
+									case Failed => result() = Failed; Some("Test FAILED")
+									case _ => None
+								}
+							}
+							finally {
+								Thread.currentThread.setContextClassLoader(oldLoader)
+							}
+						}
+						new NamedTestTask(testClassName, runTest())
+					}
+			}
+		def end() =
+		{
+			foreachListenerSafe(_.doComplete(result()))
+			result() match
 			{
-				if(testClassNames.isEmpty)
-					log.debug("No tests to run for framework " + framework.name + ".")
-				else
+				case Error => if(endErrorsEnabled) Some("ERROR occurred during testing.") else None
+				case Failed => if(endErrorsEnabled) Some("One or more tests FAILED.") else None
+				case Passed =>
 				{
 					log.info(" ")
-					log.info("Running " + framework.name + " tests...")
-					val runner = framework.testRunner(loader, listeners, log)
-					for(testClassName <- testClassNames)
-					{
-						runner.run(testClassName) match
-						{
-							case Error => result = Error
-							case Failed => if(result != Error) result = Failed
-							case _ => ()
-						}
-					}
+					log.info("All tests PASSED.")
+					None
 				}
 			}
-			foreachListenerSafe(_.doComplete(result))
 		}
-		catch
-		{
-			case t =>
-			{
-				foreachListenerSafe(_.doComplete(t))
-				throw t
-			}
-		}
-		finally {
-			Thread.currentThread.setContextClassLoader(oldLoader)
-		}
-		result match
-		{
-			case Error => Some("ERROR occurred during testing.")
-			case Failed => Some("One or more tests FAILED.")
-			case Passed =>
-			{
-				log.info(" ")
-				log.info("All tests PASSED.")
-				None
-			}
-		}
+		val endTask = new NamedTestTask(TestFinishName, end() )
+		(startTask, testTasks, endTask)
 	}
 }
 

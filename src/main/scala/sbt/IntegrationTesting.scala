@@ -34,7 +34,7 @@ trait ScalaIntegrationTesting extends IntegrationTesting
 		}
 
 	private def executeIntegrationTests(frameworks: Iterable[TestFramework], classpath: PathFinder, analysis: CompileAnalysis, options: => Seq[TestOption]): Option[String] =
-		doTests(frameworks, classpath, analysis, options)
+		None//doTests(frameworks, classpath, analysis, options)
 }
 
 /** A fully featured integration testing that may be mixed in with any subclass of <code>BasicScalaProject</code>.

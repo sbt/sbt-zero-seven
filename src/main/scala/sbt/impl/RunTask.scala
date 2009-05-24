@@ -10,7 +10,6 @@ import jcl.IdentityHashMap
 private[sbt] object RunTask
 {
 	final type Task = Project#Task
-	val UnnamedName = "<anonymous>"
 	def apply(root: Task, rootName: String): List[WorkFailure[Task]]  = apply(root, rootName, true)
 	def apply(root: Task, rootName: String, parallelExecution: Boolean): List[WorkFailure[Task]] =
 		apply(root, rootName, if(parallelExecution) Runtime.getRuntime.availableProcessors else 1)
@@ -114,7 +113,7 @@ private final class RunTask(root: Task, rootName: String, maximumTasks: Int) ext
 		if(task == expandedRoot)
 			rootName
 		else
-			expandedTaskNameCache.getOrElse(task, UnnamedName)
+			expandedTaskNameCache.getOrElse(task, task.name)
 
 	private val nameToTaskCache = new IdentityHashMap[Project, Map[String, Task]]
 	private def nameToTaskMap(project: Project): Map[String, Task] = nameToTaskCache.getOrElseUpdate(project, project.tasks)

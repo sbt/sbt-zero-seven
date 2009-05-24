@@ -245,7 +245,7 @@ object Configurations
 	
 	lazy val Default = config("default")
 	lazy val Compile = config("compile")
-	lazy val IntegrationTest = config("it")
+	lazy val IntegrationTest = config("it") hide
 	lazy val Provided = config("provided")
 	lazy val Javadoc = config("javadoc")
 	lazy val Runtime = config("runtime")
@@ -254,7 +254,7 @@ object Configurations
 	lazy val System = config("system")
 	lazy val Optional = config("optional")
 
-	lazy val CompilerPlugin = config("plugin")
+	lazy val CompilerPlugin = config("plugin") hide
 	
 	private[sbt] def removeDuplicates(configs: Iterable[Configuration]) = Set(scala.collection.mutable.Map(configs.map(config => (config.name, config)).toSeq: _*).values.toList: _*)
 }

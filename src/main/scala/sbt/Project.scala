@@ -43,6 +43,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	* are different tasks with the same name, only one will be included. */
 	def taskList: String = descriptionList(deepTasks)
 	
+	final def taskName(task: Task) = tasks.find( _._2 eq task ).map(_._1).getOrElse(UnnamedName)
 	/** A description of all available tasks in this project and all dependencies and all
 	* available method tasks in this project, but not of dependencies.  If there
 	* are different tasks or methods with the same name, only one will be included. */
@@ -254,6 +255,7 @@ private[sbt] final class LoadSetupError(val message: String) extends LoadResult
 
 object Project
 {
+	val UnnamedName = "<anonymous>"
 	val BootDirectoryName = "boot"
 	val DefaultOutputDirectoryName = "target"
 	val DefaultEnvBackingName = "build.properties"

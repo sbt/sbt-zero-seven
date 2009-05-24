@@ -23,7 +23,7 @@ trait TestsListener extends TestReportListener
 	/** called once, at end. */
   def doComplete(finalResult: Result.Value)
 	/** called once, at end, if the test framework throws an exception. */
-  def doComplete(t: Throwable)
+  @deprecated def doComplete(t: Throwable)
 }
 
 abstract class WriterReportListener(val log: Logger) extends TestsListener
@@ -286,11 +286,7 @@ class LogTestReportListener(val log: Logger) extends TestReportListener
 	protected def createScalaTestOutput = new ScalaTestOutput(log)
 	protected def createSpecsOutput = new SpecsOutput(log)
 	
-	def startGroup(name: String)
-	{
-		log.info("")
-		log.info("Testing " + name + " ...")
-	}
+	def startGroup(name: String) {}
 	def testEvent(event: TestEvent)
 	{
 		log.debug("in testEvent:" + event)
