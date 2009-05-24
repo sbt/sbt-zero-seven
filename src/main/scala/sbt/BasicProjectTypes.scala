@@ -151,10 +151,14 @@ trait ManagedProject extends ClasspathProject
 		
 	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, log) }
 
+	/** This is the public ID of the project (used for publishing, for example) */
 	def moduleID: String = normalizedName
+	/** This is the full public ID of the project (used for publishing, for example) */
 	def projectID: ModuleID = ModuleID(organization, moduleID, version.toString)
 
+	/** This is the default name for artifacts (such as jars) without any version string.*/
 	def artifactID = moduleID
+	/** This is the default name for artifacts (such as jars) including the version string.*/
 	def artifactBaseName = artifactID + "-" + version.toString
 	def artifacts: Iterable[Artifact]
 	

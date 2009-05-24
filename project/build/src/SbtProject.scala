@@ -32,7 +32,7 @@ protected class MainProject(val info: ProjectInfo) extends CrossCompileProject
 	def extraResources = descendents(info.projectPath / "licenses", "*") +++ "LICENSE" +++ "NOTICE"
 	override def mainResources = super.mainResources +++ extraResources
 	override def mainClass = Some("sbt.Main")
-	override def testOptions = ExcludeTests("sbt.ReflectiveSpecification" :: Nil) :: super.testOptions.toList
+	override def testOptions = ExcludeTests("sbt.ReflectiveSpecification" :: "sbt.ProcessSpecification" :: Nil) :: super.testOptions.toList
 	
 	// ======== Scripted testing ==========
 	
@@ -66,5 +66,5 @@ protected class MainProject(val info: ProjectInfo) extends CrossCompileProject
 		
 	val ScriptedClassName = "scripted.ScriptedTests"
 	
-	val filter = (group: String, name: String) => group == "extend"//name == "multi"
+	val filter = (group: String, name: String) => true
 }
