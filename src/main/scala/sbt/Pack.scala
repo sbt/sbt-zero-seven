@@ -6,7 +6,6 @@ package sbt
 import java.io.{File, FileOutputStream}
 import java.util.jar.{JarEntry, JarFile, JarOutputStream, Pack200}
 import scala.collection.Map
-import scala.collection.jcl.Conversions
 import FileUtilities._
 
 object Pack
@@ -15,7 +14,7 @@ object Pack
 	def pack(jarPath: Path, out: Path, options: Map[String, String], log: Logger): Option[String] =
 	{
 		val packer = Pack200.newPacker
-		val properties = Conversions.convertMap(packer.properties)
+		val properties = new wrap.MutableMapWrapper(packer.properties)
 		properties ++= options
 		 
 		OpenResource.openJarFile(false).ioOption(jarPath.asFile, "applying pack200 compression to jar", log) {

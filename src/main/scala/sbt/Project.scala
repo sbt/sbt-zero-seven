@@ -50,12 +50,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	def taskAndMethodList: String = descriptionList(tasksAndMethods)
 	/** The actions and methods declared on this project. */
 	final def tasksAndMethods: Map[String, Described] =
-	{
-		val map = new jcl.TreeMap[String, Described]
-		map ++= methods
-		map ++= tasks
-		map.readOnly
-	}
+		immutable.TreeMap.empty[String, Described] ++ methods ++ tasks
 	private def descriptionList(described: Map[String, Described]): String =
 	{
 		val buffer = new StringBuilder
@@ -69,7 +64,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	private[sbt] def deepTasks: Map[String, Project#Task] = deep(_.tasks)
 	private def deep[T](p: Project => Map[String, T]): Map[String, T] =
 	{
-		val tasks = new jcl.TreeMap[String, T]
+		var tasks: immutable.SortedMap[String,T] = new immutable.TreeMap[String, T]
 		for(dependentProject <- topologicalSort)
 			tasks ++= p(dependentProject).elements
 		tasks

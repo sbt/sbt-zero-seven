@@ -3,8 +3,7 @@
  */
 package sbt
 
-import scala.collection.jcl.WeakHashMap
-import scala.collection.mutable.{Buffer, ListBuffer}
+import scala.collection.mutable.{Buffer, HashMap, ListBuffer}
 
 sealed trait LogEvent extends NotNull
 final class Success(val msg: String) extends LogEvent
@@ -111,7 +110,7 @@ final class MultiLogger(delegates: List[Logger]) extends BasicLogger
 * */
 final class BufferedLogger(delegate: Logger) extends Logger
 {
-	private[this] val buffers = new WeakHashMap[Thread, Buffer[LogEvent]]
+	private[this] val buffers = new HashMap[Thread, Buffer[LogEvent]]
 	/* The recording depth part is to enable a weak nesting of recording calls.  When recording is
 	*  nested (recordingDepth >= 2), calls to play/playAll add the buffers for worker Threads to the
 	*  serial buffer (main Thread) and calls to clear/clearAll clear worker Thread buffers only. */
@@ -134,7 +133,7 @@ final class BufferedLogger(delegate: Logger) extends Logger
  		synchronized
 		{
 			if(recordingDepth == 1)
-				delegate.logAll(buffer.readOnly)
+				delegate.logAll(wrap.Wrappers.readOnly(buffer))
 			else if(recordingDepth > 1 && inWorker)
 				serialBuffer ++= buffer
 		}
@@ -144,7 +143,7 @@ final class BufferedLogger(delegate: Logger) extends Logger
 			if(recordingDepth == 1)
 			{
 				for(buffer <- buffers.values)
-					delegate.logAll(buffer.readOnly)
+					delegate.logAll(wrap.Wrappers.readOnly(buffer))
 			}
 			else if(recordingDepth > 1)
 			{

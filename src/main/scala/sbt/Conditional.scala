@@ -119,8 +119,8 @@ trait Conditional[Source, Product, External] extends NotNull
 		
 		new ConditionalAnalysis
 		{
-			def dirtySources = modified.readOnly
-			def cleanSources = unmodified.readOnly
+			def dirtySources = wrap.Wrappers.readOnly(modified)
+			def cleanSources = wrap.Wrappers.readOnly(unmodified)
 			def directlyModifiedSourcesCount = directlyModifiedCount
 			def invalidatedSourcesCount = dirtySources.size - directlyModifiedCount
 			def removedSourcesCount = removedCount
@@ -250,7 +250,7 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 	private def warnHashError(source: Path, message: String)
 	{
 		log.warn("Error computing hash for source " + source + ": " + message)
-		newHashes += (source, None)
+		newHashes += ((source, None))
 	}
 	protected def hashModified(source: Path) =
 	{
@@ -258,7 +258,7 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 		{
 			case None =>
 				log.debug("Source " + source + " had no hash, marking modified.")
-				Hash(source, log).fold(err => warnHashError(source, err), newHash => newHashes += (source, Some(newHash)))
+				Hash(source, log).fold(err => warnHashError(source, err), newHash => newHashes += ((source, Some(newHash))))
 				true
 			case Some(oldHash) =>
 			{
@@ -269,7 +269,7 @@ class CompileConditional(config: CompileConfiguration) extends Conditional[Path,
 						log.debug("Assuming source is modified because of error.")
 						true
 					case Right(newHash) =>
-						newHashes += (source, Some(newHash))
+						newHashes += ((source, Some(newHash)))
 						val different = !(oldHash deepEquals newHash)
 						if(different)
 							log.debug("Hash for source " + source + " changed (was " + Hash.toHex(oldHash) +

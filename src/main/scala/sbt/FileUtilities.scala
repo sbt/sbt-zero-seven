@@ -29,6 +29,7 @@ final class Preserved private[sbt](toRestore: scala.collection.Map[File, Path], 
 /** A collection of file related methods. */
 object FileUtilities
 {
+	import wrap.Wrappers.readOnly
 	/** The size of the byte or char buffer used in various methods.*/
 	private val BufferSize = 8192
 	private val Newline = System.getProperty("line.separator")
@@ -37,7 +38,7 @@ object FileUtilities
 
 	/** Splits a String around path separator characters. */
 	private[sbt] def pathSplit(s: String) = PathSeparatorPattern.split(s)
-	
+
 	def preserve(paths: Iterable[Path], log: Logger): Either[String, Preserved] =
 	{
 		for(tmp <- createTemporaryDirectory(log).right) yield
@@ -50,7 +51,7 @@ object FileUtilities
 				copyFile(source, toPath, log)
 				pathMap(toPath.asFile) = source
 			}
-			new Preserved(pathMap.readOnly, tmp)
+			new Preserved(readOnly(pathMap), tmp)
 		}
 	}
 	
@@ -247,7 +248,7 @@ object FileUtilities
 				result match { case None => next(); case x => x }
 			}
 		}
-		next().toLeft(set.readOnly)
+		next().toLeft(readOnly(set))
 	}
 	
 	/** Copies all bytes from the given input stream to the given output stream.
@@ -385,7 +386,7 @@ object FileUtilities
 				else
 					None
 			}
-		}.toLeft(targetSet.readOnly)
+		}.toLeft(readOnly(targetSet))
 	}
 	private def copyImpl(sources: Iterable[Path], destinationDirectory: Path, log: Logger)
 		(doCopy: Path => Option[String]): Option[String] =
@@ -452,7 +453,7 @@ object FileUtilities
 				else
 					None
 			}
-		}.toLeft(targetSet.readOnly)
+		}.toLeft(readOnly(targetSet))
 	}
 	
 	/** Copies the files declared in <code>sources</code> to the <code>targetDirectory</code>
@@ -496,7 +497,7 @@ object FileUtilities
 				case Nil => None
 			}
 		
-		Control.trap("Error copying files: ", log) { copyAll(uniquelyNamedSources.toList).toLeft(targetSet.readOnly) }
+		Control.trap("Error copying files: ", log) { copyAll(uniquelyNamedSources.toList).toLeft(readOnly(targetSet)) }
 	}
 	/** Copies <code>sourceFile</code> to <code>targetFile</code>.  If <code>targetFile</code>
 	* exists, it is overwritten.  Note that unlike higher level copies in FileUtilities, this

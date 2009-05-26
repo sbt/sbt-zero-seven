@@ -3,7 +3,7 @@
  */
 package sbt;
 
-import scala.collection._;
+import scala.collection.mutable;
 
 trait Dag[Node <: Dag[Node]]{
 	self : Node =>
@@ -12,13 +12,13 @@ trait Dag[Node <: Dag[Node]]{
 
 	def topologicalSort = {
 		val discovered = new mutable.HashSet[Node];
-		val finished = new jcl.LinkedHashSet[Node];
+		val finished = new wrap.MutableSetWrapper(new java.util.LinkedHashSet[Node]);
 
 		def visit(dag : Node){
 			if (!discovered(dag)) {
 				discovered(dag) = true; 
 				dag.dependencies.foreach(visit);
-				finished(dag) = true; 
+				finished += dag;
 			}
 		}
 

@@ -3,9 +3,9 @@
  */
  package sbt.impl
 
-import scala.collection.{immutable, jcl, mutable}
+import scala.collection.{immutable, mutable}
 import scala.collection.Map
-import jcl.IdentityHashMap
+import sbt.wrap.IdentityHashMap
 
 private[sbt] object RunTask
 {

@@ -110,7 +110,7 @@ trait WebstartScalaProject extends ScalaProject
 			}
 		}
 	/** Creates default XML elements for a JNLP file for the given resources.*/
-	protected def defaultElements(resources: Seq[WebstartJarResource]): NodeSeq = resources.map(defaultElement)
+	protected def defaultElements(resources: Seq[WebstartJarResource]): NodeSeq = NodeSeq.fromSeq(resources.map(defaultElement))
 	/** Creates a default XML element for a JNLP file for the given resource.*/
 	protected def defaultElement(resource: WebstartJarResource): Elem =
 		<jar href={resource.href} main={resource.isMain.toString}/>

@@ -86,6 +86,7 @@ src/main/scala/sbt/impl/SelectMainClass.scala -text
 src/main/scala/sbt/impl/TestFrameworkImpl.scala -text
 src/main/scala/sbt/impl/TestParser.scala -text
 src/main/scala/sbt/impl/TestStatusReporter.scala -text
+src/main/scala/sbt/wrap/Wrappers.scala -text
 src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject2.scala -text
 src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject3.scala -text
 src/test/resources/sbt-test-resources/actions/interactive/changes/TestProject4.scala -text

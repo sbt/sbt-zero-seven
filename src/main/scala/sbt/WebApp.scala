@@ -142,7 +142,6 @@ private object LazyJettyRun extends JettyRun
 			{
 				log.debug("Scanning for changes to: " + scanDirectories.mkString(", "))
 				val scanner = new Scanner
-				import scala.collection.jcl.Conversions._
 				val list = new java.util.ArrayList[File]
 				scanDirectories.foreach(x => list.add(x))
 				scanner.setScanDirs(list)

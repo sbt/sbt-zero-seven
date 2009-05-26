@@ -178,10 +178,10 @@ private object MaxPathStrategy
 		val cost = // compute the cost of the longest execution path ending at each node
 		{
 			val cost = new mutable.HashMap[D, Int]
-			def computeCost(work: D): Int = info.reverseDeps.getOrElse(work, Nil).foldLeft(0)(_ max getCost(_)) + selfCost(work)
+			def computeCost(work: D): Int = info.reverseDeps.getOrElse(work, immutable.Set.empty[D]).foldLeft(0)(_ max getCost(_)) + selfCost(work)
 			def getCost(work: D): Int = cost.getOrElseUpdate(work, computeCost(work))
 			info.remainingDeps.keys.foreach(getCost)
-			cost.readOnly
+			wrap.Wrappers.readOnly(cost)
 		}
 		// create a function to compare units of work.  This is not as simple as cost(a) compare cost(b) because it cannot return 0 for
 		// unequal nodes

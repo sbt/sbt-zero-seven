@@ -95,14 +95,14 @@ object TrapExit
 		}
 	}
 	
-	import scala.collection.jcl.Conversions.convertSet
 	/** Returns all threads that are not in the 'system' thread group and are not the AWT implementation
 	* thread (AWT-XAWT, AWT-Windows, ...)*/
 	private def allThreads: Set[Thread] =
 	{
-		val threads = convertSet(Thread.getAllStackTraces.keySet)
-		for(thread <- threads.toList if isSystemThread(thread))
-			threads -= thread
+		val allThreads = wrap.Wrappers.toList(Thread.getAllStackTraces.keySet)
+		val threads = new scala.collection.mutable.HashSet[Thread]
+		for(thread <- allThreads if !isSystemThread(thread))
+			threads += thread
 		threads
 	}
 	/** Returns true if the given thread is in the 'system' thread group and is an AWT thread other than

@@ -15,7 +15,7 @@ trait ClasspathProject extends Project
 	def fullClasspath(config: Configuration): PathFinder =
 		Path.lazyPathFinder
 		{
-			val set = new scala.collection.jcl.LinkedHashSet[Path]
+			val set = new wrap.MutableSetWrapper(new java.util.LinkedHashSet[Path])
 			for(project <- topologicalSort)
 			{
 				project match

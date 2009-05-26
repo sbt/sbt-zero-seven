@@ -100,7 +100,7 @@ object TestFramework
 					map.getOrElseUpdate(framework, new HashSet[String]) += test.testClassName
 			}
 		}
-		map.readOnly
+		wrap.Wrappers.readOnly(map)
 	}
 	private def createTasks(work: Iterable[() => Option[String]], baseName: String) =
 		work.toList.zipWithIndex.map{ case (work, index) => new NamedTestTask(baseName + " " + (index+1), work()) }

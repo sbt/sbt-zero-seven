@@ -255,7 +255,7 @@ sealed abstract class PathFinder extends NotNull
 	{
 		val pathSet = new HashSet[Path]
 		addTo(pathSet)
-		pathSet.readOnly
+		wrap.Wrappers.readOnly(pathSet)
 	}
 	private[sbt] def addTo(pathSet: Set[Path])
 }

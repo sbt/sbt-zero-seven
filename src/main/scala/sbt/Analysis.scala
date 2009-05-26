@@ -87,7 +87,7 @@ sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) e
 	def products(source: Path) = productMap.get(source)
 	
 	def allSources = sourceDependencyMap.keySet
-	def allProducts: Set[Path] = HashSet(productMap.values.toList.flatten[Path].toSeq : _*)
+	def allProducts: Set[Path] = HashSet(flatten(productMap.values.toList) : _*)
 	def allExternals = externalDependencyMap.keySet
 	
 	def allExternalDependencies = readOnlyIterable(externalDependencyMap)
@@ -124,6 +124,8 @@ sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) e
 }
 object BasicAnalysis
 {
+	private def flatten(s: Iterable[Set[Path]]): Seq[Path] = s.flatMap(x => x.toSeq).toSeq
+
 	val GeneratedFileName = "generated_files"
 	val DependenciesFileName = "dependencies"
 	val ExternalDependenciesFileName = "external"
@@ -227,11 +229,7 @@ object PropertiesUtilities
 	}
 	
 	def propertyNames(properties: Properties): Iterable[String] =
-	{
-		import java.util.Collections.list
-		import scala.collection.jcl.Conversions.convertList
-		convertList(list(properties.propertyNames)).map(_.toString)
-	}
+		wrap.Wrappers.toList(properties.propertyNames).map(_.toString)
 }
 object MapUtilities
 {
@@ -239,7 +237,7 @@ object MapUtilities
 		map.values.toList.flatMap(set => set.toList)
 	
 	def readOnlyIterable[Key, Value](i: Map[Key, Set[Value]]): Iterable[(Key, scala.collection.Set[Value])] =
-		for( (key, set) <- i.elements.toList) yield (key, set.readOnly)
+		for( (key, set) <- i.elements.toList) yield (key, wrap.Wrappers.readOnly(set))//.readOnly)
 		
 	def mark[Key, Value](source: Key, map: Map[Key, Set[Value]])
 	{

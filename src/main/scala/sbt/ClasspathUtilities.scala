@@ -7,7 +7,6 @@ import java.io.File
 import java.net.{URI, URL, URLClassLoader}
 import java.util.Collections
 import scala.collection.Set
-import scala.collection.jcl.Conversions
 import scala.collection.mutable.{HashSet, ListBuffer}
 
 private[sbt] object ClasspathUtilities
@@ -19,26 +18,25 @@ private[sbt] object ClasspathUtilities
 	def separate(paths: Iterable[File]): (Iterable[File], Iterable[File]) = paths.partition(isArchive)
 	// Partitions the given classpath into (jars, directories)
 	def separatePaths(paths: Iterable[Path]) = separate(paths.map(_.asFile.getCanonicalFile))
-	def buildSearchPaths(classpath: Iterable[Path]): (Set[File], Set[File]) =
+	private[sbt] def buildSearchPaths(classpath: Iterable[Path]): (wrap.Set[File], wrap.Set[File]) =
 	{
 		val (jars, dirs) = separatePaths(classpath)
-		(linkedSet(jars ++ extraJars), linkedSet(dirs ++ extraDirs))
+		(linkedSet(jars ++ extraJars.toList), linkedSet(dirs ++ extraDirs.toList))
 	}
-	def onClasspath(classpathJars: Set[File], classpathDirectories: Iterable[File], file: File): Boolean =
+	private[sbt] def onClasspath(classpathJars: wrap.Set[File], classpathDirectories: wrap.Set[File], file: File): Boolean =
 	{
 		val f = file.getCanonicalFile
 		if(ClasspathUtilities.isArchive(f))
 			classpathJars.contains(f)
 		else
-			classpathDirectories.find(Path.relativize(_, f).isDefined).isDefined
+			classpathDirectories.toList.find(Path.relativize(_, f).isDefined).isDefined
 	}
 	
 	/** Returns all entries in 'classpath' that correspond to a compiler plugin.*/
 	def compilerPlugins(classpath: Iterable[Path]): Iterable[File] =
 	{
 		val loader = new URLClassLoader(classpath.map(_.asURL).toList.toArray)
-		val all = Conversions.convertList(Collections.list(loader.getResources("scalac-plugin.xml"))).readOnly
-		all.flatMap(asFile)
+		wrap.Wrappers.toList(loader.getResources("scalac-plugin.xml")).flatMap(asFile)
 	}
 	/** Converts the given URL to a File.  If the URL is for an entry in a jar, the File for the jar is returned. */
 	private[sbt] def asFile(url: URL) =
@@ -79,10 +77,9 @@ private[sbt] object ClasspathUtilities
 		}
 		(linkedSet(extJars ++ bootJars), linkedSet(bootDirs))
 	}
-	private def linkedSet[T](s: Iterable[T]): Set[T] =
+	private def linkedSet[T](s: Iterable[T]): wrap.Set[T] =
 	{
-		import scala.collection.jcl.Conversions.convertSet
-		val set: scala.collection.mutable.Set[T] = new java.util.LinkedHashSet[T]
+		val set = new wrap.MutableSetWrapper(new java.util.LinkedHashSet[T])
 		set ++= s
 		set.readOnly
 	}

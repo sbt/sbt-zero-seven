@@ -160,11 +160,11 @@ trait ScalaProject extends Project with FileTasks
 	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: => Seq[PackageOption]): Task =
 		fileTask("package", (outputDirectory / jarName) from sources)
 		{
-			import scala.collection.jcl.Map
+			import wrap.{MutableMapWrapper,Wrappers}
 			/** Copies the mappings in a2 to a1, mutating a1. */
 			def mergeAttributes(a1: Attributes, a2: Attributes)
 			{
-				for( (key, value) <- Map(a2))
+				for( (key, value) <- Wrappers.toList(a2))
 					a1.put(key, value)
 			}
 
@@ -177,13 +177,13 @@ trait ScalaProject extends Project with FileTasks
 					case JarManifest(mergeManifest) => 
 					{
 						mergeAttributes(manifest.getMainAttributes, mergeManifest.getMainAttributes)
-						val entryMap = Map(manifest.getEntries)
-						for((key, value) <- Map(mergeManifest.getEntries))
+						val entryMap = new MutableMapWrapper(manifest.getEntries)
+						for((key, value) <- Wrappers.toList(mergeManifest.getEntries))
 						{
 							entryMap.get(key) match
 							{
 								case Some(attributes) => mergeAttributes(attributes, value)
-								case None => entryMap.put(key, value)
+								case None => entryMap += (key, value)
 							}
 						}
 					}
