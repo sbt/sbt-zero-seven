@@ -12,7 +12,7 @@ import org.apache.ivy.{core, plugins, util, Ivy}
 import core.LogOptions
 import core.cache.DefaultRepositoryCacheManager
 import core.deliver.DeliverOptions
-import core.module.descriptor.{DefaultArtifact, DefaultDependencyDescriptor, DefaultModuleDescriptor, MDArtifact, ModuleDescriptor}
+import core.module.descriptor.{DefaultArtifact, DefaultDependencyDescriptor, DefaultModuleDescriptor, DependencyDescriptor, MDArtifact, ModuleDescriptor}
 import core.module.descriptor.{DefaultExcludeRule, ExcludeRule}
 import core.module.id.{ArtifactId,ModuleId, ModuleRevisionId}
 import core.publish.PublishOptions
@@ -335,13 +335,14 @@ object ManageDependencies
 		withIvy(config)(doClean)
 	}
 	/** Creates a Maven pom from the given Ivy configuration*/
-	def makePom(config: IvyConfiguration, extraDependencies: Iterable[ModuleID], output: File) =
+	def makePom(config: IvyConfiguration, extraDependencies: Iterable[ModuleID], configurations: Option[Iterable[Configuration]], output: File) =
 	{
 		def doMakePom(ivy: Ivy, md: ModuleDescriptor, default: String) =
 			Control.trapUnit("Could not make pom: ", config.log)
 			{
 				val module = addLateDependencies(ivy, md, default, extraDependencies)
-				PomModuleDescriptorWriter.write(module, DefaultConfigurationMapping, output)
+				val pomModule = keepConfigurations(module, configurations)
+				PomModuleDescriptorWriter.write(pomModule, DefaultConfigurationMapping, output)
 				config.log.info("Wrote " + output.getAbsolutePath)
 				None
 			}
@@ -360,8 +361,35 @@ object ManageDependencies
 		addDependencies(module, extraDependencies, parser)
 		module
 	}
-	private def addConfigurations(configurations: Option[Iterable[Configuration]], to: { def setConfs(c: Array[String]): AnyRef })
-		{ for(confs <- configurations) { to.setConfs(confs.map(_.name).toList.toArray) } }
+	private def getConfigurations(module: ModuleDescriptor, configurations: Option[Iterable[Configuration]]) =
+		configurations match
+		{
+			case Some(confs) => confs.map(_.name).toList.toArray
+			case None => module.getPublicConfigurationsNames
+		}
+	/** Retain dependencies only with the configurations given, or all public configurations of `module` if `configurations` is None.
+	* This is currently only preserves the information required by makePom*/
+	private def keepConfigurations(module: ModuleDescriptor, configurations: Option[Iterable[Configuration]]): ModuleDescriptor =
+	{
+		val keepConfigurations = getConfigurations(module, configurations)
+		val keepSet = Set(keepConfigurations.toSeq : _*)
+		def translate(dependency: DependencyDescriptor) =
+		{
+			val keep = dependency.getModuleConfigurations.filter(keepSet.contains)
+			if(keep.isEmpty)
+				None
+			else // TODO: translate the dependency to contain only configurations to keep
+				Some(dependency)
+		}
+		val newModule = new DefaultModuleDescriptor(module.getModuleRevisionId, "", null)
+		newModule.setHomePage(module.getHomePage)
+		for(dependency <- module.getDependencies; translated <- translate(dependency))
+			newModule.addDependency(translated)
+		newModule
+	}
+	private def addConfigurations(configurations: Iterable[String], to: { def setConfs(c: Array[String]): AnyRef }): Unit =
+		to.setConfs(configurations.toList.toArray)
+	
 	def deliver(ivyConfig: IvyConfiguration, updateConfig: UpdateConfiguration, status: String, deliverIvyPattern: String, extraDependencies: Iterable[ModuleID], configurations: Option[Iterable[Configuration]]) =
 	{
 		def doDeliver(ivy: Ivy, md: ModuleDescriptor, default: String) =
@@ -372,7 +400,7 @@ object ManageDependencies
 				{
 					val revID = module.getModuleRevisionId
 					val options = DeliverOptions.newInstance(ivy.getSettings).setStatus(status)
-					addConfigurations(configurations, options)
+					options.setConfs(getConfigurations(module, configurations))
 					
 					ivy.deliver(revID, revID.getRevision, deliverIvyPattern, options)
 					None
@@ -391,7 +419,7 @@ object ManageDependencies
 				srcArtifactPatterns.foreach(pattern => patterns.add(pattern))
 				val options = (new PublishOptions).setOverwrite(true)
 				deliveredIvyPattern.foreach(options.setSrcIvyPattern)
-				addConfigurations(configurations, options)
+				options.setConfs(getConfigurations(md, configurations))
 				ivy.publish(revID, patterns, resolverName, options)
 				None
 			}

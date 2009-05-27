@@ -142,9 +142,9 @@ trait ManagedProject extends ClasspathProject
 				ManageDependencies.deliver(ivyConf, updateConf, status, deliveredPattern, extraDependencies, configurations)
 			}
 		}
-	def makePomTask(output: => Path, extraDependencies: => Iterable[ModuleID], options: => Seq[ManagedOption]) =
+	def makePomTask(output: => Path, extraDependencies: => Iterable[ModuleID], configurations: => Option[Iterable[Configuration]], options: => Seq[ManagedOption]) =
 		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) =>
-			ManageDependencies.makePom(ivyConf, extraDependencies, output.asFile) })
+			ManageDependencies.makePom(ivyConf, extraDependencies, configurations, output.asFile) })
 		
 	def cleanCacheTask(managedDependencyPath: Path, options: => Seq[ManagedOption]) =
 		withIvyTask(withConfigurations("", managedDependencyPath, options) { (ivyConf, ignore) => ManageDependencies.cleanCache(ivyConf) })
@@ -340,7 +340,7 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 		interDependencies.readOnly
 	}
 	protected def deliverScalaDependencies: Iterable[ModuleID] = Nil
-	protected def makePomAction = makePomTask(pomPath, deliverProjectDependencies, updateOptions)
+	protected def makePomAction = makePomTask(pomPath, deliverProjectDependencies, None, updateOptions)
 	protected def deliverLocalAction = deliverTask(publishLocalConfiguration, deliverOptions)
 	protected def publishLocalAction = publishTask(publishLocalConfiguration, publishOptions) dependsOn(deliverLocal)
 	protected def publishLocalConfiguration = new DefaultPublishConfiguration("local", "release", true)
@@ -373,7 +373,7 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 			pathPatterns.map(_.relativePath)
 		}
 		def extraDependencies: Iterable[ModuleID] = Nil//deliverProjectDependencies
-		/**  The configurations to include in the publish/deliver action: specify none for all configurations. */
+		/**  The configurations to include in the publish/deliver action: specify none for all public configurations. */
 		def configurations: Option[Iterable[Configuration]] = None
 	}
 	
