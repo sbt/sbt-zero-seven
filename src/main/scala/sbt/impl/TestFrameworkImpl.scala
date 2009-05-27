@@ -96,9 +96,9 @@ private[sbt] class ScalaTestRunner(val log: Logger, val listeners: Seq[TestRepor
 			{
 				case Level.Error =>
 					if(report.message.trim.isEmpty)
-						fire(TypedErrorEvent(report.name, event, None)(result))
+						fire(TypedErrorEvent(report.name, event, None, report.throwable)(result))
 					else
-						fire(TypedErrorEvent(report.name, event, Some(report.message.trim))(result))
+						fire(TypedErrorEvent(report.name, event, Some(report.message.trim), report.throwable)(result))
 				case Level.Info =>
 					if(report.message.trim.isEmpty)
 						fire(TypedEvent(report.name, event, None)(result))
