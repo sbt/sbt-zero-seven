@@ -159,14 +159,15 @@ private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion
 		val newDefault = new ChainResolver
 		newDefault.setName("redefined-public")
 		newDefault.add(localResolver(settings.getDefaultIvyUserDir.getAbsolutePath))
+		newDefault.add(mavenLocal)
 		target match
 		{
 			case UpdateSbt =>
 				newDefault.add(sbtResolver(scalaVersion))
 				newDefault.add(mavenMainResolver)
 			case UpdateScala =>
-				newDefault.add(mavenResolver("Scala Tools Releases", "http://scala-tools.org/repo-releases"))
-				newDefault.add(mavenResolver("Scala Tools Snapshots", "http://scala-tools.org/repo-snapshots"))
+				newDefault.add(mavenResolver("Scala-Tools Maven2 Repository", "http://scala-tools.org/repo-releases"))
+				newDefault.add(mavenResolver("Scala-Tools Maven2 Snapshots Repository", "http://scala-tools.org/repo-snapshots"))
 		}
 		onDefaultRepositoryCacheManager(settings)(_.setUseOrigin(true))
 		settings.addResolver(newDefault)
@@ -188,6 +189,15 @@ private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion
 		resolver.setName("Sbt Repository")
 		resolver.addIvyPattern(pattern)
 		resolver.addArtifactPattern(pattern)
+		resolver
+	}
+	private def mavenLocal =
+	{
+		val localPattern = System.getProperty("user.home") + "/.m2/repository/[organisation]/[module]/[revision]/[artifact]-[revision](-[classifier]).[ext]"
+		val resolver = new FileSystemResolver
+		resolver.setName("Maven2 Local")
+		resolver.addArtifactPattern(localPattern)
+		resolver.setM2compatible(true)
 		resolver
 	}
 	/** Creates a maven-style resolver.*/
