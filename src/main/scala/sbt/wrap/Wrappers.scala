@@ -70,36 +70,40 @@ private[sbt] sealed abstract class Map[K,V] extends Iterable[(K,V)]
 {
 	def apply(key: K): V
 	def get(key: K): Option[V]
-	def getOrElse[V2 >: V](key: K, default: => V2): V2 = get(key).getOrElse(default)
+	final def getOrElse[V2 >: V](key: K, default: => V2): V2 =
+		get(key) match
+		{
+			case Some(value) => value
+			case None => default
+		}
 }
 private[sbt] sealed abstract class MapWrapper[K,V](val underlying: JMap[K,V]) extends Map[K,V]
 {
-	def apply(key: K) = underlying.get(key)
-	def get(key: K) =
+	final def apply(key: K) = underlying.get(key)
+	final def get(key: K) =
 	{
-		if(underlying.containsKey(key))
-			Some(underlying.get(key))
-		else
+		val value = underlying.get(key)
+		if(value == null)
 			None
+		else
+			Some(value)
 	}
-	def toList = Wrappers.toList(underlying)
+	final def toList = Wrappers.toList(underlying)
 }
 private[sbt] sealed class MutableMapWrapper[K,V](wrapped: JMap[K,V]) extends MapWrapper[K,V](wrapped) with Removable[K] with Addable[(K,V)]
 {
-	def getOrElseUpdate(key: K, default: => V): V =
-	{
-		if(underlying.containsKey(key))
-			underlying.get(key)
-		else
+	final def getOrElseUpdate(key: K, default: => V): V =
+		get(key) match
 		{
-			val newValue = default
-			underlying.put(key, newValue)
-			newValue
+			case Some(value) => value
+			case None =>
+				val newValue = default
+				underlying.put(key, newValue)
+				newValue
 		}
-	}
-	def update(key: K, value: V) { underlying.put(key, value) }
-	def +=(pair: (K, V) ) { update(pair._1, pair._2) }
-	def -=(key: K) { underlying.remove(key) }
-	def readOnly: Map[K,V] = this
+	final def update(key: K, value: V) { underlying.put(key, value) }
+	final def +=(pair: (K, V) ) { update(pair._1, pair._2) }
+	final def -=(key: K) { underlying.remove(key) }
+	final def readOnly: Map[K,V] = this
 }
 private[sbt] final class IdentityHashMap[K,V] extends MutableMapWrapper(new java.util.IdentityHashMap[K,V])

@@ -1,9 +1,9 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah
+ * Copyright 2008, 2009 Mark Harrah
  */
 package sbt
 
-abstract class CompilerCore
+sealed abstract class CompilerCore
 {
 	val ClasspathOptionString = "-classpath"
 	val OutputOptionString = "-d"
@@ -72,11 +72,54 @@ abstract class CompilerCore
 	}
 	private def failure = Some(actionUnsuccessfulMessage)
 }
+
+
+sealed abstract class CompilerBase extends CompilerCore
+{
+	def actionStartMessage(label: String) = "Compiling " + label + " sources..."
+	val actionNothingToDoMessage = "Nothing to compile."
+	val actionSuccessfulMessage = "Compilation successful."
+	val actionUnsuccessfulMessage = "Compilation unsuccessful."
+}
+final class ForkCompile(config: ForkScalaCompiler) extends CompilerBase
+{
+	import java.io.File
+	protected def process(arguments: List[String], log: Logger) =
+		Fork.scalac(config.javaHome, config.compileJVMOptions, config.scalaJars, arguments, log) == 0
+	override protected def processJava(args: List[String], log: Logger) =
+		Fork.javac(config.javaHome, args, log) == 0
+}
+object ForkCompile
+{
+	def apply(config: ForkScalaCompiler, conditional: CompileConditional) =
+	{
+		import conditional.config.{classpath, javaOptions, label, log, options, outputDirectory, sources}
+		// recompile only if any sources were modified after any classes or no classes exist
+		val sourcePaths = sources.get
+		val newestSource = (0L /: sourcePaths)(_ max _.lastModified)
+		val products = (outputDirectory  ** GlobFilter("*.class")).get
+		val oldestClass = (java.lang.Long.MAX_VALUE /: products)(_ min _.lastModified)
+		if(products.isEmpty || newestSource > oldestClass)
+		{
+			// full recompile, since we are not doing proper dependency tracking
+			FileUtilities.clean(outputDirectory :: Nil, log)
+			val compiler = new ForkCompile(config)
+			FileUtilities.createDirectory(outputDirectory.asFile, log)
+			compiler(label, sourcePaths, Path.makeString(classpath.get), outputDirectory, options, javaOptions, log)
+		}
+		else
+		{
+			log.info("Compilation up to date.")
+			None
+		}
+	}
+}
+
 // The following code is based on scala.tools.nsc.Main and scala.tools.nsc.ScalaDoc
 // Copyright 2005-2008 LAMP/EPFL
 // Original author: Martin Odersky
-	
-object Compile extends CompilerCore
+
+object Compile extends CompilerBase
 {
 	protected def process(arguments: List[String], log: Logger) =
 	{
@@ -97,11 +140,6 @@ object Compile extends CompilerCore
 	}
 	override protected def processJava(args: List[String], log: Logger) =
 		(Process("javac", args) ! log) == 0
-	
-	def actionStartMessage(label: String) = "Compiling " + label + " sources..."
-	val actionNothingToDoMessage = "Nothing to compile."
-	val actionSuccessfulMessage = "Compilation successful."
-	val actionUnsuccessfulMessage = "Compilation unsuccessful."
 }
 object Scaladoc extends CompilerCore
 {
@@ -139,7 +177,7 @@ object Scaladoc extends CompilerCore
 // The following code is based on scala.tools.nsc.reporters.{AbstractReporter, ConsoleReporter}
 // Copyright 2002-2008 LAMP/EPFL
 // Original author: Martin Odersky
-class LoggerReporter(log: Logger) extends scala.tools.nsc.reporters.Reporter
+final class LoggerReporter(log: Logger) extends scala.tools.nsc.reporters.Reporter
 {
 	import scala.tools.nsc.util.{FakePos,Position}
 	private val positions = new scala.collection.mutable.HashMap[Position, Severity]

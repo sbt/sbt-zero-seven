@@ -88,16 +88,20 @@ trait ScalaProject extends Project with FileTasks
 	}
 
 	def consoleTask(classpath : PathFinder): Task = 
-		interactiveTask { Run.console(classpath.get, log) }
+		consoleTask(classpath, Run)
+	def consoleTask(classpath : PathFinder, runner: ScalaRun): Task =
+		interactiveTask { runner.console(classpath.get, log) }
 
 	def runTask(mainClass: => Option[String], classpath: PathFinder, options: String*): Task =
 		runTask(mainClass, classpath, options)
 	def runTask(mainClass: => Option[String], classpath: PathFinder, options: => Seq[String]): Task =
+		runTask(mainClass, classpath, options, Run)
+	def runTask(mainClass: => Option[String], classpath: PathFinder, options: => Seq[String], runner: ScalaRun): Task =
 		task
 		{
 			mainClass match
 			{
-				case Some(main) => Run.run(main, classpath.get, options, log)
+				case Some(main) => runner.run(main, classpath.get, options, log)
 				case None => Some("No main class specified.")
 			}
 		}
@@ -264,7 +268,7 @@ trait ScalaProject extends Project with FileTasks
 				if(includeTests.isEmpty && testFilters.isEmpty) options
 				else TestFilter(test => includeTestsSet.contains(test) || testFilters.exists(_.accept(test))) :: options.toList
 			toRun(newOptions)
-		} completeWith testAnalysis.allTests.map(_.testClassName)
+		} completeWith testAnalysis.allTests.map(_.testClassName).toList
 }
 trait WebScalaProject extends ScalaProject
 {

@@ -11,8 +11,36 @@ import scala.tools.nsc.util.ClassPath
 import java.io.File
 import java.net.{URL, URLClassLoader}
 
+trait ScalaRun
+{
+	def console(classpath: Iterable[Path], log: Logger): Option[String]
+	def run(mainClass: String, classpath: Iterable[Path], options: Seq[String], log: Logger): Option[String]
+}
+class ForkRun(config: ForkScalaRun) extends ScalaRun
+{
+	def console(classpath: Iterable[Path], log: Logger): Option[String] =
+	{
+		error("Forking the interpreter is not implemented.")
+		//val exitCode = Fork.scala(config.javaHome, config.runJVMOptions, config.scalaJars, classpathOption(classpath), log)
+		//processExitCode(exitCode, "interpreter")
+	}
+	def run(mainClass: String, classpath: Iterable[Path], options: Seq[String], log: Logger): Option[String] =
+	{
+		val exitCode = Fork.scala(config.javaHome, config.runJVMOptions, config.scalaJars, classpathOption(classpath) ::: mainClass :: options.toList, log)
+		processExitCode(exitCode, "runner")
+	}
+	private def classpathOption(classpath: Iterable[Path]) = "-cp" :: Path.makeString(classpath) :: Nil
+	private def processExitCode(exitCode: Int, label: String) =
+	{
+		if(exitCode == 0)
+			None
+		else
+			Some("Nonzero exit code returned from " + label + ": " + exitCode)
+	}
+}
+
 /** This module is an interface to starting the scala interpreter or runner.*/
-object Run
+object Run extends ScalaRun
 {
 	/** Starts an interactive scala interpreter session with the given classpath.*/
 	def console(classpath: Iterable[Path], log: Logger) =

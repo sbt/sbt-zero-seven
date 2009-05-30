@@ -194,7 +194,7 @@ abstract class CompileConfiguration extends NotNull
 	def testDefinitionClassNames: Iterable[String]
 }
 import java.io.File
-class CompileConditional(config: CompileConfiguration) extends Conditional[Path, Path, File]
+class CompileConditional(val config: CompileConfiguration) extends Conditional[Path, Path, File]
 {
 	import config._
 	type AnalysisType = CompileAnalysis

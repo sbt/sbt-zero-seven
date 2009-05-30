@@ -237,12 +237,31 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		def javaOptions = javaOptionsAsString(testJavaCompileOptions)
 	}
 	
-	protected def compileAction = task { mainCompileConditional.run } describedAs MainCompileDescription
-	protected def testCompileAction = task { testCompileConditional.run } dependsOn compile describedAs TestCompileDescription
+	/** Configures forking the compiler and runner.  Use ForkScalaCompiler, ForkScalaRun or mix together.*/
+	def fork: Option[ForkScala] = None
+	private def doCompile(conditional: CompileConditional) =
+	{
+		fork match
+		{
+			case Some(fc: ForkScalaCompiler) => ForkCompile(fc, conditional)
+			case _ => conditional.run
+		}
+	}
+	private def getRunner =
+	{
+		fork match
+		{
+			case Some(fr: ForkScalaRun) => new ForkRun(fr)
+			case _ => Run
+		}
+	}
+	
+	protected def compileAction = task { doCompile(mainCompileConditional) } describedAs MainCompileDescription
+	protected def testCompileAction = task { doCompile(testCompileConditional) } dependsOn compile describedAs TestCompileDescription
 	protected def cleanAction = cleanTask(outputPath, cleanOptions) describedAs CleanDescription
-	protected def runAction = task { args => runTask(getMainClass(true), runClasspath, args) dependsOn(compile) } describedAs RunDescription
-	protected def consoleQuickAction = consoleTask(consoleClasspath) describedAs ConsoleQuickDescription
-	protected def consoleAction = consoleTask(consoleClasspath).dependsOn(testCompile) describedAs ConsoleDescription
+	protected def runAction = task { args => runTask(getMainClass(true), runClasspath, args, getRunner) dependsOn(compile) } describedAs RunDescription
+	protected def consoleQuickAction = consoleTask(consoleClasspath, getRunner) describedAs ConsoleQuickDescription
+	protected def consoleAction = consoleTask(consoleClasspath, getRunner).dependsOn(testCompile) describedAs ConsoleDescription
 	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
 	protected def docTestAction = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions).dependsOn(testCompile) describedAs TestDocDescription
 	protected def testAction = defaultTestTask(testOptions)
