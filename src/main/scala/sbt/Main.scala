@@ -175,7 +175,7 @@ object Main
 	* by a project.*/
 	protected def interactiveCommands: Iterable[String] = basicCommands.toList ++ logLevels.toList
 	/** The list of logging levels.*/
-	private def logLevels: Iterable[String] = TreeSet.empty[String] ++ Level.elements.map(_.toString)
+	private def logLevels: Iterable[String] = TreeSet.empty[String] ++ Level.levels.map(_.toString)
 	/** The list of all interactive commands other than logging level.*/
 	private def basicCommands: Iterable[String] = TreeSet(ShowProjectsAction, ShowActions, ShowCurrent, HelpAction,
 		RebootCommand, ReloadAction, TraceCommand, ContinuousCompileCommand, ProjectConsoleAction)
@@ -195,7 +195,6 @@ object Main
 			val methodCompletions = for( (name, method) <- project.methods) yield (name, method.completions)
 			reader.setVariableCompletions(project.taskNames, project.propertyNames, methodCompletions)
 		}
-		updateTaskCompletions(baseProject)
 		
 		/** Prompts the user for the next command using 'currentProject' as context.
 		* If the command indicates that the user wishes to terminate or reload the session,
@@ -204,6 +203,7 @@ object Main
 		*   (tail recursively) to prompt for the next command. */
 		def loop(currentProject: Project): RunCompleteAction =
 		{
+			updateTaskCompletions(baseProject) // this is done after every command because the completions could change due to the action invoked
 			reader.readLine("> ") match
 			{
 				case Some(line) =>
@@ -289,7 +289,7 @@ object Main
 		printCommonCommands()
 		printCmd(ReloadAction, "Reloads sbt, recompiling modified project definitions if necessary.")
 		printCmd(ShowCurrent, "Shows the current project and logging level of that project.")
-		printCmd(Level.elements.mkString(", "), "Set logging for the current project to the specified level.")
+		printCmd(Level.levels.mkString(", "), "Set logging for the current project to the specified level.")
 		printCmd(TraceCommand, "Toggles whether logging stack traces is enabled.")
 		printCmd(ProjectAction + " <project name>", "Sets the currently active project.")
 		printCmd(ShowProjectsAction, "Shows all available projects.")

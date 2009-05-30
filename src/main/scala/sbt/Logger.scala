@@ -328,8 +328,10 @@ object Level extends Enumeration with NotNull
 	* label is also defined here. */
 	val SuccessLabel = "success"
 	
+	// added because elements was renamed to iterator in 2.8.0 nightly
+	def levels = Debug :: Info :: Warn :: Error :: Nil
 	/** Returns the level with the given name wrapped in Some, or None if no level exists for that name. */
-	def apply(s: String) = elements.find(s == _.toString)
+	def apply(s: String) = levels.find(s == _.toString)
 	/** Same as apply, defined for use in pattern matching. */
 	private[sbt] def unapply(s: String) = apply(s)
 }

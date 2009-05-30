@@ -511,7 +511,7 @@ trait ReflectiveLibraryDependencies extends ManagedProject
 {
 	def excludeIDs: Iterable[ModuleID] = projectID :: Nil
 	def libraryDependencies: Set[ModuleID] = reflectiveLibraryDependencies
-	def reflectiveLibraryDependencies : Set[ModuleID] = Set(Reflective.reflectiveMappings[ModuleID](this).values.toList: _*) -- excludeIDs
+	def reflectiveLibraryDependencies : Set[ModuleID] = Set[ModuleID](Reflective.reflectiveMappings[ModuleID](this).values.toList: _*) -- excludeIDs
 }
 
 trait ReflectiveConfigurations extends Project
@@ -540,7 +540,7 @@ trait ReflectiveRepositories extends Project
 {
 	def repositories: Set[Resolver] =
 	{
-		val reflective = Set(reflectiveRepositories.values.toList: _*)
+		val reflective = Set[Resolver](reflectiveRepositories.values.toList: _*)
 		info.parent match
 		{
 			case Some(p: ReflectiveRepositories) => p.repositories ++ reflective
