@@ -27,7 +27,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 	// the list of all configurations cross-compile supports
 	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_8_0 :: Nil
 	// the list of configurations to actually build against
-	private val buildConfigurations = allConfigurations //conf_2_8_0 :: Nil
+	private val buildConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: Nil//allConfigurations not currently used because of issues with 2.8.0
 	private def buildConfigurationNames = buildConfigurations.map(_.toString)
 
 	/* Methods to derive the configuration name from the base name 'v'.*/
@@ -167,7 +167,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 			
 			// The libraries to compile sbt against
 			val classpath = fullClasspath(config(version)) +++ optionalClasspath(version)
-			val sources: List[String] = pathListStrings(mainSources.get)
+			val sources: List[String] = pathListStrings(mainSources)
 			val compilerOptions = List("-cp", concatPaths(classpath), "-d", classes.toString)
 			val compilerArguments: List[String] = compilerOptions ::: sources
 			
@@ -180,7 +180,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 			else
 				Some("Nonzero exit value (" + exitValue + ") when calling scalac " + version + " with options: \n" + compilerOptions.mkString(" "))
 		}
-	private def concatPaths(p: PathFinder): String = pathListStrings(p.get).mkString(File.pathSeparator)
-	private def pathListStrings(p: Iterable[Path]): List[String] = p.map(_.asFile.getAbsolutePath).toList
+	private def concatPaths(p: PathFinder): String = Path.makeString(p.get)
+	private def pathListStrings(p: PathFinder): List[String] = p.get.map(_.absolutePath).toList
 	private def classesPath(scalaVersion: String) = ("target"  / ("classes-" + scalaVersion)) ##
 }
