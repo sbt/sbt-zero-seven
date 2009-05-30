@@ -259,16 +259,16 @@ object Configurations
 	private[sbt] def removeDuplicates(configs: Iterable[Configuration]) = Set(scala.collection.mutable.Map(configs.map(config => (config.name, config)).toSeq: _*).values.toList: _*)
 }
 /** Represents an Ivy configuration. */
-final class Configuration(val name: String, val description: String, val isPublic: Boolean, val extendsConfigs: List[Configuration], val transitive: Boolean) extends NotNull
+final case class Configuration(name: String, description: String, isPublic: Boolean, extendsConfigs: List[Configuration], transitive: Boolean) extends NotNull
 {
 	require(name != null && !name.isEmpty)
 	require(description != null)
 	def this(name: String) = this(name, "", true, Nil, true)
-	def describedAs(newDescription: String) = new Configuration(name, newDescription, isPublic, extendsConfigs, transitive)
-	def extend(configs: Configuration*) = new Configuration(name, description, isPublic, configs.toList ::: extendsConfigs, transitive)
+	def describedAs(newDescription: String) = Configuration(name, newDescription, isPublic, extendsConfigs, transitive)
+	def extend(configs: Configuration*) = Configuration(name, description, isPublic, configs.toList ::: extendsConfigs, transitive)
 	def notTransitive = intransitive
-	def intransitive = new Configuration(name, description, isPublic, extendsConfigs, false)
-	def hide = new Configuration(name, description, false, extendsConfigs, transitive)
+	def intransitive = Configuration(name, description, isPublic, extendsConfigs, false)
+	def hide = Configuration(name, description, false, extendsConfigs, transitive)
 	override def toString = name
 }
 

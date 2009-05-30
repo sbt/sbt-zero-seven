@@ -24,14 +24,15 @@ trait TaskManager{
 	/** A method task is an action that has parameters.  Note that it is not a Task, though,
 	* because it requires arguments to perform its work.  It therefore cannot be a dependency of
 	* a Task..*/
-	final class MethodTask(val description: Option[String], action: Array[String] => ManagedTask, val completions: List[String]) extends Described
+	final class MethodTask(val description: Option[String], action: Array[String] => ManagedTask, getCompletions: => Seq[String]) extends Described
 	{
 		/** Creates a new method task, identical to this method task, except with thE[String]e given description.*/
-		def describedAs(description : String) = new MethodTask(Some(description), action, completions)
+		def describedAs(description : String) = new MethodTask(Some(description), action, getCompletions)
 		/** Invokes this method task with the given arguments.*/
 		def apply(arguments: Array[String]) = action(arguments)
 		def manager: ManagerType = TaskManager.this
-		def completeWith(add: Iterable[String]) = new MethodTask(description, action, (add ++ completions).toList)
+		def completeWith(add: => Seq[String]) = new MethodTask(description, action, add)
+		def completions = getCompletions
 	}
 	
 	sealed class Task(val explicitName: Option[String], val description : Option[String], val dependencies : List[ManagedTask],
