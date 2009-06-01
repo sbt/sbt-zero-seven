@@ -119,13 +119,13 @@ object ForkCompile
 // Copyright 2005-2008 LAMP/EPFL
 // Original author: Martin Odersky
 
-object Compile extends CompilerBase
+final class Compile(maximumErrors: Int) extends CompilerBase
 {
 	protected def process(arguments: List[String], log: Logger) =
 	{
 		import scala.tools.nsc.{CompilerCommand, FatalError, Global, Settings, reporters, util}
 		import util.FakePos
-		var reporter = new LoggerReporter(log)
+		var reporter = new LoggerReporter(maximumErrors, log)
 		val settings = new Settings(reporter.error)
 		val command = new CompilerCommand(arguments, settings, error, false)
 		
@@ -141,13 +141,13 @@ object Compile extends CompilerBase
 	override protected def processJava(args: List[String], log: Logger) =
 		(Process("javac", args) ! log) == 0
 }
-object Scaladoc extends CompilerCore
+final class Scaladoc(maximumErrors: Int) extends CompilerCore
 {
 	protected def process(arguments: List[String], log: Logger) =
 	{
 		import scala.tools.nsc.{doc, CompilerCommand, FatalError, Global, reporters, util}
 		import util.FakePos
-		val reporter = new LoggerReporter(log)
+		val reporter = new LoggerReporter(maximumErrors, log)
 		val docSettings: doc.Settings = new doc.Settings(reporter.error)
 		val command = new CompilerCommand(arguments, docSettings, error, false)
 		object compiler extends Global(command.settings, reporter)
@@ -177,7 +177,7 @@ object Scaladoc extends CompilerCore
 // The following code is based on scala.tools.nsc.reporters.{AbstractReporter, ConsoleReporter}
 // Copyright 2002-2008 LAMP/EPFL
 // Original author: Martin Odersky
-final class LoggerReporter(log: Logger) extends scala.tools.nsc.reporters.Reporter
+final class LoggerReporter(maximumErrors: Int, log: Logger) extends scala.tools.nsc.reporters.Reporter
 {
 	import scala.tools.nsc.util.{FakePos,Position}
 	private val positions = new scala.collection.mutable.HashMap[Position, Severity]
@@ -195,7 +195,7 @@ final class LoggerReporter(log: Logger) extends scala.tools.nsc.reporters.Report
 	def display(pos: Position, msg: String, severity: Severity)
 	{
 		severity.count += 1
-		if(severity != ERROR || severity.count <= LoggerReporter.ErrorLimit)
+		if(severity != ERROR || maximumErrors < 0 || severity.count <= maximumErrors)
 			print(severityToLevel(severity), pos, msg)
 	}
 	private def severityToLevel(severity: Severity): Level.Value =
@@ -264,8 +264,4 @@ final class LoggerReporter(log: Logger) extends scala.tools.nsc.reporters.Report
 			false
 		}
 	}
-}
-object LoggerReporter
-{
-	val ErrorLimit = 100
 }

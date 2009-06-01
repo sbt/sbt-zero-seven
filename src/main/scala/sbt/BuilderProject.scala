@@ -73,6 +73,7 @@ final class BuilderProject(val info: ProjectInfo, override protected val logImpl
 			def log = BuilderProject.this.log
 			def options = compileOptions.map(_.asString)
 			def javaOptions = javaCompileOptions
+			def maxErrors = ScalaProject.DefaultMaximumCompileErrors
 		}
 		
 	def projectDefinition: Either[String, Option[String]] =

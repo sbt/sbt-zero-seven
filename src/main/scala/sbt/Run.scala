@@ -21,12 +21,13 @@ class ForkRun(config: ForkScalaRun) extends ScalaRun
 	def console(classpath: Iterable[Path], log: Logger): Option[String] =
 	{
 		error("Forking the interpreter is not implemented.")
-		//val exitCode = Fork.scala(config.javaHome, config.runJVMOptions, config.scalaJars, classpathOption(classpath), log)
+		//val exitCode = Fork.scala(config.javaHome, config.runJVMOptions, config.scalaJars, classpathOption(classpath), config.workingDirectory, log)
 		//processExitCode(exitCode, "interpreter")
 	}
 	def run(mainClass: String, classpath: Iterable[Path], options: Seq[String], log: Logger): Option[String] =
 	{
-		val exitCode = Fork.scala(config.javaHome, config.runJVMOptions, config.scalaJars, classpathOption(classpath) ::: mainClass :: options.toList, log)
+		val scalaOptions = classpathOption(classpath) ::: mainClass :: options.toList
+		val exitCode = Fork.scala(config.javaHome, config.runJVMOptions, config.scalaJars, scalaOptions, config.workingDirectory, log)
 		processExitCode(exitCode, "runner")
 	}
 	private def classpathOption(classpath: Iterable[Path]) = "-cp" :: Path.makeString(classpath) :: Nil

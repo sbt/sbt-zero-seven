@@ -71,7 +71,7 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 		def outputDirectory = integrationTestCompilePath
 		def classpath = integrationTestClasspath
 		def analysisPath = integrationTestAnalysisPath
-		def options = optionsAsString(integrationTestCompileOptions)
+		def baseCompileOptions = integrationTestCompileOptions
 		def javaOptions = javaOptionsAsString(javaCompileOptions)
 		def testDefinitionClassNames = integrationTestFrameworks.map(_.testSuperClassName)
 	}

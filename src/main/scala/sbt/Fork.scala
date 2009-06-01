@@ -51,7 +51,7 @@ object Fork
 		{
 			val executable = javaCommand(javaHome, commandName).getAbsolutePath
 			val command = (executable :: options.toList).toArray
-			log.debug("Forking java process: " + command.mkString(" "))
+			log.debug("Forking java process: " + command.mkString(" ") + workingDirectory.map("\n\tin " + _.getAbsolutePath).getOrElse(""))
 			val builder = new JProcessBuilder(command : _*)
 			workingDirectory.foreach(wd => builder.directory(wd))
 			val environment = builder.environment

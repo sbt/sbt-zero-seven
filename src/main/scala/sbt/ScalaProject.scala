@@ -16,6 +16,8 @@ trait ScalaProject extends Project with FileTasks
 	
 	case class CompileOption(val asString: String) extends ActionOption
 	case class JavaCompileOption(val asString: String) extends ActionOption
+	final case class MaxCompileErrors(val value: Int) extends CompileOption("") with ScaladocOption { def asList = Nil }
+	
 	trait PackageOption extends ActionOption
 	trait TestOption extends ActionOption
 	trait CleanOption extends ActionOption
@@ -156,7 +158,9 @@ trait ScalaProject extends Project with FileTasks
 		task
 		{
 			val classpathString = Path.makeString(classpath.get)
-			Scaladoc(label, sources.get, classpathString, outputDirectory, options.flatMap(_.asList), log)
+			val optionsLocal = options
+			val maxErrors = maximumErrors(optionsLocal)
+			(new Scaladoc(maxErrors))(label, sources.get, classpathString, outputDirectory, optionsLocal.flatMap(_.asList), log)
 		}
 
 	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: PackageOption*): Task =
@@ -269,6 +273,9 @@ trait ScalaProject extends Project with FileTasks
 				else TestFilter(test => includeTestsSet.contains(test) || testFilters.exists(_.accept(test))) :: options.toList
 			toRun(newOptions)
 		} completeWith testAnalysis.allTests.map(_.testClassName).toList
+		
+	protected final def maximumErrors[T <: ActionOption](options: Seq[T]) =
+		(for( MaxCompileErrors(maxErrors) <- options) yield maxErrors).firstOption.getOrElse(DefaultMaximumCompileErrors)
 }
 trait WebScalaProject extends ScalaProject
 {
@@ -323,9 +330,10 @@ trait WebScalaProject extends ScalaProject
 }
 object ScalaProject
 {
+	val DefaultMaximumCompileErrors = 100
 	val AnalysisDirectoryName = "analysis"
 	val MainClassKey = "Main-Class"
 	val TestResourcesProperty = "sbt.test.resources"
-	def optionsAsString(options: Seq[ScalaProject#CompileOption]) = options.map(_.asString)
+	def optionsAsString(options: Seq[ScalaProject#CompileOption]) = options.map(_.asString).filter(!_.isEmpty)
 	def javaOptionsAsString(options: Seq[ScalaProject#JavaCompileOption]) = options.map(_.asString)
 }

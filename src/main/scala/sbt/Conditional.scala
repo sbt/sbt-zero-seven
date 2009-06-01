@@ -192,6 +192,7 @@ abstract class CompileConfiguration extends NotNull
 	def options: Seq[String]
 	def javaOptions: Seq[String]
 	def testDefinitionClassNames: Iterable[String]
+	def maxErrors: Int
 }
 import java.io.File
 class CompileConditional(val config: CompileConfiguration) extends Conditional[Path, Path, File]
@@ -296,7 +297,7 @@ class CompileConditional(val config: CompileConfiguration) extends Conditional[P
 		val id = AnalysisCallback.register(analysisCallback)
 		val allOptions = (("-Xplugin:" + FileUtilities.sbtJar.getCanonicalPath) ::
 			("-P:sbt-analyzer:callback:" + id.toString) :: Nil) ++ options
-		val r = Compile(label, dirtySources, classpathString, outputDirectory, allOptions, javaOptions, log)
+		val r = (new Compile(config.maxErrors))(label, dirtySources, classpathString, outputDirectory, allOptions, javaOptions, log)
 		AnalysisCallback.unregister(id)
 		if(log.atLevel(Level.Debug))
 		{

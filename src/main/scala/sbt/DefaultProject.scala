@@ -213,27 +213,31 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	{
 		def log = BasicScalaProject.this.log
 		def projectPath = info.projectPath
+		def baseCompileOptions: Seq[CompileOption]
+		lazy val localBaseOptions = baseCompileOptions
+		def options = optionsAsString(localBaseOptions.filter(!_.isInstanceOf[MaxCompileErrors]))
+		def maxErrors = maximumErrors(localBaseOptions)
 	}
 	class MainCompileConfig extends BaseCompileConfig
 	{
+		def baseCompileOptions = compileOptions
 		def label = mainLabel
 		def sources = mainSources
 		def outputDirectory = mainCompilePath
 		def classpath = compileClasspath
 		def analysisPath = mainAnalysisPath
 		def testDefinitionClassNames = Nil
-		def options = optionsAsString(compileOptions)
 		def javaOptions = javaOptionsAsString(javaCompileOptions)
 	}
 	class TestCompileConfig extends BaseCompileConfig
 	{
+		def baseCompileOptions = testCompileOptions
 		def label = testLabel
 		def sources = testSources
 		def outputDirectory = testCompilePath
 		def classpath = testClasspath
 		def analysisPath = testAnalysisPath
 		def testDefinitionClassNames = testFrameworks.map(_.testSuperClassName)
-		def options = optionsAsString(testCompileOptions)
 		def javaOptions = javaOptionsAsString(testJavaCompileOptions)
 	}
 	
