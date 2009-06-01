@@ -12,7 +12,7 @@ trait Dag[Node <: Dag[Node]]{
 
 	def topologicalSort = {
 		val discovered = new mutable.HashSet[Node];
-		val finished = new wrap.MutableSetWrapper(new java.util.LinkedHashSet[Node]);
+		val finished = new scala.collection.jcl.LinkedHashSet[Node]//new wrap.MutableSetWrapper(new java.util.LinkedHashSet[Node]);
 
 		def visit(dag : Node){
 			if (!discovered(dag)) {
