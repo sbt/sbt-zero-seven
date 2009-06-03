@@ -14,6 +14,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 	private val version2_7_2 = "2.7.2"
 	private val version2_7_3 = "2.7.3"
 	private val version2_7_4 = "2.7.4"
+	private val version2_7_5 = "2.7.5"
 	private val version2_8_0 = "2.8.0-SNAPSHOT"
 	private val base = "base"
 
@@ -25,9 +26,9 @@ abstract class CrossCompileProject extends BasicScalaProject
 	private val conf_2_7_4 = config(version2_7_4)
 	private val conf_2_8_0 = config(version2_8_0)
 	// the list of all configurations cross-compile supports
-	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_8_0 :: Nil
+	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_7_5 :: conf_2_8_0 :: Nil
 	// the list of configurations to actually build against
-	private val buildConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: Nil//allConfigurations not currently used because of issues with 2.8.0
+	private val buildConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_7_5 :: Nil//allConfigurations not currently used because of issues with 2.8.0
 	private def buildConfigurationNames = buildConfigurations.map(_.toString)
 
 	/* Methods to derive the configuration name from the base name 'v'.*/
@@ -68,6 +69,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 			{ variableDependencies(conf_2_7_2, /*ScalaTest*/"0.9.3", /*Specs*/"1.4.0", false) }
 			{ variableDependencies(conf_2_7_3, /*ScalaTest*/"0.9.4", /*Specs*/"1.4.3", true) }
 			{ variableDependencies(conf_2_7_4, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.3", true) }
+			{ variableDependencies(conf_2_7_5, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.3", true) }
 			{ variableDependencies(conf_2_8_0, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.3", true) }
 		</dependencies>)
 
@@ -149,8 +151,11 @@ abstract class CrossCompileProject extends BasicScalaProject
 	{
 		val classes = classesPath(scalaVersion) ** "*"
 		val jarName = crossJarName(scalaVersion)
-		packageTask(classes +++ mainResources, outputPath, jarName, packageOptions).dependsOn(compileForScala(scalaVersion))
+		val packageActionName = crossActionName("package", scalaVersion)
+		val compileAction = compileForScala(scalaVersion) named(crossActionName("compile", scalaVersion))
+		packageTask(classes +++ mainResources, outputPath, jarName, packageOptions) dependsOn(compileAction) named(packageActionName)
 	}
+	private def crossActionName(base: String, scalaVersion: String) = base + " [ " + scalaVersion + " ] "
 	private def crossJarName(scalaVersion: String) = sbt(scalaVersion) + "-" + version.toString +  ".jar"
 	// This creates a task that compiles sbt against the given version of scala.  Classes are put in classes-<scalaVersion>.
 	private def compileForScala(version: String)=
