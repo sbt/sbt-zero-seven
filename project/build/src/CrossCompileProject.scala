@@ -14,6 +14,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 	private val version2_7_2 = "2.7.2"
 	private val version2_7_3 = "2.7.3"
 	private val version2_7_4 = "2.7.4"
+	private val version2_7_5 = "2.7.5"
 	//private val version2_8_0 = "2.8.0-SNAPSHOT"
 	private val base = "base"
 
@@ -23,9 +24,10 @@ abstract class CrossCompileProject extends BasicScalaProject
 	private val conf_2_7_2 = config(version2_7_2)
 	private val conf_2_7_3 = config(version2_7_3)
 	private val conf_2_7_4 = config(version2_7_4)
+	private val conf_2_7_5 = config(version2_7_5)
 	//private val conf_2_8_0 = config(version2_8_0)
 	// the list of all configurations to cross-compile against
-	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: /*conf_2_8_0 :: */Nil
+	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_7_5 :: /*conf_2_8_0 :: */Nil
 	// the names of all configurations to cross-compile against
 	private val allConfigurationsNames = allConfigurations.map(_.toString)
 
@@ -67,6 +69,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 			{ variableDependencies(version2_7_2, /*ScalaTest*/"0.9.3", /*Specs*/"1.4.0", false) }
 			{ variableDependencies(version2_7_3, /*ScalaTest*/"0.9.4", /*Specs*/"1.4.3", true) }
 			{ variableDependencies(version2_7_4, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.3", true) }
+			{ variableDependencies(version2_7_5, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.3", true) }
 			<!--{ variableDependencies(version2_8_0, /*ScalaTest*/"0.9.5", /*Specs*/"1.4.3", true) }-->
 		</dependencies>)
 
