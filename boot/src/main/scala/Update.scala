@@ -101,7 +101,12 @@ private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion
 		if(cleanExisting)
 		{
 			val sbtID = createID(SbtOrg, SbtModuleName, sbtVersion)
-			onDefaultRepositoryCacheManager(settings)( _.getIvyFileInCache(sbtID).delete )
+			onDefaultRepositoryCacheManager(settings) { cache =>
+				val ivyFile = cache.getIvyFileInCache(sbtID)
+				ivyFile.delete()
+				val original = new File(ivyFile.getParentFile, ivyFile.getName + ".original")
+				original.delete()
+			}
 		}
 		resolve(settings, eventManager, moduleID)
 		retrieve(settings, eventManager, moduleID, target)

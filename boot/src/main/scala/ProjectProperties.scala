@@ -48,7 +48,7 @@ private object ProjectProperties
 	/** The default version of sbt when the user doesn't explicitly specify a version when prompted.*/
 	val DefaultSbtVersion = "0.4.6"
 	/** The default version of Scala when the user doesn't explicitly specify a version when prompted.*/
-	val DefaultScalaVersion = "2.7.4"
+	val DefaultScalaVersion = "2.7.5"
 
 	// (scala version, sbt version)
 	def apply(file: File, setInitializeProject: Boolean): (String, String) = applyImpl(file, setInitializeProject, Nil)
