@@ -255,3 +255,4 @@ src/test/scala/sbt/ProcessSpecification.scala -text
 src/test/scala/sbt/ReflectSpecification.scala -text
 src/test/scala/sbt/TestedProcess.scala -text
 src/test/scala/sbt/VersionSpecification.scala -text
+src/test/scala/sbt/wrap/MutableSetWrapper.scala -text
