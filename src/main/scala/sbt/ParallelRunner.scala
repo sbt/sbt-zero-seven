@@ -3,6 +3,24 @@
  */
 package sbt
 
+/** This file provides the parallel execution engine of sbt.  It is a fairly general module, with pluggable Schedulers and Strategies.
+*
+* There are three main componenets to the engine: Distributors, Schedulers, and Strategies.
+*
+* A Scheduler provides work that is ready to execute.  The main type of Scheduler in sbt is a scheduler
+* of nodes in a directed, acyclic graph..  This type of scheduler provides work when its
+* dependencies have finished executing successfully.  Another type of scheduler is a MultiScheduler, which draws work
+* from sub-schedulers.
+*
+* A Strategy is used by a Scheduler to select the work to process from the work that is ready.  It is notified as work
+* becomes ready.  It is requested to select work to process from the work that is ready.  The main Strategy in sbt is the
+* OrderedStrategy, which prioritizes work according to some ordering defined by its constructor.  The primary ordering
+* used in sbt is based on the longest length of the processing path that includes the node being ordered.
+*
+* A Distributor uses a Scheduler to obtain work according up to the maximum work allowed to run at once.  It runs each
+* unit of work in its own Thread.
+**/
+
 import java.util.concurrent.LinkedBlockingQueue
 import scala.collection.{immutable, mutable}
 import immutable.TreeSet
@@ -31,6 +49,8 @@ object ParallelRunner
 	}
 	private def defaultStrategy[D <: Dag[D]](info: DagInfo[D]) = MaxPathStrategy((d: D) => 1, info)
 }
+/** Requests work from `scheduler` and processes it using `doWork`.  This class limits the amount of work processing at any given time
+* to `workers`.*/
 final class Distributor[D](scheduler: Scheduler[D], doWork: D => Option[String], workers: Int, log: D => Logger) extends NotNull
 {
 	require(workers > 0)
@@ -103,9 +123,12 @@ final case class WorkFailure[D](work: D, message: String) extends NotNull
 {
 	override def toString = message
 }
-/** Schedules work of type D.  This is a mutable-style interface that should only be used only once per instance.*/
+/** Schedules work of type D.  A Scheduler determines what work is ready to be processed.
+* A Scheduler is itself immutable.  It creates a mutable object for each scheduler run.*/
 trait Scheduler[D] extends NotNull
 {
+	/** Starts a new run.  The returned object is a new Run, representing a single scheduler run.  All state for the run
+	* is encapsulated in this object.*/
 	def run: Run
 	trait Run extends NotNull
 	{
@@ -123,8 +146,11 @@ trait Scheduler[D] extends NotNull
 		def failures: Iterable[WorkFailure[D]]
 	}
 }
+/** A Strategy selects the work to process from work that is ready to be processed.*/
 private trait ScheduleStrategy[D] extends NotNull
 {
+	/** Starts a new run.  The returned object is a new Run, representing a single strategy run.  All state for the run
+	* is handled through this object and is encapsulated in this object.*/
 	def run: Run
 	trait Run extends NotNull
 	{
@@ -133,7 +159,7 @@ private trait ScheduleStrategy[D] extends NotNull
 		/** Returns true if there is work ready to be run. */
 		def hasReady: Boolean
 		/** Provides up to `max` units of work.  `max` is always positive and this method is not called
-		* if hasReady is false. */
+		* if hasReady is false. The returned list cannot be empty is there is work ready to be run.*/
 		def next(max: Int): List[D]
 	}
 }
@@ -280,19 +306,25 @@ private object DagInfo
 		visitIfUnvisited(root)
 		new DagInfo(immutable.HashMap(remainingDeps.toSeq : _*), immute(reverseDeps) )
 	}
+	/** Convert a mutable Map with mutable Sets for values to an immutable Map with immutable Sets for values. */
 	private def immute[D](map: mutable.Map[D, mutable.Set[D]]): immutable.Map[D, immutable.Set[D]] =
 	{
 		val immutedSets = map.map { case (key, value) =>(key,  immutable.HashSet(value.toSeq : _*)) }
 		immutable.HashMap(immutedSets.toSeq :_*)
 	}
+	/** Convert an immutable Map with immutable Sets for values to a mutable Map with mutable Sets for values. */
 	private def mutableMap[D](map: immutable.Map[D, immutable.Set[D]]): mutable.Map[D, mutable.Set[D]] =
 	{
 		val mutableSets = map.map { case (key, value) =>(key,  mutable.HashSet(value.toSeq : _*)) }
 		mutable.HashMap(mutableSets.toSeq :_*)
 	}
 }
+/** A scheduler that can get work from sub-schedulers.  The `schedulers` argument to the constructor
+* is a sequence of the initial schedulers and the key to provide to a client that uses the 'detailedComplete'
+* method when the scheduler completes its work.*/
 private final class MultiScheduler[D, T](schedulers: (Scheduler[D], T)*) extends Scheduler[D]
 {
+	/** Returns a Run instance that represents a scheduler run.*/
 	def run = new MultiRun
 	final class MultiRun extends Run
 	{
@@ -341,6 +373,11 @@ private final class MultiScheduler[D, T](schedulers: (Scheduler[D], T)*) extends
 		}
 	}
 }
+/** This scheduler allows a unit of work to provide nested work.
+*
+* When a unit of work that implements CompoundWork is returned for processing by `multi`, this scheduler will request the work's
+* nested scheduler that represents the nested work to be done.  The new scheduler will be added to `multi`.  When the new scheduler
+* is finished providing work, a final scheduler is run.*/
 private final class CompoundScheduler[D](multi: MultiScheduler[D, Option[FinalWork[D]]], finalWorkStrategy: ScheduleStrategy[D]) extends Scheduler[D]
 {
 	def run: Run = new Run
@@ -410,7 +447,10 @@ private object CompoundScheduler
 		new CompoundScheduler(new MultiScheduler[D, Option[FinalWork[D]]]( (scheduler, None) ), strategy)
 }
 private final class FinalWork[D](val compound: D, val doFinally: Scheduler[D]) extends NotNull
+/** This represents nested work.  The work provided by `scheduler` is processed first.  The work provided by `doFinally` is processed
+* after `scheduler` completes regardless of the success of `scheduler`.*/
 final class SubWork[D](val scheduler: Scheduler[D], val doFinally: Scheduler[D]) extends NotNull
+/** Work that implements this interface provides nested work to be done before this work is processed.*/
 trait CompoundWork[D] extends NotNull
 {
 	def work: SubWork[D]
