@@ -18,7 +18,7 @@ private[sbt] object Wrappers
 				add(s.next() :: l)
 			else
 				l
-		add(Nil)
+		add(Nil).reverse
 	}
 	def toList[T](s: java.util.Enumeration[T]): List[T] =
 	{
@@ -27,7 +27,7 @@ private[sbt] object Wrappers
 				add(s.nextElement() :: l)
 			else
 				l
-		add(Nil)
+		add(Nil).reverse
 	}
 	def readOnly[K,V](map: scala.collection.mutable.Map[K,V]): scala.collection.Map[K,V] = map//.readOnly
 	def readOnly[T](set: scala.collection.mutable.Set[T]): scala.collection.Set[T] = set//.readOnly
