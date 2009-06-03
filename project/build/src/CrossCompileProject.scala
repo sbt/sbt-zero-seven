@@ -18,25 +18,25 @@ abstract class CrossCompileProject extends BasicScalaProject
 	private val version2_8_0 = "2.8.0-SNAPSHOT"
 	private val base = "base"
 
-	private def developmentVersion = version2_7_2
-
 	/* The configurations for the versions of Scala.*/
 	private val conf_2_7_2 = config(version2_7_2)
 	private val conf_2_7_3 = config(version2_7_3)
 	private val conf_2_7_4 = config(version2_7_4)
 	private val conf_2_7_5 = config(version2_7_5)
 	private val conf_2_8_0 = config(version2_8_0)
+	private val conf_base = config(base)
 	// the list of all configurations cross-compile supports
 	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_7_5 :: conf_2_8_0 :: Nil
 	// the list of configurations to actually build against
-	private val buildConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_7_5 :: Nil//allConfigurations not currently used because of issues with 2.8.0
-	private def buildConfigurationNames = buildConfigurations.map(_.toString)
-
+	private val buildConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_7_5 :: conf_2_8_0 :: Nil//allConfigurations not currently used because of issues with 2.8.0
+	// the configuration to use for normal development (when cross-building is not done)
+	private def developmentVersion = buildConfigurations.first
+	
 	/* Methods to derive the configuration name from the base name 'v'.*/
-	private def optional(v: String) = "optional-" + v
-	private def scalac(v: String) = "scalac-" + v
-	private def sbt(v: String) = "sbt_" + v
-	private def depConf(v: String) = v + "->default"
+	private def optional(v: Configuration) = config("optional-" + v.toString)
+	private def scalac(v: Configuration) = config("scalac-" + v.toString)
+	private def sbt(v: Configuration) = config("sbt_" + v.toString)
+	private def depConf(v: Configuration) = v.toString + "->default"
 	
 	// =========== Cross-compilation across scala versions ===========
 	
@@ -50,21 +50,21 @@ abstract class CrossCompileProject extends BasicScalaProject
 	// There should be a jar publication for each version of scala.  The artifact should be named sbt_<version>.
 	override def ivyXML =
 		(<configurations>
-			<conf name={base}/>
-			<conf name={optional(base)}/>
+			<conf name={conf_base.toString}/>
+			<conf name={optional(conf_base).toString}/>
 			{ variableConfigurations }
 			<!-- The configuration used for normal development (actions other than cross-*) -->
-			<conf name="default" extends={developmentVersion + "," + optional(developmentVersion)} visibility="private"/>
+			<conf name="default" extends={developmentVersion + "," + optional(developmentVersion).toString} visibility="private"/>
 		</configurations>
 		<publications>
 			{ publications }
 		</publications>
 		<dependencies>
 			<!-- Dependencies that are the same across all Scala versions -->
-			<dependency org="org.apache.ivy" name="ivy" rev="2.0.0" transitive="false" conf={depConf(base)}/>
-			<dependency org="com.jcraft" name="jsch" rev="0.1.31" transitive="false" conf={depConf(base)}/>
-			{testDependency("scalacheck", "1.5", false, base)}
-			<dependency org="org.mortbay.jetty" name="jetty" rev="6.1.14" transitive="true" conf={depConf(optional(base))}/>
+			<dependency org="org.apache.ivy" name="ivy" rev="2.0.0" transitive="false" conf={depConf(conf_base)}/>
+			<dependency org="com.jcraft" name="jsch" rev="0.1.31" transitive="false" conf={depConf(conf_base)}/>
+			{testDependency("scalacheck", "1.5", false, conf_base)}
+			<dependency org="org.mortbay.jetty" name="jetty" rev="6.1.14" transitive="true" conf={depConf(optional(conf_base))}/>
 
 			<!-- the dependencies that are different dependeding on the version of Scala -->
 			{ variableDependencies(conf_2_7_2, /*ScalaTest*/"0.9.3", /*Specs*/"1.4.0", false) }
@@ -77,40 +77,48 @@ abstract class CrossCompileProject extends BasicScalaProject
 	/** Creates a publication (an 'artifact' element) for each Scala version */
 	private def publications: NodeSeq =
 	{
-		for(conf <- buildConfigurationNames) yield
-			<artifact name={sbt(conf)} conf={conf}/>
+		for(conf <- buildConfigurations) yield
+			<artifact name={sbt(conf).toString} conf={conf.toString}/>
 	}
 	/** Creates the main, optional, and scalac configurations for each Scala version*/
 	private def variableConfigurations: NodeSeq =
 	{
-		buildConfigurationNames flatMap
+		buildConfigurations flatMap
 		{ conf =>
 			scalaComment(conf) ++
-			(<conf name={conf} extends={base}/>
-			<conf name={optional(conf)} extends={optional(base)}/>
-			<conf name={scalac(conf)} visibility="private"/>)
+			(<conf name={conf.toString} extends={conf_base.toString}/>
+			<conf name={optional(conf).toString} extends={optional(conf_base).toString}/>
+			<conf name={scalac(conf).toString} visibility="private"/>)
 		}
 	}
 	/** Defines the dependencies for the given version of Scala, ScalaTest, and Specs.  If uniformTestOrg is true,
 	* the 'org.scala-tools.testing' organization is used.  Otherwise, 'org.' is prefixed to the module name. */
-	private def variableDependencies(configuration: Configuration, scalaTestVersion: String, specsVersion: String, uniformTestOrg: Boolean) =
+	private def variableDependencies(scalaVersion: Configuration, scalaTestVersion: String, specsVersion: String, uniformTestOrg: Boolean) =
 	{
-		if(buildConfigurations.contains(configuration))
+		if(buildConfigurations.contains(scalaVersion))
 		{
-			val scalaVersion = configuration.toString
 			scalaComment(scalaVersion) ++
 			testDependency("scalatest", scalaTestVersion, uniformTestOrg, scalaVersion) ++
 			testDependency("specs", specsVersion, uniformTestOrg, scalaVersion) ++
-			<dependency org="org.scala-lang" name="scala-compiler" rev={scalaVersion} conf={depConf(scalac(scalaVersion))}/>
+			scalaDependency("scala-compiler", scalaVersion) ++ scalaDependency("scala-library", scalaVersion) ++
+			{
+				if(scalaVersion == conf_2_8_0)
+					<dependency org="jline" name="jline" rev="0.9.94" transitive="false" conf={depConf(conf_2_8_0)}/>
+				else
+					NodeSeq.Empty
+			}
 		}
 		else
 			Nil
 	}
+	private def scalaDependency(name: String, scalaVersion: Configuration) =
+		<dependency org="org.scala-lang" name={name} rev={scalaVersion.toString} conf={depConf(scalac(scalaVersion))}/>
+	
 	/** Creates a comment containing the version of Scala*/
-	private def scalaComment(scalaVersion: String) = scala.xml.Comment("Scala " + scalaVersion)
+	private def scalaComment(scalaVersion: Configuration) = scala.xml.Comment("Scala " + scalaVersion)
 	/** Creates a dependency element for a test.  See 'testOrg' for a description of uniformTestOrg.*/
 
-	private def testDependency(name: String, version: String, uniformTestOrg: Boolean, baseConf: String) =
+	private def testDependency(name: String, version: String, uniformTestOrg: Boolean, baseConf: Configuration) =
 		<dependency org={testOrg(name, uniformTestOrg)} name={name} rev={version} transitive="false" conf={depConf(optional(baseConf))}/>
 		
 	/** Returns the organization for the given test library.  If uniform is true,
@@ -130,10 +138,10 @@ abstract class CrossCompileProject extends BasicScalaProject
 		if( (Configurations.Default :: Configurations.defaultMavenConfigurations) contains config)
 			super.fullUnmanagedClasspath(config)
 		else
-			classesPath(config.toString) +++ mainResourcesPath
+			classesPath(config) +++ mainResourcesPath
 	
 	// include the optional-<version> dependencies as well as the ones common across all scala versions
-	def optionalClasspath(version: String) = fullClasspath(config(optional(version))) +++ super.optionalClasspath
+	def optionalClasspath(version: Configuration) = fullClasspath(optional(version)) +++ super.optionalClasspath
 	
 	private val CompilerMainClass = "scala.tools.nsc.Main"
 	// use a publish configuration that publishes the 'base' + all <version> configurations (base is required because
@@ -143,12 +151,12 @@ abstract class CrossCompileProject extends BasicScalaProject
 		override def configurations: Option[Iterable[Configuration]] = Some(config(base) :: buildConfigurations)
 	}
 	// the actions for cross-version packaging and publishing
-	lazy val crossPackage = buildConfigurationNames.map(packageForScala)
+	lazy val crossPackage = buildConfigurations.map(packageForScala)
 	lazy val crossDeliverLocal = deliverTask(conf, updateOptions) dependsOn(crossPackage : _*)
 	lazy val crossPublishLocal = publishTask(conf, updateOptions) dependsOn(crossDeliverLocal)
 	// Creates a task that produces a packaged sbt compiled against Scala scalaVersion.
 	//  The jar is named 'sbt_<scala-version>-<sbt-version>.jar'
-	private def packageForScala(scalaVersion: String) =
+	private def packageForScala(scalaVersion: Configuration) =
 	{
 		val classes = classesPath(scalaVersion) ** "*"
 		val jarName = crossJarName(scalaVersion)
@@ -156,10 +164,10 @@ abstract class CrossCompileProject extends BasicScalaProject
 		val compileAction = compileForScala(scalaVersion) named(crossActionName("compile", scalaVersion))
 		packageTask(classes +++ mainResources, outputPath, jarName, packageOptions) dependsOn(compileAction) named(packageActionName)
 	}
-	private def crossActionName(base: String, scalaVersion: String) = base + " [ " + scalaVersion + " ] "
-	private def crossJarName(scalaVersion: String) = sbt(scalaVersion) + "-" + version.toString +  ".jar"
+	private def crossActionName(base: String, scalaVersion: Configuration) = base + " [ " + scalaVersion.toString + " ] "
+	private def crossJarName(scalaVersion: Configuration) = sbt(scalaVersion) + "-" + version.toString +  ".jar"
 	// This creates a task that compiles sbt against the given version of scala.  Classes are put in classes-<scalaVersion>.
-	private def compileForScala(version: String)=
+	private def compileForScala(version: Configuration)=
 		task
 		{
 			val classes = classesPath(version)
@@ -169,10 +177,10 @@ abstract class CrossCompileProject extends BasicScalaProject
 				FileUtilities.createDirectory(classes, log)
 			for(err <- setupResult) log.error(err)
 			// the classpath containing the scalac compiler
-			val compilerClasspath = concatPaths(fullClasspath(config(scalac(version))))
+			val compilerClasspath = concatPaths(fullClasspath(scalac(version)))
 			
 			// The libraries to compile sbt against
-			val classpath = fullClasspath(config(version)) +++ optionalClasspath(version)
+			val classpath = fullClasspath(version) +++ optionalClasspath(version)
 			val sources: List[String] = pathListStrings(mainSources)
 			val compilerOptions = List("-cp", concatPaths(classpath), "-d", classes.toString)
 			val compilerArguments: List[String] = compilerOptions ::: sources
@@ -188,5 +196,5 @@ abstract class CrossCompileProject extends BasicScalaProject
 		}
 	private def concatPaths(p: PathFinder): String = Path.makeString(p.get)
 	private def pathListStrings(p: PathFinder): List[String] = p.get.map(_.absolutePath).toList
-	private def classesPath(scalaVersion: String) = ("target"  / ("classes-" + scalaVersion)) ##
+	private def classesPath(scalaVersion: Configuration) = ("target"  / ("classes-" + scalaVersion.toString)) ##
 }

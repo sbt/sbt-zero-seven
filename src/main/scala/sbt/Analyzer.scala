@@ -221,11 +221,14 @@ class Analyzer(val global: Global) extends Plugin
 	{
 		tpe match
 		{
+			// singleArgument is of type Symbol in 2.8.0 and type Type in 2.7.x
 			case MethodType(List(singleArgument), result) => isUnitType(result) && isStringArray(singleArgument)
 			case _ => false
 		}
 	}
 	private lazy val StringArrayType = appliedType(definitions.ArrayClass.typeConstructor, definitions.StringClass.tpe :: Nil)
-	private def isStringArray(tpe: Type) = tpe.typeSymbol == StringArrayType.typeSymbol
+	// isStringArray is overloaded to handle the incompatibility between 2.7.x and 2.8.0
+	private def isStringArray(tpe: Type): Boolean = tpe.typeSymbol == StringArrayType.typeSymbol
+	private def isStringArray(sym: Symbol): Boolean = isStringArray(sym.tpe)
 	private def isUnitType(tpe: Type) = tpe.typeSymbol == definitions.UnitClass
 }

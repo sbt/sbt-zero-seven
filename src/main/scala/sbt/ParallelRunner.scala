@@ -210,11 +210,13 @@ private object MaxPathStrategy
 			wrap.Wrappers.readOnly(cost)
 		}
 		// create a function to compare units of work.  This is not as simple as cost(a) compare cost(b) because it cannot return 0 for
-		// unequal nodes
-		implicit val compare =
-			(a: D) => new Ordered[D]
+		// unequal nodes (at least for the Ordered comparison)
+		
+		// 2.8.0 uses Ordering
+		implicit val compareOrdering: Ordering[D] =
+			new Ordering[D]
 			{
-				def compare(b: D) =
+				def compare(a: D, b: D) =
 				{
 					val base = cost(a) compare cost(b)
 					if(base == 0)
@@ -223,7 +225,12 @@ private object MaxPathStrategy
 						base
 				}
 			}
-		new OrderedStrategy(new TreeSet()(compare))
+		// 2.7.x uses an implicit view to Ordered
+		implicit val compare =
+			(a: D) => new Ordered[D] {
+				def compare(b: D) = compareOrdering.compare(a, b)
+			}
+		new OrderedStrategy(new TreeSet())
 	}
 }
 /** A strategy that adds work to a tree and selects the last key as the next work to be done. */
