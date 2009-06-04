@@ -112,14 +112,14 @@ object ManageDependencies
 				addResolvers(ivy.getSettings, ScalaToolsReleases :: Nil, log)
 			}
 		}
-		/** Configures Ivy using defaults.  This is done when no ivy-settings.xml exists and no inline configurations or resolvers are specified. */
+		/** Configures Ivy using defaults.  This is done when no ivy-settings.xml exists. */
 		def configureDefaults()
 		{
 			ivy.configureDefault
 			val settings = ivy.getSettings
 			for(dir <- paths.cacheDirectory) settings.setDefaultCache(dir.asFile)
 			settings.setBaseDir(paths.projectDirectory.asFile)
-			useOrigin(settings)
+			configureCache(settings)
 		}
 		/** Called to configure Ivy when the configured dependency manager is SbtManager and inline configuration is specified or if the manager
 		* is AutodetectManager.  It will configure Ivy with an 'ivy-settings.xml' file if there is one, or configure the defaults and add scala-tools as
@@ -308,11 +308,14 @@ object ManageDependencies
 		excludeScalaJar(ScalaLibraryID)
 		excludeScalaJar(ScalaCompilerID)
 	}
-	private def useOrigin(settings: IvySettings)
+	private def configureCache(settings: IvySettings)
 	{
 		settings.getDefaultRepositoryCacheManager match
 		{
-			case manager: DefaultRepositoryCacheManager => manager.setUseOrigin(true)
+			case manager: DefaultRepositoryCacheManager =>
+				manager.setUseOrigin(true)
+				manager.setChangingMatcher(PatternMatcher.REGEXP);
+				manager.setChangingPattern(".*-SNAPSHOT");
 			case _ => ()
 		}
 	}
@@ -587,7 +590,6 @@ private object ConvertResolver
 				val resolver = new IBiblioResolver
 				resolver.setName(repo.name)
 				resolver.setM2compatible(true)
-				resolver.setChangingPattern(""".*\-SNAPSHOT""")
 				resolver.setRoot(repo.root)
 				resolver
 			}
