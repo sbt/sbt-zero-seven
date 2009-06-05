@@ -8,6 +8,7 @@
 package sbt
 
 import scala.collection.Set
+import scala.reflect.Manifest
 
 /** This provides functionality to catch System.exit calls to prevent the JVM from terminating.
 * This is useful for executing user code that may call System.exit, but actually exiting is
@@ -44,12 +45,9 @@ object TrapExit
 					* wait for those threads to die.*/
 					val code = new ExitCode
 					processThreads(originalThreads, thread => replaceHandler(thread, originalThreads, code))
-					processThreads(originalThreads, thread => waitOnThread(thread, log))
-					code.value match
-					{
-						case Some(exitCode) => Left(exitCode)
-						case None => result
-					}
+					processThreads(originalThreads, thread => if(!thread.isDaemon) waitOnThread(thread, log)) // wait for all non-daemon threads to terminate
+					interruptAll(originalThreads) // should only be daemon threads left now
+					code.value.toLeft(r)
 				}
 				case Left(code) =>
 				{
@@ -79,19 +77,24 @@ object TrapExit
 	}
 	/** Returns the exit code of the System.exit that caused the given Exception, or rethrows the exception
 	* if its cause was not calling System.exit.*/
-	private def exitCode(e: Throwable): Int =
+	private def exitCode(e: Throwable) =
+		withCause[TrapExitSecurityException, Int](e)
+			{exited => exited.exitCode}
+			{other => throw other}
+	/** Recurses into the causes of the given exception looking for a cause of type CauseType.  If one is found, `withType` is called with that cause.
+	*  If not, `notType` is called with the root cause.*/
+	private def withCause[CauseType <: Throwable, T](e: Throwable)(withType: CauseType => T)(notType: Throwable => T)(implicit mf: Manifest[CauseType]): T =
 	{
-		e match
+		val clazz = mf.erasure
+		if(clazz.isInstance(e))
+			withType(e.asInstanceOf[CauseType])
+		else
 		{
-			case x: TrapExitSecurityException => x.exitCode
-			case _ => 
-			{
-				val cause = e.getCause
-				if(cause == null)
-					throw e
-				else
-					exitCode(cause)
-			}
+			val cause = e.getCause
+			if(cause == null)
+				notType(e)
+			else
+				withCause(cause)(withType)(notType)(mf)
 		}
 	}
 	
@@ -127,18 +130,43 @@ object TrapExit
 	/** Handles System.exit by disposing all frames and calling interrupt on all user threads */
 	private def stopAll(originalThreads: Set[Thread])
 	{
+		disposeAllFrames()
+		interruptAll(originalThreads)
+	}
+	private def disposeAllFrames()
+	{
 		val allFrames = java.awt.Frame.getFrames
 		if(allFrames.length > 0)
 		{
 			allFrames.foreach(_.dispose) // dispose all top-level windows, which will cause the AWT-EventQueue-* threads to exit
 			Thread.sleep(2000) // AWT Thread doesn't exit immediately, so wait to interrupt it
 		}
-		// interrupt all threads that appear to have been started by the user
-		processThreads(originalThreads, thread => if(!thread.getName.startsWith("AWT-")) thread.interrupt)
+	}
+	// interrupt all threads that appear to have been started by the user
+	private def interruptAll(originalThreads: Set[Thread]): Unit =
+		processThreads(originalThreads, safeInterrupt)
+		
+	private def safeInterrupt(thread: Thread)
+	{
+		if(!thread.getName.startsWith("AWT-"))
+		{
+			thread.setUncaughtExceptionHandler(new TrapInterrupt(thread.getUncaughtExceptionHandler))
+			thread.interrupt
+		}
+	}
+	private final class TrapInterrupt(originalHandler: Thread.UncaughtExceptionHandler) extends Thread.UncaughtExceptionHandler
+	{
+		def uncaughtException(thread: Thread, e: Throwable)
+		{
+			withCause[InterruptedException, Unit](e)
+				{interrupted => ()}
+				{other => originalHandler.uncaughtException(thread, e) }
+			thread.setUncaughtExceptionHandler(originalHandler)
+		}
 	}
 	/** An uncaught exception handler that delegates to the original uncaught exception handler except when
 	* the cause was a call to System.exit (which generated a SecurityException)*/
-	class ExitHandler(originalHandler: Thread.UncaughtExceptionHandler, originalThreads: Set[Thread], codeHolder: ExitCode) extends Thread.UncaughtExceptionHandler
+	private final class ExitHandler(originalHandler: Thread.UncaughtExceptionHandler, originalThreads: Set[Thread], codeHolder: ExitCode) extends Thread.UncaughtExceptionHandler
 	{
 		def uncaughtException(t: Thread, e: Throwable)
 		{
@@ -154,25 +182,15 @@ object TrapExit
 		}
 	}
 }
-private class ExitCode extends NotNull
+private final class ExitCode extends NotNull
 {
 	private var code: Option[Int] = None
-	def set(c: Int)
-	{
-		synchronized
-		{
-			code match
-			{
-				case Some(existing) => ()
-				case None => code = Some(c)
-			}
-		}
-	}
+	def set(c: Int): Unit = synchronized { code = code orElse Some(c) }
 	def value: Option[Int] = synchronized { code }
 }
 ///////  These two classes are based on similar classes in Nailgun
 /** A custom SecurityManager to disallow System.exit. */
-private class TrapExitSecurityManager(delegateManager: SecurityManager) extends SecurityManager
+private final class TrapExitSecurityManager(delegateManager: SecurityManager) extends SecurityManager
 {
 	import java.security.Permission
 	override def checkExit(status: Int)
@@ -196,7 +214,7 @@ private class TrapExitSecurityManager(delegateManager: SecurityManager) extends 
 	}
 }
 /** A custom SecurityException that tries not to be caught.*/
-private class TrapExitSecurityException(val exitCode: Int) extends SecurityException
+private final class TrapExitSecurityException(val exitCode: Int) extends SecurityException
 {
 	private var accessAllowed = false
 	def allowAccess
