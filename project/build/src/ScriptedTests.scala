@@ -33,6 +33,7 @@ class ScriptedTests(testResources: Resources, filter: ScriptedTestFilter) extend
 	private def includeDirectory(file: File) = file.getName != ".svn"
 	def scriptedTests(log: Logger): Option[String] =
 	{
+		System.setProperty("sbt.scala.version", "")
 		var success = true
 		for(group <- baseDirectory.listFiles(DirectoryFilter) if includeDirectory(group))
 		{
