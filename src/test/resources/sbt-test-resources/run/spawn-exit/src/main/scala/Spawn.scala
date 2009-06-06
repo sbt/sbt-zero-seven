@@ -1,7 +1,8 @@
 // The purpose of this test is to verify that sbt.TrapExit properly waits for Threads started after
-//   the main method exits.
+//   the main method exits and that it handles System.exit from a second generation thread.
 // The first thread waits 1s for the main method to exit and then creates another thread.
-//   This thread waits another second before exiting.
+//   This thread waits another second before calling System.exit.  The first thread hangs around to
+//   ensure that TrapExit actually processes the exit.
 
 object Spawn
 {
@@ -13,23 +14,17 @@ object Spawn
 	{
 		override def run()
 		{
-			sleep()
+			Thread.sleep(1000)
 			(new ThreadB).start()
+			synchronized { wait() }
 		}
 	}
 	class ThreadB extends Thread
 	{
-		override def run() { sleep() }
-	}
-	private def sleep()
-	{
-		try { Thread.sleep(1000) }
-		catch
+		override def run()
 		{
-			case e: InterruptedException =>
-				val msg = "TrapExit improperly interrupted non-daemon thread"
-				System.err.println(msg)
-				error(msg)
+			Thread.sleep(1000)
+			System.exit(0)
 		}
 	}
 }

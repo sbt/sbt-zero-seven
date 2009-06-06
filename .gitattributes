@@ -179,9 +179,15 @@ src/test/resources/sbt-test-resources/properties/multi-project-a/test -text
 src/test/resources/sbt-test-resources/properties/multi-project-b/project/build.properties -text
 src/test/resources/sbt-test-resources/properties/multi-project-b/project/build/src/TestProject.scala -text
 src/test/resources/sbt-test-resources/properties/multi-project-b/test -text
+src/test/resources/sbt-test-resources/run/daemon-exit/project/build.properties -text
+src/test/resources/sbt-test-resources/run/daemon-exit/src/main/scala/Daemon.scala -text
+src/test/resources/sbt-test-resources/run/daemon-exit/test -text
 src/test/resources/sbt-test-resources/run/daemon/project/build.properties -text
 src/test/resources/sbt-test-resources/run/daemon/src/main/scala/Daemon.scala -text
 src/test/resources/sbt-test-resources/run/daemon/test -text
+src/test/resources/sbt-test-resources/run/spawn-exit/project/build.properties -text
+src/test/resources/sbt-test-resources/run/spawn-exit/src/main/scala/Spawn.scala -text
+src/test/resources/sbt-test-resources/run/spawn-exit/test -text
 src/test/resources/sbt-test-resources/run/spawn/project/build.properties -text
 src/test/resources/sbt-test-resources/run/spawn/src/main/scala/Spawn.scala -text
 src/test/resources/sbt-test-resources/run/spawn/test -text
