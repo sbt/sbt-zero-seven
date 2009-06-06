@@ -63,20 +63,14 @@ object Run extends ScalaRun
 	/** Executes the given function, trapping calls to System.exit. */
 	private def executeTrapExit(f: => Unit, log: Logger): Option[String] =
 	{
-		TrapExit(f, log) match
+		val exitCode = TrapExit(f, log)
+		if(exitCode == 0)
 		{
-			case Left(exitCode) =>
-			{
-				if(exitCode == 0)
-				{
-					log.debug("Exited with code 0")
-					None
-				}
-				else
-					Some("Nonzero exit code: " + exitCode)
-			}
-			case _ => None
+			log.debug("Exited with code 0")
+			None
 		}
+		else
+			Some("Nonzero exit code: " + exitCode)
 	}
 	/** Runs the class 'mainClass' using the given classpath and options using the scala runner.*/
 	def run(mainClass: String, classpath: Iterable[Path], options: Seq[String], log: Logger) =

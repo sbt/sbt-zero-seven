@@ -19,48 +19,49 @@ import scala.reflect.Manifest
 object TrapExit
 {
 	/** Executes the given thunk in a context where System.exit(code) throws
-	* a custom SecurityException, which is then caught and the exit code returned
-	* in Left.  Otherwise, the result of calling execute is returned. No other
-	* exceptions are handled by this method.*/
-	def apply[T](execute: => T, log: Logger): Either[Int, T] =
+	* a custom SecurityException, which is then caught and the exit code returned.
+	* Otherwise, 0 is returned.  No other exceptions are handled by this method.*/
+	def apply(execute: => Unit, log: Logger): Int =
 	{
-		val originalSecurityManager = System.getSecurityManager
-		val newSecurityManager = new TrapExitSecurityManager(originalSecurityManager)
-		System.setSecurityManager(newSecurityManager)
+		log.debug("Starting sandboxed run...")
 		
 		/** Take a snapshot of the threads that existed before execution in order to determine
 		* the threads that were created by 'execute'.*/
 		val originalThreads = allThreads
+		val code = new ExitCode
+		val customThreadGroup = new ExitThreadGroup(new ExitHandler(Thread.getDefaultUncaughtExceptionHandler, originalThreads, code))
+		val executionThread = new Thread(customThreadGroup, "run-main") { override def run() { execute } }
 		
-		val result =
-			try { Right(execute) }
-			catch { case t: Throwable => Left(exitCode(t)) }
-		val newResult =
-			result match
-			{
-				case Right(r) =>
-				{
-					/** In this case, the code completed without calling System.exit.  It possibly started other threads
-					* and so we replace the uncaught exception handlers on those threads to handle System.exit.  Then we
-					* wait for those threads to die.*/
-					val code = new ExitCode
-					processThreads(originalThreads, thread => replaceHandler(thread, originalThreads, code))
-					processThreads(originalThreads, thread => if(!thread.isDaemon) waitOnThread(thread, log)) // wait for all non-daemon threads to terminate
-					interruptAll(originalThreads) // should only be daemon threads left now
-					code.value.toLeft(r)
-				}
-				case Left(code) =>
-				{
-					/** The other case is that the code directly called System.exit.  In this case, we dispose all
-					* top-level windows and interrupt user-started threads.*/
-					stopAll(originalThreads)
-					result
-				}
-			}
-			
-		System.setSecurityManager(originalSecurityManager)
+		val originalSecurityManager = System.getSecurityManager
+		try
+		{
+			val newSecurityManager = new TrapExitSecurityManager(originalSecurityManager, customThreadGroup)
+			System.setSecurityManager(newSecurityManager)
 
-		newResult
+			executionThread.start()
+
+			log.debug("Waiting for threads to exit or System.exit to be called.")
+			waitForExit(originalThreads, log)
+			log.debug("Interrupting remaining threads (should be all daemons).")
+			interruptAll(originalThreads) // should only be daemon threads left now
+			log.debug("Sandboxed run complete..")
+			code.value.getOrElse(0)
+		}
+		finally { System.setSecurityManager(originalSecurityManager) }
+	}
+	 // wait for all non-daemon threads to terminate
+	private def waitForExit(originalThreads: Set[Thread], log: Logger)
+	{
+		var daemonsOnly = true
+		processThreads(originalThreads, thread =>
+			if(!thread.isDaemon)
+			{
+				daemonsOnly = false
+				waitOnThread(thread, log)
+			}
+		)
+		if(!daemonsOnly)
+			waitForExit(originalThreads, log)
 	}
 	/** Waits for the given thread to exit. */
 	private def waitOnThread(thread: Thread, log: Logger)
@@ -68,12 +69,6 @@ object TrapExit
 		log.debug("Waiting for thread " + thread.getName + " to exit")
 		thread.join
 		log.debug("\tThread " + thread.getName + " exited.")
-	}
-	/** Replaces the uncaught exception handler with one that handles the SecurityException thrown by System.exit and
-	* otherwise delegates to the original handler*/
-	private def replaceHandler(thread: Thread, originalThreads: Set[Thread], code: ExitCode)
-	{
-		thread.setUncaughtExceptionHandler(new ExitHandler(thread.getUncaughtExceptionHandler, originalThreads, code))
 	}
 	/** Returns the exit code of the System.exit that caused the given Exception, or rethrows the exception
 	* if its cause was not calling System.exit.*/
@@ -145,7 +140,7 @@ object TrapExit
 	// interrupt all threads that appear to have been started by the user
 	private def interruptAll(originalThreads: Set[Thread]): Unit =
 		processThreads(originalThreads, safeInterrupt)
-		
+	// interrupts the given thread, but first replaces the exception handler so that the InterruptedException is not printed
 	private def safeInterrupt(thread: Thread)
 	{
 		if(!thread.getName.startsWith("AWT-"))
@@ -154,6 +149,7 @@ object TrapExit
 			thread.interrupt
 		}
 	}
+	// an uncaught exception handler that swallows InterruptedExceptions and otherwise defers to originalHandler
 	private final class TrapInterrupt(originalHandler: Thread.UncaughtExceptionHandler) extends Thread.UncaughtExceptionHandler
 	{
 		def uncaughtException(thread: Thread, e: Throwable)
@@ -181,6 +177,10 @@ object TrapExit
 			}
 		}
 	}
+	private final class ExitThreadGroup(handler: Thread.UncaughtExceptionHandler) extends ThreadGroup("trap.exit")
+	{
+		override def uncaughtException(t: Thread, e: Throwable) = handler.uncaughtException(t, e)
+	}
 }
 private final class ExitCode extends NotNull
 {
@@ -190,7 +190,7 @@ private final class ExitCode extends NotNull
 }
 ///////  These two classes are based on similar classes in Nailgun
 /** A custom SecurityManager to disallow System.exit. */
-private final class TrapExitSecurityManager(delegateManager: SecurityManager) extends SecurityManager
+private final class TrapExitSecurityManager(delegateManager: SecurityManager, group: ThreadGroup) extends SecurityManager
 {
 	import java.security.Permission
 	override def checkExit(status: Int)
@@ -212,6 +212,7 @@ private final class TrapExitSecurityManager(delegateManager: SecurityManager) ex
 		if(delegateManager != null)
 			delegateManager.checkPermission(perm, context)
 	}
+	override def getThreadGroup = group
 }
 /** A custom SecurityException that tries not to be caught.*/
 private final class TrapExitSecurityException(val exitCode: Int) extends SecurityException
