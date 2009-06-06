@@ -164,9 +164,13 @@ trait ScalaProject extends Project with FileTasks
 		}
 
 	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: PackageOption*): Task =
-		packageTask(sources, outputDirectory, jarName, options)
+		packageTask(sources, outputDirectory / jarName, options)
 	def packageTask(sources: PathFinder, outputDirectory: Path, jarName: => String, options: => Seq[PackageOption]): Task =
-		fileTask("package", (outputDirectory / jarName) from sources)
+		packageTask(sources: PathFinder, outputDirectory / jarName, options)
+	def packageTask(sources: PathFinder, jarPath: => Path, options: PackageOption*): Task =
+		packageTask(sources, jarPath, options)
+	def packageTask(sources: PathFinder, jarPath: => Path, options: => Seq[PackageOption]): Task =
+		fileTask("package", jarPath from sources)
 		{
 			import wrap.{MutableMapWrapper,Wrappers}
 			/** Copies the mappings in a2 to a1, mutating a1. */
@@ -205,16 +209,14 @@ trait ScalaProject extends Project with FileTasks
 					case _ => log.warn("Ignored unknown package option " + option)
 				}
 			}
-			val jarPath = outputDirectory / jarName
-			FileUtilities.clean(jarPath :: Nil, log) orElse
-			FileUtilities.jar(sources.get, jarPath, manifest, recursive, log)
+			val jarPathLocal = jarPath
+			FileUtilities.clean(jarPathLocal :: Nil, log) orElse
+			FileUtilities.jar(sources.get, jarPathLocal, manifest, recursive, log)
 		}
 	def zipTask(sources: PathFinder, outputDirectory: Path, zipName: => String): Task =
-		fileTask("zip", (outputDirectory / zipName) from sources)
-		{
-			val zipPath = outputDirectory / zipName
-			FileUtilities.zip(sources.get, zipPath, false, log)
-		}
+		zipTask(sources, outputDirectory / zipName)
+	def zipTask(sources: PathFinder, zipPath: => Path): Task =
+		fileTask("zip", zipPath from sources) { FileUtilities.zip(sources.get, zipPath, false, log) }
 	def incrementVersionNumber()
 	{
 		projectVersion.get match

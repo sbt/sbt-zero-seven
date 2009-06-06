@@ -3,6 +3,7 @@
  */
 package sbt
 
+import impl.PropertiesUtilities
 import scala.reflect.Manifest
 
 trait Environment
@@ -54,15 +55,6 @@ trait Environment
 	* to convert an instance of 'T' to and from the 'String' representation used for persistence.*/
 	def propertyOptionalF[T](defaultValue: => T, format: Format[T])(implicit manifest: Manifest[T]): Property[T] =
 		propertyOptional(defaultValue)(manifest, format)
-}
-trait Format[T] extends NotNull
-{
-	def toString(t: T): String
-	def fromString(s: String): T
-}
-abstract class SimpleFormat[T] extends Format[T]
-{
-	def toString(t: T) = t.toString
 }
 
 import scala.collection.Map
@@ -274,7 +266,7 @@ trait BasicEnvironment extends Environment
 	implicit val LongFormat: Format[Long] = new SimpleFormat[Long] { def fromString(s: String) = java.lang.Long.parseLong(s) }
 	implicit val DoubleFormat: Format[Double] = new SimpleFormat[Double] { def fromString(s: String) = java.lang.Double.parseDouble(s) }
 	implicit val BooleanFormat: Format[Boolean] = new SimpleFormat[Boolean] { def fromString(s: String) = java.lang.Boolean.valueOf(s).booleanValue }
-	implicit val StringFormat: Format[String] = new SimpleFormat[String] { def fromString(s: String) = s }
+	implicit val StringFormat: Format[String] = Format.string
 	val NonEmptyStringFormat: Format[String] = new SimpleFormat[String]
 	{
 		def fromString(s: String) =
@@ -291,13 +283,7 @@ trait BasicEnvironment extends Environment
 		{
 			def fromString(s: String) = Version.fromString(s).fold(msg => throw new RuntimeException(msg), x => x)
 		}
-	import java.io.File
-	implicit val FileFormat: Format[File] =
-		new Format[File]
-		{
-			def fromString(s: String) = (new File(s)).getCanonicalFile
-			def toString(f: File) = f.getCanonicalPath
-		}
+	implicit val FileFormat = Format.file
 }
 private object Environment
 {

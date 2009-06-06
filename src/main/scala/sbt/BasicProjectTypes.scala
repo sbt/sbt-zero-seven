@@ -152,7 +152,7 @@ trait ManagedProject extends ClasspathProject
 	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, log) }
 
 	/** This is the public ID of the project (used for publishing, for example) */
-	def moduleID: String = normalizedName
+	def moduleID: String = normalizedName + Project.scalaVersionString
 	/** This is the full public ID of the project (used for publishing, for example) */
 	def projectID: ModuleID = ModuleID(organization, moduleID, version.toString)
 
@@ -342,14 +342,19 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	protected def deliverScalaDependencies: Iterable[ModuleID] = Nil
 	protected def makePomAction = makePomTask(pomPath, deliverProjectDependencies, None, updateOptions)
 	protected def deliverLocalAction = deliverTask(publishLocalConfiguration, deliverOptions)
-	protected def publishLocalAction = publishTask(publishLocalConfiguration, publishOptions) dependsOn(deliverLocal)
+	protected def publishLocalAction =
+	{
+		val dependencies = deliverLocal :: publishPomDepends
+		publishTask(publishLocalConfiguration, publishOptions) dependsOn(dependencies : _*)
+	}
 	protected def publishLocalConfiguration = new DefaultPublishConfiguration("local", "release", true)
 	protected def deliverAction = deliverTask(publishConfiguration, deliverOptions)
 	protected def publishAction =
 	{
-		val dependencies = deliver :: (if(managedStyle == Maven) makePom :: Nil else Nil)
+		val dependencies = deliver :: publishPomDepends
 		publishTask(publishConfiguration, publishOptions) dependsOn(dependencies : _*)
 	}
+	private def publishPomDepends = if(managedStyle == Maven) makePom :: Nil else Nil
 	protected def publishConfiguration =
 	{
 		val repository = defaultPublishRepository.getOrElse(error("Repository to publish to not specified."))
@@ -405,7 +410,7 @@ trait BasicDependencyPaths extends ManagedProject
 	def pomName = artifactBaseName + PomExtension
 	def dependencyPath = path(dependencyDirectoryName)
 	def managedDependencyPath = crossPath(managedDependencyRootPath)
-	def managedDependencyRootPath = managedDirectoryName
+	def managedDependencyRootPath: Path = managedDirectoryName
 	def pomPath = outputPath / pomName
 }
 object BasicDependencyPaths

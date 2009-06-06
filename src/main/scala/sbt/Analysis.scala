@@ -31,7 +31,7 @@ trait TaskAnalysis[Source, Product, External] extends NotNull
 
 import java.io.File
 import BasicAnalysis._
-import MapUtilities._
+import impl.MapUtilities.{add, all, read, mark, readOnlyIterable, write}
 import scala.collection.mutable.{HashMap, HashSet, ListBuffer, Map, Set}
 
 sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) extends TaskAnalysis[Path, Path, File]
@@ -102,12 +102,17 @@ sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) e
 			mark(source, map)
 	}
 	
+	import Format._ // get implicits for data types
+	
+	implicit val path: Format[Path] = Format.path(projectPath)
+	implicit val pathSet: Format[Set[Path]] = Format.set
+	
 	def revert() = load()
 	final def load(): Option[String] =
 	{
-		loadPaths(sourceDependencyMap, analysisPath / DependenciesFileName, projectPath, log) orElse
-			loadPaths(productMap, analysisPath / GeneratedFileName, projectPath, log) orElse
-			loadFilePaths(externalDependencyMap, analysisPath / ExternalDependenciesFileName, projectPath, log) orElse
+		read(sourceDependencyMap, analysisPath / DependenciesFileName, log) orElse
+			read(productMap, analysisPath / GeneratedFileName, log) orElse
+			read(externalDependencyMap, analysisPath / ExternalDependenciesFileName, log) orElse
 			loadExtra()
 	}
 	protected def loadExtra(): Option[String] = None
@@ -115,9 +120,9 @@ sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) e
 	final def save(): Option[String] =
 	{
 		FileUtilities.createDirectory(analysisPath.asFile, log) orElse
-			writePaths(sourceDependencyMap, DependenciesLabel, analysisPath / DependenciesFileName, log) orElse
-			writePaths(productMap, GeneratedLabel, analysisPath / GeneratedFileName, log) orElse
-			writeFilePaths(externalDependencyMap, ExternalDependenciesLabel, analysisPath / ExternalDependenciesFileName, log) orElse
+			write(sourceDependencyMap, DependenciesLabel, analysisPath / DependenciesFileName, log) orElse
+			write(productMap, GeneratedLabel, analysisPath / GeneratedFileName, log) orElse
+			write(externalDependencyMap, ExternalDependenciesLabel, analysisPath / ExternalDependenciesFileName, log) orElse
 			saveExtra()
 	}
 	protected def saveExtra(): Option[String] = None
@@ -196,125 +201,21 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 				Path.relativize(basePath, c).getOrElse(c)
 		}
 		
+	import Format._ // get implicits for data types
+	implicit val stringSet: Format[Set[String]] = Format.set
+	implicit val testSet: Format[Set[TestDefinition]] = Format.set
 	override protected def loadExtra() =
 	{
-		loadStrings(applicationsMap, analysisPath / ApplicationsFileName, projectPath, log) orElse
-		loadHashes(hashesMap, analysisPath / HashesFileName, projectPath, log) orElse
-		loadTestDefinitions(testMap, analysisPath / TestsFileName, projectPath, log) orElse
-		loadStrings(projectDefinitionMap, analysisPath / ProjectDefinitionsName, projectPath, log)
+		read(applicationsMap, analysisPath / ApplicationsFileName, log) orElse
+		read(hashesMap, analysisPath / HashesFileName, log) orElse
+		read(testMap, analysisPath / TestsFileName, log) orElse
+		read(projectDefinitionMap, analysisPath / ProjectDefinitionsName, log)
 	}
 	override protected def saveExtra() =
 	{
-		writeStrings(applicationsMap, ApplicationsLabel, analysisPath / ApplicationsFileName, log) orElse
-		writeHashes(hashesMap, HashesLabel, analysisPath / HashesFileName, log) orElse
-		writeTestDefinitions(testMap, TestsLabel, analysisPath / TestsFileName, log) orElse
-		writeStrings(projectDefinitionMap, ProjectDefinitionsLabel, analysisPath / ProjectDefinitionsName, log)
-	}
-}
-
-import java.util.Properties
-import java.io.{FileInputStream, FileOutputStream, InputStream, OutputStream}
-object PropertiesUtilities
-{
-	def write(properties: Properties, label: String, to: Path, log: Logger) =
-		FileUtilities.writeStream(to.asFile, log)((output: OutputStream) => { properties.store(output, label); None })
-	
-	def load(properties: Properties, from: Path, log: Logger): Option[String] =
-	{
-		val file = from.asFile
-		if(file.exists)
-			FileUtilities.readStream(file, log)( (input: InputStream) => { properties.load(input); None })
-		else
-			None
-	}
-	
-	def propertyNames(properties: Properties): Iterable[String] =
-		wrap.Wrappers.toList(properties.propertyNames).map(_.toString)
-}
-object MapUtilities
-{
-	def all[Key, Value](map: Map[Key, Set[Value]]): Iterable[Value] =
-		map.values.toList.flatMap(set => set.toList)
-	
-	def readOnlyIterable[Key, Value](i: Map[Key, Set[Value]]): Iterable[(Key, scala.collection.Set[Value])] =
-		for( (key, set) <- i.elements.toList) yield (key, wrap.Wrappers.readOnly(set))//.readOnly)
-		
-	def mark[Key, Value](source: Key, map: Map[Key, Set[Value]])
-	{
-		if(!map.contains(source))
-			map.put(source, new HashSet[Value])
-	}
-	def add[Key, Value](key: Key, value: Value, map: Map[Key, Set[Value]])
-	{
-		map.getOrElseUpdate(key, new HashSet[Value]) + value
-	}
-	
-	def writeHashes(map: Map[Path, Array[Byte]], label: String, to: Path, log: Logger) =
-	{
-		val properties = new Properties
-		for( (path, hash) <- map)
-			properties.setProperty(path.projectRelativePath, Hash.toHex(hash))
-		PropertiesUtilities.write(properties, label, to, log)
-	}
-	
-	def writeTestDefinitions(map: Map[Path, Set[TestDefinition]], label: String, to: Path, log: Logger) =
-		write(map, label, (i: Iterable[TestDefinition]) => i.map(_.toString).mkString(File.pathSeparator), to, log)
-	def writeStrings(map: Map[Path, Set[String]], label: String, to: Path, log: Logger) =
-		write(map, label, (i: Iterable[String]) => i.mkString(File.pathSeparator), to, log)
-	def writePaths(map: Map[Path, Set[Path]], label: String, to: Path, log: Logger) =
-		write(map, label, Path.makeRelativeString, to, log)
-	private def write[Value](map: Map[Path, Set[Value]], label: String,
-		valuesToString: Iterable[Value] => String, to: Path, log: Logger): Option[String] =
-	{
-		val properties = new Properties
-		for( (path, set) <- map)
-			properties.setProperty(path.projectRelativePath, valuesToString(set))
-		PropertiesUtilities.write(properties, label, to, log)
-	}
-	def writeFilePaths(map: Map[File, Set[Path]], label: String, to: Path, log: Logger) =
-	{
-		val properties = new Properties
-		for( (file, set) <- map)
-			properties.setProperty(file.getCanonicalPath, Path.makeRelativeString(set))
-		PropertiesUtilities.write(properties, label, to, log)
-	}
-	
-	private def pathSetFromString(projectPath: Path)(s: String): Set[Path] =
-		(new HashSet[Path]) ++ Path.splitString(projectPath, s)
-	private def stringToSet[T](f: String => T)(s: String): Set[T] =
-		(new HashSet[T]) ++ FileUtilities.pathSplit(s).map(_.trim).filter(_.length > 0).map(f)
-
-	def loadHashes(map: Map[Path, Array[Byte]], from: Path, projectPath: Path, log: Logger) =
-		load(map, Hash.fromHex, from, projectPath, log)
-	def loadTestDefinitions(map: Map[Path, Set[TestDefinition]], from: Path, projectPath: Path, log: Logger) =
-		loadStrings(map, t => TestParser.parse(t).fold(error, x => x), from, projectPath, log)
-	def loadStrings(map: Map[Path, Set[String]], from: Path, projectPath: Path, log: Logger): Option[String] =
-		loadStrings(map, x => x, from, projectPath, log)
-	def loadStrings[T](map: Map[Path, Set[T]], f: String => T, from: Path, projectPath: Path, log: Logger): Option[String] =
-		load(map, stringToSet[T](f)(_), from, projectPath, log)
-	def loadPaths(map: Map[Path, Set[Path]], from: Path, projectPath: Path, log: Logger) =
-		load(map, pathSetFromString(projectPath)(_), from, projectPath, log)
-		
-	private def load[Value](map: Map[Path, Value], stringToValue: String => Value, from: Path, projectPath: Path, log: Logger): Option[String] =
-	{
-		map.clear
-		val properties = new Properties
-		PropertiesUtilities.load(properties, from, log) orElse
-		{
-			for(name <- PropertiesUtilities.propertyNames(properties))
-				map.put(Path.fromString(projectPath, name), stringToValue(properties.getProperty(name)))
-			None
-		}
-	}
-	def loadFilePaths(map: Map[File, Set[Path]], from: Path, projectPath: Path, log: Logger) =
-	{
-		map.clear
-		val properties = new Properties
-		PropertiesUtilities.load(properties, from, log) orElse
-		{
-			for(name <- PropertiesUtilities.propertyNames(properties))
-				map.put(new File(name), pathSetFromString(projectPath)(properties.getProperty(name)))
-			None
-		}
+		write(applicationsMap, ApplicationsLabel, analysisPath / ApplicationsFileName, log) orElse
+		write(hashesMap, HashesLabel, analysisPath / HashesFileName, log) orElse
+		write(testMap, TestsLabel, analysisPath / TestsFileName, log) orElse
+		write(projectDefinitionMap, ProjectDefinitionsLabel, analysisPath / ProjectDefinitionsName, log)
 	}
 }

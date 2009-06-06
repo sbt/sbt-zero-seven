@@ -19,9 +19,11 @@ trait ScalaIntegrationTesting extends IntegrationTesting
 		testTask(frameworks, classpath, analysis, options)
 }
 
+trait BasicScalaIntegrationTesting extends BasicIntegrationTesting with MavenStyleIntegrationTestPaths
+{ self: BasicScalaProject => }
 /** A fully featured integration testing that may be mixed in with any subclass of <code>BasicScalaProject</code>.
  * Pre-suite setup and post-suite cleanup are provide by overriding <code>pretests</code> and <code>posttests</code> respectively.*/
-trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with IntegrationTestPaths with BasicDependencyProject
+trait BasicIntegrationTesting extends ScalaIntegrationTesting with IntegrationTestPaths with BasicDependencyProject
 {
 	self: BasicScalaProject =>
 
@@ -47,7 +49,6 @@ trait BasicScalaIntegrationTesting extends ScalaIntegrationTesting with Integrat
 	def integrationTestConfiguration = if(useIntegrationTestConfiguration) Configurations.IntegrationTest else Configurations.Test
 	def integrationTestClasspath = fullClasspath(integrationTestConfiguration) +++ optionalClasspath
 	
-	def integrationTestSources = descendents(integrationTestScalaSourcePath, "*.scala")
 	def integrationTestLabel = "integration-test"
 	def integrationTestCompileConfiguration = new IntegrationTestCompileConfig
 	
@@ -81,27 +82,4 @@ object BasicScalaIntegrationTesting
 {
 	val IntegrationTestCompileDescription = "Compiles integration test sources."
 	val IntegrationTestDescription = "Runs all integration tests detected during compilation."
-}
-
-trait IntegrationTestPaths extends BasicProjectPaths
-{
-	import IntegrationTestPaths._
-
-	def integrationTestDirectoryName = DefaultIntegrationTestDirectoryName
-	def integrationTestCompileDirectoryName = DefaultIntegrationTestCompileDirectoryName
-	def integrationTestAnalysisDirectoryName = DefaultIntegrationTestAnalysisDirectoryName
-
-	def integrationTestSourcePath = sourcePath / integrationTestDirectoryName
-	def integrationTestScalaSourcePath = integrationTestSourcePath / scalaDirectoryName
-	def integrationTestResourcesPath = integrationTestSourcePath / resourcesDirectoryName
-
-	def integrationTestCompilePath = outputPath / integrationTestCompileDirectoryName
-	def integrationTestAnalysisPath = outputPath / integrationTestAnalysisDirectoryName
-}
-
-object IntegrationTestPaths
-{
-	val DefaultIntegrationTestDirectoryName = "it"
-	val DefaultIntegrationTestCompileDirectoryName = "it-classes"
-	val DefaultIntegrationTestAnalysisDirectoryName = "it-analysis"
 }

@@ -53,6 +53,7 @@ src/main/scala/sbt/ExitHook.scala -text
 src/main/scala/sbt/FileTask.scala -text
 src/main/scala/sbt/FileUtilities.scala -text
 src/main/scala/sbt/Fork.scala -text
+src/main/scala/sbt/Format.scala -text
 src/main/scala/sbt/Hash.scala -text
 src/main/scala/sbt/IntegrationTesting.scala -text
 src/main/scala/sbt/LineReader.scala -text
@@ -68,6 +69,7 @@ src/main/scala/sbt/Path.scala -text
 src/main/scala/sbt/Process.scala -text
 src/main/scala/sbt/Project.scala -text
 src/main/scala/sbt/ProjectInfo.scala -text
+src/main/scala/sbt/ProjectPaths.scala -text
 src/main/scala/sbt/ReflectUtilities.scala -text
 src/main/scala/sbt/Resources.scala -text
 src/main/scala/sbt/Run.scala -text
@@ -81,6 +83,7 @@ src/main/scala/sbt/Version.scala -text
 src/main/scala/sbt/WebApp.scala -text
 src/main/scala/sbt/Webstart.scala -text
 src/main/scala/sbt/impl/CommandParser.scala -text
+src/main/scala/sbt/impl/MapUtilities.scala -text
 src/main/scala/sbt/impl/ProcessImpl.scala -text
 src/main/scala/sbt/impl/RunTask.scala -text
 src/main/scala/sbt/impl/SelectMainClass.scala -text

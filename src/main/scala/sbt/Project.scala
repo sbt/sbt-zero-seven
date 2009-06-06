@@ -183,7 +183,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	
 	/** The list of directories to which this project writes.  This is used to verify that multiple
 	* projects have not been defined with the same output directories. */
-	def outputDirectories: Iterable[Path] = outputPath :: Nil
+	def outputDirectories: Iterable[Path] = outputRootPath :: Nil
 	def rootProject = Project.rootProject(this)
 	/** The path to the file that provides persistence for properties.*/
 	final def envBackingPath = info.builderPath / Project.DefaultEnvBackingName
@@ -284,7 +284,7 @@ object Project
 	/** Returns the current version of Scala being used to build the project.  If the sbt loader is not being
 	* used, this returns None.  Otherwise, the value returned by this method is fixed for the duration of
 	* a Project's existence.  It only changes on reboot (during which a Project is recreated).*/
-	def currentScalaVersion: Option[String] =
+	val currentScalaVersion: Option[String] =
 	{
 		val sv = sbtScalaVersion
 		if(sv.isEmpty)
@@ -292,6 +292,7 @@ object Project
 		else
 			Some(sv)
 	}
+	def scalaVersionString = currentScalaVersion.map("_" + _).getOrElse("")
 	
 	/** Loads the project in the current working directory.*/
 	private[sbt] def loadProject: LoadResult = loadProject(bootLogger)

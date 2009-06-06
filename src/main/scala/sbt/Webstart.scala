@@ -259,10 +259,10 @@ private object WebstartScalaProject
 }
 /** The default extension point for a webstart project.  There is one method that is required to be defined: jnlpXML.
 * 'webstartSignConfiguration', 'webstartPack200', and 'webstartGzip' are methods of interest. */
-abstract class DefaultWebstartProject(val info: ProjectInfo) extends BasicWebstartProject
+abstract class DefaultWebstartProject(val info: ProjectInfo) extends BasicWebstartProject with MavenStyleWebstartPaths
 /** Defines default implementations of all methods in WebstartOptions except for jnlpXML.  packageAction is overridden
 * to create a webstart distribution after the normal package operation. */
-abstract class BasicWebstartProject extends BasicScalaProject with WebstartScalaProject with WebstartPaths
+abstract class BasicWebstartProject extends BasicScalaProject with WebstartScalaProject with WebstartOptions with WebstartPaths
 {
 	def webstartSignConfiguration: Option[SignConfiguration] = None
 	
@@ -274,28 +274,4 @@ abstract class BasicWebstartProject extends BasicScalaProject with WebstartScala
 	def webstartGzip = true
 	
 	override def packageAction = super.packageAction && webstartTask(this)
-}
-/** Defines default paths for a webstart project.  It directly extends WebstartOptions to make
-* it easy to implement and override webstart options in the common case of one webstartTask per
-* project.*/
-trait WebstartPaths extends BasicProjectPaths with WebstartOptions
-{
-	def webstartOutputDirectory = outputPath / webstartDirectoryName
-	def webstartMainJar = outputPath / defaultJarName
-	
-	def webstartLibDirectory = webstartOutputDirectory / webstartLibName
-	def jnlpFile = webstartOutputDirectory / jnlpFileName
-	def webstartZip: Option[Path] = Some(outputPath / webstartZipName)
-	def jnlpPath = mainSourcePath / DefaultJnlpName
-	def jnlpResourcesPath = jnlpPath / BasicProjectPaths.DefaultResourcesDirectoryName
-	
-	def jnlpFileName = DefaultJnlpFileName
-	def webstartLibName = DefaultWebstartLibName
-	def webstartDirectoryName = DefaultWebstartDirectoryName
-	def webstartZipName = artifactBaseName + ".zip"
-	
-	val DefaultWebstartDirectoryName = "webstart"
-	val DefaultJnlpName = "jnlp"
-	def DefaultJnlpFileName = artifactBaseName + ".jnlp"
-	val DefaultWebstartLibName = "lib"
 }

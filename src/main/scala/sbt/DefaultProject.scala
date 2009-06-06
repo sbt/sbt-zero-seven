@@ -1,12 +1,13 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah, David MacIver
+ * Copyright 2008, 2009  Mark Harrah, David MacIver
  */
 package sbt
 
 /** The default project when no project is explicitly configured and the common base class for
 * configuring a project.*/
-class DefaultProject(val info: ProjectInfo) extends BasicScalaProject
-class DefaultWebProject(val info: ProjectInfo) extends BasicWebScalaProject
+class DefaultProject(val info: ProjectInfo) extends BasicScalaProject with MavenStyleScalaPaths
+class DefaultWebProject(val info: ProjectInfo) extends BasicWebScalaProject with MavenStyleWebScalaPaths
+
 
 import BasicScalaProject._
 import ScalaProject.{optionsAsString, javaOptionsAsString}
@@ -15,7 +16,7 @@ import java.util.jar.Attributes
 
 /** This class defines concrete instances of actions from ScalaProject using overridable paths,
 * options, and configuration. */
-abstract class BasicScalaProject extends ScalaProject with BasicDependencyProject with BasicProjectPaths
+abstract class BasicScalaProject extends ScalaProject with BasicDependencyProject with ScalaPaths
 {
 	/** The explicitly specified class to be run by the 'run' action.
 	* See http://code.google.com/p/simple-build-tool/wiki/RunningProjectCode for details.*/
@@ -44,37 +45,6 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 
 	val mainCompileConditional = new CompileConditional(mainCompileConfiguration)
 	val testCompileConditional = new CompileConditional(testCompileConfiguration)
-
-	/** Declares all sources to be packaged by the package-src action.*/
-	def packageSourcePaths = mainSources +++ mainResources
-	/** Declares all sources to be packaged by the package-test-src action.*/
-	def packageTestSourcePaths = testSources +++ testResources
-	/** Declares all paths to be packaged by the package-project action.*/
-	def packageProjectPaths = descendents( (info.projectPath ##), "*") --- (packageProjectExcludes ** "*")
-	protected def packageProjectExcludes: PathFinder = outputRootPath +++ managedDependencyRootPath +++ info.bootPath +++ info.builderProjectOutputPath
-	
-	/** The Scala sources to compile with the `compile` action. By default, it excludes paths that match 'defaultExcludes'.*/
-	def mainScalaSources = descendents(mainScalaSourcePath ##, "*.scala")
-	/** The Java sources to compile with the `compile` action.. By default, it excludes paths that match 'defaultExcludes'.*/
-	def mainJavaSources = descendents(mainJavaSourcePath ##, "*.java")
-	/** The Scala sources to compile with the `test-compile` action.. By default, it excludes paths that match 'defaultExcludes'.*/
-	def testScalaSources = descendents(testScalaSourcePath ##, "*.scala")
-	/** The Java sources to compile with the `test-compile` action.. By default, it excludes paths that match 'defaultExcludes'.*/
-	def testJavaSources = descendents(testJavaSourcePath ##, "*.java")
-	
-	/** A PathFinder that selects all main sources.*/
-	def mainSources = mainScalaSources +++ mainJavaSources
-	/** A PathFinder that selects all test sources.*/
-	def testSources = testScalaSources +++ testJavaSources
-	/** A PathFinder that selects all main resources.  By default, it excludes paths that match 'defaultExcludes'.*/
-	def mainResources = descendents(mainResourcesPath ##, "*")
-	/** A PathFinder that selects all test resources. By default, it excludes paths that match 'defaultExcludes'.*/
-	def testResources = descendents(testResourcesPath ##, "*")
-	
-	/** A PathFinder that selects all the classes compiled from the main sources.*/
-	def mainClasses = (mainCompilePath ##) ** "*.class"
-	/** A PathFinder that selects all the classes compiled from the test sources.*/
-	def testClasses = (testCompilePath ##) ** "*.class"
 
 	/** The main artifact produced by this project. To redefine the main artifact, override `defaultMainArtifact`
 	* Additional artifacts are defined by `val`s of type `Artifact`.*/
@@ -125,16 +95,6 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	
 	protected def includeTest(test: String): Boolean = true
 
-	
-	/** These are the directories that are created when a user makes a new project from sbt.*/
-	private def directoriesToCreate: List[Path] =
-		dependencyPath ::
-		mainScalaSourcePath ::
-		mainResourcesPath ::
-		testScalaSourcePath ::
-		testResourcesPath ::
-		Nil
-	
 	/** This is called to create the initial directories when a user makes a new project from
 	* sbt.*/
 	override final def initializeDirectories()
@@ -180,13 +140,13 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		}
 	}
 	/** The unmanaged base classpath.  By default, the unmanaged classpaths for test and run include this classpath. */
-	protected def mainUnmanagedClasspath = mainCompilePath +++ mainResourcesPath +++ unmanagedClasspath
+	protected def mainUnmanagedClasspath = mainCompilePath +++ mainResourceClasspath +++ unmanagedClasspath
 	/** The unmanaged classpath for the run configuration. By default, it includes the base classpath returned by
 	* `mainUnmanagedClasspath`.*/
 	protected def runUnmanagedClasspath = mainUnmanagedClasspath +++ mainDependencies.scalaCompiler
 	/** The unmanaged classpath for the test configuration.  By default, it includes the run classpath, which includes the base
 	* classpath returned by `mainUnmanagedClasspath`.*/
-	protected def testUnmanagedClasspath = testCompilePath +++ testResourcesPath  +++ testDependencies.scalaCompiler +++ runUnmanagedClasspath
+	protected def testUnmanagedClasspath = testCompilePath +++ testResourceClasspath  +++ testDependencies.scalaCompiler +++ runUnmanagedClasspath
 	
 	/** @deprecated Use `mainDependencies.scalaJars`*/
 	@deprecated protected final def scalaJars: Iterable[File] = mainDependencies.scalaJars.get.map(_.asFile)
@@ -282,12 +242,12 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	override protected def deliverLocalAction = super.deliverLocalAction dependsOn(`package`)
 	override protected def deliverAction = super.deliverAction dependsOn(`package`)
 	
-	protected def packageAction = packageTask(mainClasses +++ mainResources, outputPath, defaultJarName, packageOptions).dependsOn(compile) describedAs PackageDescription
-	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath, artifactBaseName + "-test.jar").dependsOn(testCompile) describedAs TestPackageDescription
-	protected def packageDocsAction = packageTask(mainDocPath ##, outputPath, artifactBaseName + "-docs.jar", Recursive).dependsOn(doc) describedAs DocPackageDescription
-	protected def packageSrcAction = packageTask(packageSourcePaths, outputPath, artifactBaseName + "-src.jar") describedAs SourcePackageDescription
-	protected def packageTestSrcAction = packageTask(packageTestSourcePaths, outputPath, artifactBaseName + "-test-src.jar") describedAs TestSourcePackageDescription
-	protected def packageProjectAction = zipTask(packageProjectPaths, outputPath, artifactBaseName + "-project.zip") describedAs ProjectPackageDescription
+	protected def packageAction = packageTask(mainClasses +++ mainResources, jarPath, packageOptions).dependsOn(compile) describedAs PackageDescription
+	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath / (artifactBaseName + "-test.jar")).dependsOn(testCompile) describedAs TestPackageDescription
+	protected def packageDocsAction = packageTask(mainDocPath ##, outputPath / (artifactBaseName + "-docs.jar"), Recursive).dependsOn(doc) describedAs DocPackageDescription
+	protected def packageSrcAction = packageTask(packageSourcePaths, outputPath / (artifactBaseName + "-src.jar")) describedAs SourcePackageDescription
+	protected def packageTestSrcAction = packageTask(packageTestSourcePaths, outputPath / (artifactBaseName + "-test-src.jar")) describedAs TestSourcePackageDescription
+	protected def packageProjectAction = zipTask(packageProjectPaths, outputPath / (artifactBaseName + "-project.zip")) describedAs ProjectPackageDescription
 	
 	protected def docAllAction = (doc && docTest) describedAs DocAllDescription
 	protected def packageAllAction = task { None } dependsOn(`package`, packageTest, packageSrc, packageTestSrc, packageDocs) describedAs PackageAllDescription
@@ -324,7 +284,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		topologicalSort.dropRight(1) flatMap { p =>
 			p match
 			{
-				case bpp: BasicProjectPaths => List(bpp.outputPath / bpp.defaultJarName)
+				case bpp: BasicScalaPaths => List(bpp.jarPath)
 				case _ => Nil
 			}
 		}
@@ -335,12 +295,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		mapScalaModule(snapshot.scalaLibrary, ManageDependencies.ScalaLibraryID) ++
 		mapScalaModule(snapshot.scalaCompiler, ManageDependencies.ScalaCompilerID)
 	}
-	
-	/** The directories to which a project writes are listed here and is used
-	* to check a project and its dependencies for collisions.*/
-	override def outputDirectories = outputPath :: managedDependencyPath :: Nil
 }
-abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProject with WebProjectPaths
+abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProject with WebScalaPaths
 {
 	import BasicWebScalaProject._
 	
@@ -370,8 +326,7 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	override def cleanAction = super.cleanAction dependsOn jettyStop
 	
 	/** Redefine the `package` action to make a war file.*/
-	override protected def packageAction = packageTask(descendents(temporaryWarPath ##, "*"), outputPath,
-		defaultWarName, Nil) dependsOn(prepareWebapp) describedAs PackageWarDescription
+	override protected def packageAction = packageTask(descendents(temporaryWarPath ##, "*"), warPath, Nil) dependsOn(prepareWebapp) describedAs PackageWarDescription
 
 	/** Redefine the default main artifact to be a war file.*/
 	override protected def defaultMainArtifact = Artifact(artifactID, "war", "war")
@@ -445,85 +400,6 @@ object BasicWebScalaProject
 		"Stops the Jetty server that was started with the jetty-run action."
 	val JettyRunDescription =
 		"Starts the Jetty server and serves this project as a web application."
-}
-trait BasicProjectPaths extends Project
-{
-	import BasicProjectPaths._
-	def artifactBaseName: String
-	def defaultJarBaseName: String = artifactBaseName
-	def defaultJarName = defaultJarBaseName + ".jar"
-	def defaultWarName = defaultJarBaseName + ".war"
-	
-	def sourceDirectoryName = DefaultSourceDirectoryName
-	def mainDirectoryName = DefaultMainDirectoryName
-	def scalaDirectoryName = DefaultScalaDirectoryName
-	def javaDirectoryName = DefaultJavaDirectoryName
-	def resourcesDirectoryName = DefaultResourcesDirectoryName
-	def testDirectoryName = DefaultTestDirectoryName
-	def mainCompileDirectoryName = DefaultMainCompileDirectoryName
-	def testCompileDirectoryName = DefaultTestCompileDirectoryName
-	def docDirectoryName = DefaultDocDirectoryName
-	def apiDirectoryName = DefaultAPIDirectoryName
-	def graphDirectoryName = DefaultGraphDirectoryName
-	def mainAnalysisDirectoryName = DefaultMainAnalysisDirectoryName
-	def testAnalysisDirectoryName = DefaultTestAnalysisDirectoryName
-	
-	def sourcePath = path(sourceDirectoryName)
-	def bootPath = path(BootDirectoryName)
-	
-	def mainSourcePath = sourcePath / mainDirectoryName
-	def mainScalaSourcePath = mainSourcePath / scalaDirectoryName
-	def mainJavaSourcePath = mainSourcePath / javaDirectoryName
-	def mainResourcesPath = mainSourcePath / resourcesDirectoryName
-	def mainDocPath = docPath / mainDirectoryName / apiDirectoryName
-	def mainCompilePath = outputPath / mainCompileDirectoryName
-	def mainAnalysisPath = outputPath / mainAnalysisDirectoryName
-	
-	def testSourcePath = sourcePath / testDirectoryName
-	def testJavaSourcePath = testSourcePath / javaDirectoryName
-	def testScalaSourcePath = testSourcePath / scalaDirectoryName
-	def testResourcesPath = testSourcePath / resourcesDirectoryName
-	def testDocPath = docPath / testDirectoryName / apiDirectoryName
-	def testCompilePath = outputPath / testCompileDirectoryName
-	def testAnalysisPath = outputPath / testAnalysisDirectoryName
-	
-	def docPath = outputPath / docDirectoryName
-	def graphPath = outputPath / graphDirectoryName
-}
-object BasicProjectPaths
-{
-	val DefaultSourceDirectoryName = "src"
-	val DefaultMainCompileDirectoryName = "classes"
-	val DefaultTestCompileDirectoryName = "test-classes"
-	val DefaultDocDirectoryName = "doc"
-	val DefaultAPIDirectoryName = "api"
-	val DefaultGraphDirectoryName = "graph"
-	val DefaultMainAnalysisDirectoryName = "analysis"
-	val DefaultTestAnalysisDirectoryName = "test-analysis"
-	
-	val DefaultMainDirectoryName = "main"
-	val DefaultScalaDirectoryName = "scala"
-	val DefaultJavaDirectoryName = "java"
-	val DefaultResourcesDirectoryName = "resources"
-	val DefaultTestDirectoryName = "test"
-	
-	// forwarders to new locations
-	def BootDirectoryName = Project.BootDirectoryName
-	def DefaultManagedDirectoryName = BasicDependencyPaths.DefaultManagedDirectoryName
-	def DefaultDependencyDirectoryName = BasicDependencyPaths.DefaultDependencyDirectoryName
-}
-trait WebProjectPaths extends BasicProjectPaths
-{
-	import WebProjectPaths._
-	def temporaryWarPath = outputDirectoryName / webappDirectoryName
-	def webappPath = mainSourcePath / webappDirectoryName
-	def webappDirectoryName = DefaultWebappDirectoryName
-	def jettyContextPath = DefaultJettyContextPath
-}
-object WebProjectPaths
-{
-	val DefaultWebappDirectoryName = "webapp"
-	val DefaultJettyContextPath = "/"
 }
 /** Analyzes the dependencies of a project after compilation.  All methods except `snapshot` return a
 * `PathFinder`.  The underlying calculations are repeated for each call to PathFinder.get. */
