@@ -103,29 +103,20 @@ sealed class BasicAnalysis(analysisPath: Path, projectPath: Path, log: Logger) e
 	}
 	
 	import Format._ // get implicits for data types
-	
 	implicit val path: Format[Path] = Format.path(projectPath)
 	implicit val pathSet: Format[Set[Path]] = Format.set
 	
-	def revert() = load()
-	final def load(): Option[String] =
-	{
-		read(sourceDependencyMap, analysisPath / DependenciesFileName, log) orElse
-			read(productMap, analysisPath / GeneratedFileName, log) orElse
-			read(externalDependencyMap, analysisPath / ExternalDependenciesFileName, log) orElse
-			loadExtra()
-	}
-	protected def loadExtra(): Option[String] = None
+	protected def backedMaps: Iterable[Backed[_,_]] = 
+		Backed(sourceDependencyMap, DependenciesLabel, DependenciesFileName) ::
+		Backed(productMap, GeneratedLabel, GeneratedFileName) ::
+		Backed(externalDependencyMap, ExternalDependenciesLabel, ExternalDependenciesFileName) ::
+		Nil
 	
-	final def save(): Option[String] =
-	{
-		FileUtilities.createDirectory(analysisPath.asFile, log) orElse
-			write(sourceDependencyMap, DependenciesLabel, analysisPath / DependenciesFileName, log) orElse
-			write(productMap, GeneratedLabel, analysisPath / GeneratedFileName, log) orElse
-			write(externalDependencyMap, ExternalDependenciesLabel, analysisPath / ExternalDependenciesFileName, log) orElse
-			saveExtra()
-	}
-	protected def saveExtra(): Option[String] = None
+	def revert() = load()
+	private def loadBacked[Key,Value](b: Backed[Key,Value]) = read(b.map, analysisPath / b.name, log)(b.keyFormat, b.valueFormat)
+	private def storeBacked[Key,Value](b: Backed[Key,Value]) = write(b.map, b.label, analysisPath / b.name, log)(b.keyFormat, b.valueFormat)
+	final def load(): Option[String] = Control.lazyFold(backedMaps.toList)(backed =>loadBacked(backed))
+	final def save(): Option[String] = Control.lazyFold(backedMaps.toList)(backed => storeBacked(backed))
 }
 object BasicAnalysis
 {
@@ -204,18 +195,13 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 	import Format._ // get implicits for data types
 	implicit val stringSet: Format[Set[String]] = Format.set
 	implicit val testSet: Format[Set[TestDefinition]] = Format.set
-	override protected def loadExtra() =
-	{
-		read(applicationsMap, analysisPath / ApplicationsFileName, log) orElse
-		read(hashesMap, analysisPath / HashesFileName, log) orElse
-		read(testMap, analysisPath / TestsFileName, log) orElse
-		read(projectDefinitionMap, analysisPath / ProjectDefinitionsName, log)
-	}
-	override protected def saveExtra() =
-	{
-		write(applicationsMap, ApplicationsLabel, analysisPath / ApplicationsFileName, log) orElse
-		write(hashesMap, HashesLabel, analysisPath / HashesFileName, log) orElse
-		write(testMap, TestsLabel, analysisPath / TestsFileName, log) orElse
-		write(projectDefinitionMap, ProjectDefinitionsLabel, analysisPath / ProjectDefinitionsName, log)
-	}
+	
+	override protected def backedMaps =
+		Backed(applicationsMap, ApplicationsLabel, ApplicationsFileName) ::
+		Backed(hashesMap, HashesLabel, HashesFileName) ::
+		Backed(testMap, TestsLabel, TestsFileName) ::
+		Backed(projectDefinitionMap, ProjectDefinitionsLabel, ProjectDefinitionsName) ::
+		super.backedMaps.toList
 }
+/** A map that is persisted in a properties file named 'name' and with 'label'.  'keyFormat' and 'valueFormat' are used to (de)serialize. */
+final case class Backed[Key, Value](map: Map[Key, Value], label: String, name: String)(implicit val keyFormat: Format[Key], val valueFormat: Format[Value]) extends NotNull
