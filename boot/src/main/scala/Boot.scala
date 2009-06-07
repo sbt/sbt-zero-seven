@@ -185,18 +185,20 @@ private class Setup(loaderCache: LoaderCache) extends Paths
 		val scalaDirectory = new File(baseDirectory, ScalaDirectoryName)
 		val sbtDirectory = new File(baseDirectory, sbtDirectoryName(sbtVersion))
 		
-		val updateTargets = needsUpdate("", scalaDirectory, TestLoadScalaClasses, UpdateScala) ::: needsUpdate(sbtVersion, sbtDirectory, TestLoadSbtClasses, UpdateSbt)
-		Update(baseDirectory, sbtVersion, scalaVersion, updateTargets: _*)
+		val classpath = getJars(scalaDirectory, sbtDirectory)
+		val classLoader = new URLClassLoader(classpath.toArray, new BootFilteredLoader)
 		
-		val sbtFailed = failIfMissing(sbtDirectory, TestLoadSbtClasses, "sbt " + sbtVersion, SbtVersionKey)
-		val scalaFailed = failIfMissing(scalaDirectory, TestLoadScalaClasses, "Scala " + scalaVersion, ScalaVersionKey)
+		val updateTargets = needsUpdate("", classLoader, TestLoadScalaClasses, UpdateScala) ::: needsUpdate(sbtVersion, classLoader, TestLoadSbtClasses, UpdateSbt)
+		if(!updateTargets.isEmpty) // avoid loading Ivy related classes if there is nothing to update
+			Update(baseDirectory, sbtVersion, scalaVersion, updateTargets: _*)
+		
+		val sbtFailed = failIfMissing(classLoader, TestLoadSbtClasses, "sbt " + sbtVersion, SbtVersionKey)
+		val scalaFailed = failIfMissing(classLoader, TestLoadScalaClasses, "Scala " + scalaVersion, ScalaVersionKey)
 		
 		(scalaFailed +++ sbtFailed) match
 		{
 			case Success =>
 				setScalaVersion(scalaVersion)
-				val classpath = getJars(scalaDirectory, sbtDirectory)
-				val classLoader = new URLClassLoader(classpath.toArray, new BootFilteredLoader)
 				loaderCache( scalaVersion, sbtVersion ) = classLoader
 				Right(classLoader)
 			case f: Failure =>
@@ -236,27 +238,21 @@ private final class LoaderCache
 }
 private object Setup
 {
-	private def failIfMissing(dir: File, classes: Iterable[String], label: String, key: String) = checkTarget(dir, classes, Success, new Failure(label, List(key)))
-	private def needsUpdate(version: String, dir: File, classes: Iterable[String], target: UpdateTarget.Value) =
+	private def failIfMissing(loader: ClassLoader, classes: Iterable[String], label: String, key: String) = checkTarget(loader, classes, Success, new Failure(label, List(key)))
+	private def needsUpdate(version: String, loader: ClassLoader, classes: Iterable[String], target: UpdateTarget.Value) =
 		if(version.endsWith("-SNAPSHOT"))
 			target :: Nil
 		else
-			checkTarget(dir, classes, Nil, target :: Nil)
-	private def checkTarget[T](dir: File, classes: Iterable[String], ifSuccess: => T, ifFailure: => T): T =
+			checkTarget(loader, classes, Nil, target :: Nil)
+	private def checkTarget[T](loader: ClassLoader, classes: Iterable[String], ifSuccess: => T, ifFailure: => T): T =
 	{
-		if(dir.exists)
+		try
 		{
-			val loader = new URLClassLoader(getJars(dir).toArray, new BootFilteredLoader)
-			try
-			{
-				for(c <- classes)
-					Class.forName(c, false, loader)
-				ifSuccess
-			}
-			catch { case e: ClassNotFoundException => ifFailure }
+			for(c <- classes)
+				Class.forName(c, false, loader)
+			ifSuccess
 		}
-		else
-			ifFailure
+		catch { case e: ClassNotFoundException => ifFailure }
 	}
 	def isYes(so: Option[String]) =
 		so match
