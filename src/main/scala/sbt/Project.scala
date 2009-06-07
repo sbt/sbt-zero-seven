@@ -350,7 +350,6 @@ object Project
 	/** Checks the project's dependencies, initializes its environment, and possibly its directories.*/
 	private def initialize[P <: Project](p: P, setupInfo: Option[SetupInfo], log: Logger): P =
 	{
-		p.initializeEnvironment()
 		setupInfo match
 		{
 			case Some(setup) =>

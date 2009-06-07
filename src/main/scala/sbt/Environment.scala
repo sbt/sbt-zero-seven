@@ -205,14 +205,15 @@ trait BasicEnvironment extends Environment
 		new UserProperty[T](Some(defaultValue), format, true, inheritFirst, manifest)
 	
 	private type AnyUserProperty = UserProperty[_]
-	/** Maps property name to property.  The map is populated by 'initializeEnvironment'.*/
-	private val propertyMap = new scala.collection.mutable.HashMap[String, AnyUserProperty]
+	/** Maps property name to property.  The map is populated by 'initializeEnvironment'.  It should not be referenced
+	* by initialization or else subclass properties will be missed.**/
+	private lazy val propertyMap = initializeEnvironment
 	
-	import java.util.Properties
 	/** Initializes 'propertyMap' by reflectively listing the vals on this object that
 	* reference a UserProperty. */
-	private[sbt] def initializeEnvironment()
+	private def initializeEnvironment =
 	{
+		val propertyMap = new scala.collection.mutable.HashMap[String, AnyUserProperty]
 		// AnyProperty is required because the return type of the property*[T] methods is Property[T]
 		// and so the vals we are looking for have type Property[T] and not UserProperty[T]
 		// We then only keep instances of UserProperty
@@ -221,7 +222,7 @@ trait BasicEnvironment extends Environment
 		for( (name, property: AnyUserProperty) <- vals)
 			propertyMap(name) = property
 		
-		val properties = new Properties
+		val properties = new java.util.Properties
 		for(errorMsg <- PropertiesUtilities.load(properties, envBackingPath, log))
 			log.error("Error loading properties from " + environmentLabel + " : " + errorMsg)
 		
@@ -241,6 +242,7 @@ trait BasicEnvironment extends Environment
 			}
 		}
 		setEnvironmentModified(false)
+		propertyMap
 	}
 	def propertyNames: Iterable[String] = propertyMap.keys.toList
 	def getPropertyNamed(name: String): Option[UserProperty[_]] = propertyMap.get(name)
@@ -249,7 +251,7 @@ trait BasicEnvironment extends Environment
 	{
 		if(isEnvironmentModified)
 		{
-			val properties = new Properties
+			val properties = new java.util.Properties
 			for( (name, variable) <- propertyMap; stringValue <- variable.getStringValue)
 				properties.setProperty(name, stringValue)
 			val result = PropertiesUtilities.write(properties, "Project properties", envBackingPath, log)
@@ -273,15 +275,14 @@ trait BasicEnvironment extends Environment
 		{
 			val trimmed = s.trim
 			if(trimmed.isEmpty)
-				throw new RuntimeException("The empty string is not allowed.")
-			else
-				trimmed
+				error("The empty string is not allowed.")
+			trimmed
 		}
 	}
 	implicit val VersionFormat: Format[Version] =
 		new SimpleFormat[Version]
 		{
-			def fromString(s: String) = Version.fromString(s).fold(msg => throw new RuntimeException(msg), x => x)
+			def fromString(s: String) = Version.fromString(s).fold(msg => error(msg), x => x)
 		}
 	implicit val FileFormat = Format.file
 }
@@ -294,7 +295,6 @@ private object Environment
 			mappings(ReflectUtilities.transformCamelCase(name, '.')) = value
 		mappings
 	}
-	def scalaVersionString = scala.tools.nsc.Properties.versionString
 }
 
 sealed trait PropertyResolution[+T] extends NotNull
