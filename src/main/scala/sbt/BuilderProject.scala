@@ -4,7 +4,7 @@
 package sbt
 
 /** The project definition used to build project definitions. */
-final class BuilderProject(val info: ProjectInfo, override protected val logImpl: Logger) extends ScalaProject
+private final class BuilderProject(val info: ProjectInfo, override protected val logImpl: Logger) extends SimpleScalaProject
 {
 	import BasicProjectPaths._
 	
@@ -26,42 +26,46 @@ final class BuilderProject(val info: ProjectInfo, override protected val logImpl
 	def projectClasspath = compilePath +++ libraries +++
 		Path.lazyPathFinder { Path.fromFile(FileUtilities.sbtJar) :: Nil }
 
-	val compileConditional =
-		new CompileConditional(compileConfiguration)
+	val compileConditional = new BuilderCompileConditional
+	final class BuilderCompileConditional extends AbstractCompileConditional(compileConfiguration)
+	{
+		type AnalysisType = BuilderCompileAnalysis
+		override protected def constructAnalysis(analysisPath: Path, projectPath: Path, log: Logger) =
+			new BuilderCompileAnalysis(analysisPath, projectPath, log)
+		override protected def execute(cAnalysis: ConditionalAnalysis): Option[String] =
 		{
-			override protected def execute(cAnalysis: ConditionalAnalysis): Option[String] =
+			if(cAnalysis.dirtySources.isEmpty)
+				None
+			else
 			{
-				if(cAnalysis.dirtySources.isEmpty)
-					None
-				else
-				{
-					val oldLevel = log.getLevel
-					log.setLevel(Level.Info)
-					log.info("Recompiling project definition...")
-					log.info("\t" + cAnalysis.toString)
-					log.setLevel(oldLevel)
-					super.execute(cAnalysis)
-				}
+				val oldLevel = log.getLevel
+				log.setLevel(Level.Info)
+				log.info("Recompiling project definition...")
+				log.info("\t" + cAnalysis.toString)
+				log.setLevel(oldLevel)
+				super.execute(cAnalysis)
 			}
-			override def analysisCallback: AnalysisCallback =
-				new BasicAnalysisCallback(info.projectPath, List(Project.ProjectClassName), analysis)
+		}
+		protected def analysisCallback: AnalysisCallback =
+			new BasicAnalysisCallback(info.projectPath, List(Project.ProjectClassName), analysis)
+			{
+				def foundApplication(sourcePath: Path, className: String)  {}
+				def foundSubclass(sourcePath: Path, subclassName: String, superclassName: String, isModule: Boolean)
 				{
-					def foundSubclass(sourcePath: Path, subclassName: String, superclassName: String, isModule: Boolean)
+					if(superclassName == Project.ProjectClassName && !isModule)
 					{
-						if(superclassName == Project.ProjectClassName && !isModule)
-						{
-							log.debug("Found project definition " + subclassName)
-							analysis.addProjectDefinition(sourcePath, subclassName)
-						}
+						log.debug("Found project definition " + subclassName)
+						analysis.addProjectDefinition(sourcePath, subclassName)
 					}
 				}
-		}
+			}
+	}
 	
 	lazy val compile = task { compileConditional.run }
 	lazy val clean = cleanTask(outputPath, ClearAnalysis(compileConditional.analysis))
 	
 	def compileConfiguration =
-		new CompileConfiguration
+		new AbstractCompileConfiguration
 		{
 			def label = "builder"
 			def sources = sourcePath.descendentsExcept("*.scala", defaultExcludes)
@@ -69,7 +73,6 @@ final class BuilderProject(val info: ProjectInfo, override protected val logImpl
 			def classpath = projectClasspath
 			def analysisPath = outputPath / DefaultMainAnalysisDirectoryName
 			def projectPath = info.projectPath
-			def testDefinitionClassNames = Nil
 			def log = BuilderProject.this.log
 			def options = compileOptions.map(_.asString)
 			def javaOptions = javaCompileOptions

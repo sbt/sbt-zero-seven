@@ -154,31 +154,15 @@ object CompileAnalysis
 		analysis.load().toLeft(analysis)
 	}
 }
-final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
-	extends BasicAnalysis(analysisPath, projectPath, log)
+import CompileAnalysis._
+import Format._ // get implicits for data types
+sealed class BasicCompileAnalysis protected (analysisPath: Path, projectPath: Path, log: Logger) extends BasicAnalysis(analysisPath, projectPath, log)
 {
-	import CompileAnalysis._
-	private val testMap = new HashMap[Path, Set[TestDefinition]]
-	private val projectDefinitionMap = new HashMap[Path, Set[String]]
 	/*private */val hashesMap = new HashMap[Path, Array[Byte]]
-	private val applicationsMap = new HashMap[Path, Set[String]]
 	
-	override protected def mapsToClear = applicationsMap :: hashesMap :: testMap :: projectDefinitionMap :: super.mapsToClear
-	override protected def mapsToRemoveSource = applicationsMap :: hashesMap :: testMap :: projectDefinitionMap :: super.mapsToRemoveSource
+	override protected def mapsToClear = hashesMap :: super.mapsToClear
+	override protected def mapsToRemoveSource = hashesMap :: super.mapsToRemoveSource
 	
-	def allTests = all(testMap)
-	def allProjects = all(projectDefinitionMap)
-	def allApplications = all(applicationsMap)
-	def testSourceMap: Map[String, Path] =
-	{
-		val map = new HashMap[String, Path]
-		for( (source, tests) <- testMap; test <- tests) map(test.testClassName) = source
-		map
-	}
-	
-	def addTest(source: Path, test: TestDefinition) = add(source, test, testMap)
-	def addProjectDefinition(source: Path, className: String) = add(source, className, projectDefinitionMap)
-	def addApplication(source: Path, className: String) = add(source, className, applicationsMap)
 	def setHash(source: Path, hash: Array[Byte]) { hashesMap(source) = hash }
 	def clearHash(source: Path) { hashesMap.removeKey(source) }
 	def hash(source: Path) = hashesMap.get(source)
@@ -192,16 +176,44 @@ final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger)
 				Path.relativize(basePath, c).getOrElse(c)
 		}
 		
-	import Format._ // get implicits for data types
 	implicit val stringSet: Format[Set[String]] = Format.set
-	implicit val testSet: Format[Set[TestDefinition]] = Format.set
+	override protected def backedMaps = Backed(hashesMap, HashesLabel, HashesFileName) :: super.backedMaps.toList
+}
+private[sbt] final class BuilderCompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger) extends BasicCompileAnalysis(analysisPath, projectPath, log)
+{
+	private val projectDefinitionMap = new HashMap[Path, Set[String]]
+	override protected def mapsToClear = projectDefinitionMap :: super.mapsToClear
+	def allProjects = all(projectDefinitionMap)
+	def addProjectDefinition(source: Path, className: String) = add(source, className, projectDefinitionMap)
 	
 	override protected def backedMaps =
-		Backed(applicationsMap, ApplicationsLabel, ApplicationsFileName) ::
-		Backed(hashesMap, HashesLabel, HashesFileName) ::
-		Backed(testMap, TestsLabel, TestsFileName) ::
 		Backed(projectDefinitionMap, ProjectDefinitionsLabel, ProjectDefinitionsName) ::
-		super.backedMaps.toList
+		super.backedMaps
+}
+final class CompileAnalysis(analysisPath: Path, projectPath: Path, log: Logger) extends BasicCompileAnalysis(analysisPath, projectPath, log)
+{
+	private val testMap = new HashMap[Path, Set[TestDefinition]]
+	private val applicationsMap = new HashMap[Path, Set[String]]
+	def allTests = all(testMap)
+	def allApplications = all(applicationsMap)
+	def addTest(source: Path, test: TestDefinition) = add(source, test, testMap)
+	def addApplication(source: Path, className: String) = add(source, className, applicationsMap)
+	
+	def testSourceMap: Map[String, Path] =
+	{
+		val map = new HashMap[String, Path]
+		for( (source, tests) <- testMap; test <- tests) map(test.testClassName) = source
+		map
+	}
+	
+	override protected def mapsToClear = applicationsMap :: testMap :: super.mapsToClear
+	override protected def mapsToRemoveSource = applicationsMap :: testMap :: super.mapsToRemoveSource
+	
+	implicit val testSet: Format[Set[TestDefinition]] = Format.set
+	override protected def backedMaps =
+		Backed(testMap, TestsLabel, TestsFileName) ::
+		Backed(applicationsMap, ApplicationsLabel, ApplicationsFileName) ::
+		super.backedMaps
 }
 /** A map that is persisted in a properties file named 'name' and with 'label'.  'keyFormat' and 'valueFormat' are used to (de)serialize. */
 final case class Backed[Key, Value](map: Map[Key, Value], label: String, name: String)(implicit val keyFormat: Format[Key], val valueFormat: Format[Value]) extends NotNull

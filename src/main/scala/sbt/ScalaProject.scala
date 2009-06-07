@@ -8,21 +8,59 @@ import java.io.File
 import java.util.jar.{Attributes, Manifest}
 import scala.collection.mutable.ListBuffer
 
-trait ScalaProject extends Project with FileTasks
+trait SimpleScalaProject extends Project
 {
-	import ScalaProject._
-	
 	def errorTask(message: String) = task{ Some(message) }
 	
-	case class CompileOption(val asString: String) extends ActionOption
-	case class JavaCompileOption(val asString: String) extends ActionOption
-	final case class MaxCompileErrors(val value: Int) extends CompileOption("") with ScaladocOption { def asList = Nil }
-	
-	trait PackageOption extends ActionOption
-	trait TestOption extends ActionOption
 	trait CleanOption extends ActionOption
 	case class ClearAnalysis(analysis: TaskAnalysis[_, _, _]) extends CleanOption
 	case class Preserve(paths: PathFinder) extends CleanOption
+	
+	case class CompileOption(val asString: String) extends ActionOption
+	case class JavaCompileOption(val asString: String) extends ActionOption
+	
+	val Deprecation = CompileOption("-deprecation")
+	val ExplainTypes = CompileOption("-explaintypes")
+	val Optimize = CompileOption("-optimise")
+	def Optimise = Optimize
+	val Verbose = CompileOption("-verbose")
+	val Unchecked = CompileOption("-unchecked")
+	val DisableWarnings = CompileOption("-nowarn")
+	def target(target: Target.Value) = CompileOption("-target:" + target)
+	object Target extends Enumeration
+	{
+		val Java1_5 = Value("jvm-1.5")
+		val Java1_4 = Value("jvm-1.4")
+		val Msil = Value("msil")
+	}
+	
+	def cleanTask(paths: PathFinder, options: CleanOption*): Task =
+		cleanTask(paths, options)
+	def cleanTask(paths: PathFinder, options: => Seq[CleanOption]): Task =
+		task
+		{
+			val cleanOptions = options
+			val preservePaths = for(Preserve(preservePaths) <- cleanOptions; toPreserve <- preservePaths.get) yield toPreserve
+			Control.thread(FileUtilities.preserve(preservePaths, log))
+			{ preserved =>
+				val pathClean = FileUtilities.clean(paths.get, log)
+				for(ClearAnalysis(analysis) <- cleanOptions)
+				{
+					analysis.clear()
+					analysis.save()
+				}
+				val restored = preserved.restore(log)
+				pathClean orElse restored
+			}
+		}
+}
+trait ScalaProject extends SimpleScalaProject with FileTasks
+{
+	import ScalaProject._
+	
+	final case class MaxCompileErrors(val value: Int) extends CompileOption("") with ScaladocOption { def asList = Nil }
+	trait PackageOption extends ActionOption
+	trait TestOption extends ActionOption
 	
 	case class TestSetup(setup: () => Option[String]) extends TestOption
 	case class TestCleanup(cleanup: () => Option[String]) extends TestOption
@@ -43,20 +81,6 @@ trait ScalaProject extends Project with FileTasks
 		new ManifestAttributes(converted : _*)
 	}
 	
-	val Deprecation = CompileOption("-deprecation")
-	val ExplainTypes = CompileOption("-explaintypes")
-	val Optimize = CompileOption("-optimise")
-	def Optimise = Optimize
-	val Verbose = CompileOption("-verbose")
-	val Unchecked = CompileOption("-unchecked")
-	val DisableWarnings = CompileOption("-nowarn")
-	def target(target: Target.Value) = CompileOption("-target:" + target)
-	object Target extends Enumeration
-	{
-		val Java1_5 = Value("jvm-1.5")
-		val Java1_4 = Value("jvm-1.4")
-		val Msil = Value("msil")
-	}
 	
 	trait ScaladocOption extends ActionOption
 	{
@@ -105,26 +129,6 @@ trait ScalaProject extends Project with FileTasks
 			{
 				case Some(main) => runner.run(main, classpath.get, options, log)
 				case None => Some("No main class specified.")
-			}
-		}
-
-	def cleanTask(paths: PathFinder, options: CleanOption*): Task =
-		cleanTask(paths, options)
-	def cleanTask(paths: PathFinder, options: => Seq[CleanOption]): Task =
-		task
-		{
-			val cleanOptions = options
-			val preservePaths = for(Preserve(preservePaths) <- cleanOptions; toPreserve <- preservePaths.get) yield toPreserve
-			Control.thread(FileUtilities.preserve(preservePaths, log))
-			{ preserved =>
-				val pathClean = FileUtilities.clean(paths.get, log)
-				for(ClearAnalysis(analysis) <- cleanOptions)
-				{
-					analysis.clear()
-					analysis.save()
-				}
-				val restored = preserved.restore(log)
-				pathClean orElse restored
 			}
 		}
 		

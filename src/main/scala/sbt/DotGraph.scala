@@ -7,7 +7,7 @@ import java.io.{File, Writer}
 
 object DotGraph
 {
-	def apply(analysis: CompileAnalysis, outputDirectory: Path, log: Logger) =
+	def apply(analysis: BasicCompileAnalysis, outputDirectory: Path, log: Logger) =
 	{
 		val outputDir = outputDirectory.asFile
 		

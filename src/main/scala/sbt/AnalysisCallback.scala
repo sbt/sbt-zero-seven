@@ -53,14 +53,10 @@ trait AnalysisCallback extends NotNull
 	/** Called when a module with a public 'main' method with the right signature is found.*/
 	def foundApplication(sourcePath: Path, className: String): Unit
 }
-abstract class BasicAnalysisCallback(val basePath: Path, val superclassNames: Iterable[String],
-	protected val analysis: CompileAnalysis) extends AnalysisCallback
+abstract class BasicAnalysisCallback[A <: BasicCompileAnalysis](val basePath: Path, val superclassNames: Iterable[String],
+	protected val analysis: A) extends AnalysisCallback
 {
 	def superclassNotFound(superclassName: String) {}
-	def foundApplication(sourcePath: Path, className: String)
-	{
-		analysis.addApplication(sourcePath, className)
-	}
 	
 	def beginSource(sourcePath: Path)
 	{
@@ -85,5 +81,13 @@ abstract class BasicAnalysisCallback(val basePath: Path, val superclassNames: It
 	def endSource(sourcePath: Path)
 	{
 		analysis.removeSelfDependency(sourcePath)
+	}
+}
+abstract class BasicCompileAnalysisCallback(basePath: Path, superclassNames: Iterable[String], analysis: CompileAnalysis)
+	extends BasicAnalysisCallback(basePath, superclassNames, analysis)
+{
+	def foundApplication(sourcePath: Path, className: String)
+	{
+		analysis.addApplication(sourcePath, className)
 	}
 }

@@ -180,7 +180,7 @@ trait Conditional[Source, Product, External] extends NotNull
 	}
 }
 
-abstract class CompileConfiguration extends NotNull
+abstract class AbstractCompileConfiguration extends NotNull
 {
 	def label: String
 	def sources: PathFinder
@@ -191,21 +191,40 @@ abstract class CompileConfiguration extends NotNull
 	def log: Logger
 	def options: Seq[String]
 	def javaOptions: Seq[String]
-	def testDefinitionClassNames: Iterable[String]
 	def maxErrors: Int
 }
+abstract class CompileConfiguration extends AbstractCompileConfiguration
+{
+	def testDefinitionClassNames: Iterable[String]
+}
 import java.io.File
-class CompileConditional(val config: CompileConfiguration) extends Conditional[Path, Path, File]
+class CompileConditional(override val config: CompileConfiguration) extends AbstractCompileConditional(config)
 {
 	import config._
 	type AnalysisType = CompileAnalysis
+	protected def constructAnalysis(analysisPath: Path, projectPath: Path, log: Logger) =
+		new CompileAnalysis(analysisPath, projectPath, log)
+	protected def analysisCallback = new CompileAnalysisCallback
+	protected class CompileAnalysisCallback extends BasicCompileAnalysisCallback(projectPath, testDefinitionClassNames, analysis)
+	{
+		def foundSubclass(sourcePath: Path, subclassName: String, superclassName: String, isModule: Boolean)
+		{
+			analysis.addTest(sourcePath, TestDefinition(isModule, subclassName, superclassName))
+		}
+	}
+}
+abstract class AbstractCompileConditional(val config: AbstractCompileConfiguration) extends Conditional[Path, Path, File]
+{
+	import config._
+	type AnalysisType <: BasicCompileAnalysis
 	protected def loadAnalysis =
 	{
-		val a = new CompileAnalysis(analysisPath, projectPath, log)
+		val a = constructAnalysis(analysisPath, projectPath, log)
 		for(errorMessage <- a.load())
 			error(errorMessage)
 		a
 	}
+	protected def constructAnalysis(analysisPath: Path, projectPath: Path, log: Logger): AnalysisType
 	
 	protected def log = config.log
 	
@@ -349,14 +368,7 @@ class CompileConditional(val config: CompileConfiguration) extends Conditional[P
 		}
 	}
 	
-	protected def analysisCallback: AnalysisCallback = new CompileAnalysisCallback
-	protected class CompileAnalysisCallback extends BasicAnalysisCallback(projectPath, testDefinitionClassNames, analysis)
-	{
-		def foundSubclass(sourcePath: Path, subclassName: String, superclassName: String, isModule: Boolean)
-		{
-			analysis.addTest(sourcePath, TestDefinition(isModule, subclassName, superclassName))
-		}
-	}
+	protected def analysisCallback: AnalysisCallback
 }
 object ChangeDetection extends Enumeration
 {
