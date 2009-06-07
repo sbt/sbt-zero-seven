@@ -204,21 +204,20 @@ trait BasicEnvironment extends Environment
 	def propertyOptional[T](defaultValue: => T, inheritFirst: Boolean)(implicit manifest: Manifest[T], format: Format[T]): Property[T] =
 		new UserProperty[T](Some(defaultValue), format, true, inheritFirst, manifest)
 	
-	private type AnyUserProperty = UserProperty[_]
 	/** Maps property name to property.  The map is populated by 'initializeEnvironment'.  It should not be referenced
-	* by initialization or else subclass properties will be missed.**/
+	* during initialization.  Otherwise, subclass properties will be missed.**/
 	private lazy val propertyMap = initializeEnvironment
 	
 	/** Initializes 'propertyMap' by reflectively listing the vals on this object that
 	* reference a UserProperty. */
 	private def initializeEnvironment =
 	{
+		type AnyUserProperty = UserProperty[_]
 		val propertyMap = new scala.collection.mutable.HashMap[String, AnyUserProperty]
 		// AnyProperty is required because the return type of the property*[T] methods is Property[T]
 		// and so the vals we are looking for have type Property[T] and not UserProperty[T]
 		// We then only keep instances of UserProperty
-		type AnyProperty = Property[_]
-		val vals = Environment.reflectiveMappings(this, classOf[AnyProperty])
+		val vals = Environment.reflectiveMappings(this, classOf[Property[_]])
 		for( (name, property: AnyUserProperty) <- vals)
 			propertyMap(name) = property
 		
