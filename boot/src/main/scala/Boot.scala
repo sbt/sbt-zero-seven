@@ -177,7 +177,7 @@ private class Setup(loaderCache: LoaderCache) extends Paths
 	}
 	private def getLoader(scalaVersion: String, sbtVersion: String): Either[Seq[String], ClassLoader] =
 	{
-		import Setup.{failIfMissing,getJars,isYes,needsUpdate}
+		import Setup.{failIfMissing,isYes,needsUpdate}
 		import ProjectProperties.{ScalaVersionKey, SbtVersionKey}
 	
 		val baseDirectory = new File(BootDirectory, baseDirectoryName(scalaVersion))
@@ -185,31 +185,42 @@ private class Setup(loaderCache: LoaderCache) extends Paths
 		val scalaDirectory = new File(baseDirectory, ScalaDirectoryName)
 		val sbtDirectory = new File(baseDirectory, sbtDirectoryName(sbtVersion))
 		
-		val classpath = getJars(scalaDirectory, sbtDirectory)
-		val classLoader = new URLClassLoader(classpath.toArray, new BootFilteredLoader)
-		
+		val classLoader = createLoader(scalaDirectory, sbtDirectory)
 		val updateTargets = needsUpdate("", classLoader, TestLoadScalaClasses, UpdateScala) ::: needsUpdate(sbtVersion, classLoader, TestLoadSbtClasses, UpdateSbt)
-		if(!updateTargets.isEmpty) // avoid loading Ivy related classes if there is nothing to update
+		if(updateTargets.isEmpty) // avoid loading Ivy related classes if there is nothing to update
+			success(classLoader, scalaVersion, sbtVersion)
+		else
+		{
 			Update(baseDirectory, sbtVersion, scalaVersion, updateTargets: _*)
 		
-		val sbtFailed = failIfMissing(classLoader, TestLoadSbtClasses, "sbt " + sbtVersion, SbtVersionKey)
-		val scalaFailed = failIfMissing(classLoader, TestLoadScalaClasses, "Scala " + scalaVersion, ScalaVersionKey)
-		
-		(scalaFailed +++ sbtFailed) match
-		{
-			case Success =>
-				setScalaVersion(scalaVersion)
-				loaderCache( scalaVersion, sbtVersion ) = classLoader
-				Right(classLoader)
-			case f: Failure =>
-				val noRetrieveMessage = "Could not retrieve " + f.label + "."
-				val getNewVersions = SimpleReader.readLine(noRetrieveMessage + " Select different version? (y/N) : ")
-				if(isYes(getNewVersions))
-					Left(f.keys)
-				else
-					throw new BootException(noRetrieveMessage)
+			val classLoader = createLoader(scalaDirectory, sbtDirectory)
+			val sbtFailed = failIfMissing(classLoader, TestLoadSbtClasses, "sbt " + sbtVersion, SbtVersionKey)
+			val scalaFailed = failIfMissing(classLoader, TestLoadScalaClasses, "Scala " + scalaVersion, ScalaVersionKey)
+			
+			(scalaFailed +++ sbtFailed) match
+			{
+				case Success => success(classLoader, scalaVersion, sbtVersion)
+				case f: Failure =>
+					val noRetrieveMessage = "Could not retrieve " + f.label + "."
+					val getNewVersions = SimpleReader.readLine(noRetrieveMessage + " Select different version? (y/N) : ")
+					if(isYes(getNewVersions))
+						Left(f.keys)
+					else
+						throw new BootException(noRetrieveMessage)
+			}
 		}
-}
+	}
+	private def success(classLoader: ClassLoader, scalaVersion: String, sbtVersion: String) =
+	{
+		setScalaVersion(scalaVersion)
+		loaderCache( scalaVersion, sbtVersion ) = classLoader
+		Right(classLoader)
+	}
+	private def createLoader(dirs: File*) =
+	{
+		val classpath = Setup.getJars(dirs : _*)
+		new URLClassLoader(classpath.toArray, new BootFilteredLoader)
+	}
 	private def setScalaVersion(scalaVersion: String) { System.setProperty("sbt.scala.version", scalaVersion) }
 }
 private final class LoaderCache
