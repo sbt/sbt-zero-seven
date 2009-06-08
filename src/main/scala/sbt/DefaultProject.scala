@@ -122,7 +122,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	def consoleClasspath = fullClasspath(consoleConfiguration) +++ optionalClasspath
 	/** A PathFinder that corresponds to Maven's optional scope.  It includes any managed libraries in the
 	* 'optional' configuration for this project only.*/
-	def optionalClasspath = managedClasspath(Optional, false)
+	def optionalClasspath = managedClasspath(Optional)
 
 
 	/** This returns the unmanaged classpath for only this project for the given configuration.  It by

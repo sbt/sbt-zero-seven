@@ -152,7 +152,7 @@ trait ManagedProject extends ClasspathProject
 	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, log) }
 
 	/** This is the public ID of the project (used for publishing, for example) */
-	def moduleID: String = normalizedName + Project.scalaVersionString
+	def moduleID: String = normalizedName + scalaVersionString
 	/** This is the full public ID of the project (used for publishing, for example) */
 	def projectID: ModuleID = ModuleID(organization, moduleID, version.toString)
 
@@ -163,23 +163,11 @@ trait ManagedProject extends ClasspathProject
 	def artifacts: Iterable[Artifact]
 	
 	def managedDependencyPath: Path
-	/** The managed classpath for the given configuration, using the default configuration if this configuration
-	* does not exist in the managed library directory.*/
-	final def managedClasspath(config: Configuration): PathFinder = managedClasspath(config, true)
-	/** The managed classpath for the given configuration.  If 'useDefaultFallback' is true, the default configuration
-	* will be used if the configuration does not exist in the managed library directory.*/
-	def managedClasspath(config: Configuration, useDefaultFallback: Boolean): PathFinder =
-	{
-		val configDirectory = managedDependencyPath / config.toString
-		val useDirectory =
-			if(configDirectory.asFile.exists)
-				configDirectory
-			else if(useDefaultFallback)
-				managedDependencyPath / Configurations.Default.toString
-			else
-				Path.emptyPathFinder
-		descendents(useDirectory, "*.jar")
-	}
+	/** The managed classpath for the given configuration.  This can be overridden to add jars from other configurations
+	* so that the Ivy 'extends' mechanism is not required.  That way, the jars are only copied to one configuration.*/
+	def managedClasspath(config: Configuration): PathFinder = configurationClasspath(config)
+	/** All dependencies in the given configuration. */
+	final def configurationClasspath(config: Configuration): PathFinder = descendents(managedDependencyPath / config.toString, "*.jar")
 	
 	import StringUtilities.nonEmpty
 	implicit def toGroupID(groupID: String): GroupID =
@@ -306,24 +294,25 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 				case _ => None
 			}
 	}
-	/** Includes the Provided configuration on the Compile classpath.  This can be overridden by setting
-	* includeProvidedWithCompile to false.*/
-	override def managedClasspath(config: Configuration, useDefaultFallback: Boolean) =
+	/** Includes the Provided configuration on the Compile classpath, the Compile configuration on the Runtime classpath,
+	* and Compile and Runtime on the Test classpath.  Including Provided can be disabled by setting
+	* includeProvidedWithCompile to false.  Including Compile and Runtime can be disabled by setting
+	* defaultConfigurationExtensions to false.*/
+	override def managedClasspath(config: Configuration) =
 	{
-		import Configurations.{Compile, CompilerPlugin, Provided, Runtime, Test}
-		if(config == CompilerPlugin)
-			super.managedClasspath(CompilerPlugin, false)
-		else
+		import Configurations.{Compile, CompilerPlugin, Default, Provided, Runtime, Test}
+		val baseClasspath = configurationClasspath(config)
+		config match
 		{
-			val superClasspath = super.managedClasspath(config, useDefaultFallback)
-			if(config == Compile && includeProvidedWithCompile)
-				superClasspath +++ super.managedClasspath(Provided, false)
-			else if(defaultConfigurationExtensions && config == Runtime)
-				superClasspath +++ super.managedClasspath(Compile, false)
-			else if(defaultConfigurationExtensions && config == Test)
-				superClasspath +++ super.managedClasspath(Compile, false) +++ super.managedClasspath(Runtime, false)
-			else
-				superClasspath
+			case Compile =>
+				val baseCompileClasspath = baseClasspath +++ managedClasspath(Default)
+				if(includeProvidedWithCompile)
+					baseCompileClasspath +++ managedClasspath(Provided)
+				else
+					baseCompileClasspath
+			case Runtime if defaultConfigurationExtensions => baseClasspath +++ managedClasspath(Compile)
+			case Test if defaultConfigurationExtensions => baseClasspath +++ managedClasspath(Runtime)
+			case _ => baseClasspath
 		}
 	}
 	

@@ -218,6 +218,9 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	* Otherwise, this returns `base`.
 	* By default, cross-building is enabled when a project is loaded by the loader and crossScalaVersions is not empty.*/
 	def crossPath(base: Path) = withCrossVersion(base / scalaCrossString(_), base)
+	/** The string to append to a module ID that has been built against multiple Scala versions.  If cross-building is
+	* not enabled, this is the empty string.*/
+	def scalaVersionString = withCrossVersion("_" + _, "")
 	private[sbt] def withCrossVersion[T](withVersion: String => T, disabled: => T): T =
 	{
 		currentScalaVersion match
@@ -292,7 +295,6 @@ object Project
 		else
 			Some(sv)
 	}
-	def scalaVersionString = currentScalaVersion.map("_" + _).getOrElse("")
 	
 	/** Loads the project in the current working directory.*/
 	private[sbt] def loadProject: LoadResult = loadProject(bootLogger)
