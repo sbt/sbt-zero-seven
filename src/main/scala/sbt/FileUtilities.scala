@@ -363,6 +363,16 @@ object FileUtilities
 		}
 		createTemporaryDirectory(log).right.flatMap(doInDirectory)
 	}
+	def withTemporaryFile[T](log: Logger, prefix: String, postfix: String)(action: File => Either[String, T]): Either[String, T] =
+	{
+		Control.trap("Error creating temporary file: ", log)
+		{
+			val file = File.createTempFile(prefix, postfix)
+			Control.trapAndFinally("", log)
+				{ action(file) }
+				{ file.delete() }
+		}
+	}
 	
 	/** Copies the files declared in <code>sources</code> to the <code>destinationDirectory</code>
 	* directory.  The source directory hierarchy is flattened so that all copies are immediate

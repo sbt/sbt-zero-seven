@@ -263,6 +263,7 @@ src/test/resources/sbt-test-resources/tests/specs-nested/project/build/src/TestP
 src/test/resources/sbt-test-resources/tests/specs-nested/src/test/scala/TestSpecification.scala -text
 src/test/resources/sbt-test-resources/tests/specs-nested/test -text
 src/test/scala/sbt/DagSpecification.scala -text
+src/test/scala/sbt/EnvironmentSpecification.scala -text
 src/test/scala/sbt/FileUtilitiesSpecification.scala -text
 src/test/scala/sbt/NameFilterSpecification.scala -text
 src/test/scala/sbt/PathSpecification.scala -text

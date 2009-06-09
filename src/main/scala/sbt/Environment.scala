@@ -83,8 +83,8 @@ trait BasicEnvironment extends Environment
 		/** The lazily evaluated default value for this property.*/
 		private lazy val defaultValue = lazyDefaultValue
 		/** The explicitly set value for this property.*/
-		private var explicitValue: Option[T] = None
-		def update(v: T): Unit = synchronized { explicitValue = Some(v); setEnvironmentModified(true) }
+		private[BasicEnvironment] var explicitValue = new LazyVar[Option[T]](propertyMap) // ensure propertyMap is initialized before a read occurs
+		def update(v: T): Unit = synchronized { explicitValue() = Some(v); setEnvironmentModified(true) }
 		def resolve: PropertyResolution[T] =
 			synchronized
 			{
@@ -92,7 +92,7 @@ trait BasicEnvironment extends Environment
 				else resolveDefaultFirst
 			}
 		private def resolveInheritFirst =
-			explicitValue match
+			explicitValue() match
 			{
 				case Some(v) => DefinedValue(v, false, false)
 				case None =>
@@ -108,9 +108,9 @@ trait BasicEnvironment extends Environment
 					}
 			}
 		private def resolveDefaultFirst =
-			(explicitValue orElse defaultValue) match
+			(explicitValue() orElse defaultValue) match
 			{
-				case Some(v) => DefinedValue(v, false, explicitValue.isEmpty)
+				case Some(v) => DefinedValue(v, false, explicitValue().isEmpty)
 				case None => inheritedValue
 			}
 		
@@ -143,7 +143,7 @@ trait BasicEnvironment extends Environment
 		override def toString = nameString + "=" + resolve
 		
 		/** Gets the explicitly set value converted to a 'String'.*/
-		private[sbt] def getStringValue: Option[String] = explicitValue.map(format.toString)
+		private[sbt] def getStringValue: Option[String] = explicitValue().map(format.toString)
 		/** Explicitly sets the value for this property by converting the given string value.*/
 		private[sbt] def setStringValue(s: String) { update(format.fromString(s)) }
 	}
@@ -204,15 +204,16 @@ trait BasicEnvironment extends Environment
 	def propertyOptional[T](defaultValue: => T, inheritFirst: Boolean)(implicit manifest: Manifest[T], format: Format[T]): Property[T] =
 		new UserProperty[T](Some(defaultValue), format, true, inheritFirst, manifest)
 	
+	private type AnyUserProperty = UserProperty[_]
 	/** Maps property name to property.  The map is populated by 'initializeEnvironment'.  It should not be referenced
 	* during initialization.  Otherwise, subclass properties will be missed.**/
-	private lazy val propertyMap = initializeEnvironment
+	private lazy val propertyMap: Map[String, AnyUserProperty] = initializeEnvironment
 	
 	/** Initializes 'propertyMap' by reflectively listing the vals on this object that
 	* reference a UserProperty. */
 	private def initializeEnvironment =
 	{
-		type AnyUserProperty = UserProperty[_]
+		log.debug("Initializing property map")
 		val propertyMap = new scala.collection.mutable.HashMap[String, AnyUserProperty]
 		// AnyProperty is required because the return type of the property*[T] methods is Property[T]
 		// and so the vals we are looking for have type Property[T] and not UserProperty[T]
@@ -224,13 +225,16 @@ trait BasicEnvironment extends Environment
 		val properties = new java.util.Properties
 		for(errorMsg <- PropertiesUtilities.load(properties, envBackingPath, log))
 			log.error("Error loading properties from " + environmentLabel + " : " + errorMsg)
-		
-		for(name <- PropertiesUtilities.propertyNames(properties))
+
+		val storedPropertyNames = PropertiesUtilities.propertyNames(properties)
+		for(name <- storedPropertyNames)
 		{
 			val propertyValue = properties.getProperty(name)
 			propertyMap.get(name) match
 			{
-				case Some(property) => property.setStringValue(propertyValue)
+				case Some(property) =>
+					log.debug("Initializing " + name + " to " + propertyValue)
+					property.setStringValue(propertyValue)
 				case None =>
 				{
 					val p = new UserProperty[String](None, StringFormat, false, false, Manifest.classType(classOf[String]))
@@ -240,8 +244,10 @@ trait BasicEnvironment extends Environment
 				}
 			}
 		}
+		for(name <- Set(propertyMap.keys.toList : _*) -- storedPropertyNames)
+			propertyMap(name).explicitValue() = None
 		setEnvironmentModified(false)
-		propertyMap
+		propertyMap.readOnly
 	}
 	def propertyNames: Iterable[String] = propertyMap.keys.toList
 	def getPropertyNamed(name: String): Option[UserProperty[_]] = propertyMap.get(name)
@@ -336,4 +342,21 @@ final case class DefinedValue[T](value: T, isInherited: Boolean, isDefault: Bool
 	def map[R](f: T => R) = DefinedValue[R](f(value), isInherited, isDefault)
 	def flatMap[R](f: T => PropertyResolution[R]) = f(value)
 	def foreach(f: T => Unit) { f(value) }
+}
+private final class LazyVar[T](initialize: => Unit) extends NotNull
+{
+	private[this] var value: Option[T] = None
+	def apply() =
+		synchronized
+		{
+			value match
+			{
+				case Some(v) => v
+				case None =>
+					initialize
+					assume(value.isDefined, "Initialization did not set initial value.")
+					value.get
+			}
+		}
+	def update(newValue: T) = synchronized { value = Some(newValue) }
 }

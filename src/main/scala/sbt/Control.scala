@@ -44,6 +44,8 @@ object Control
 		try { Right(t) }
 		catch { case e: Exception => log.trace(e); Left(e.toString) }
 	}
+	
+	def getOrError[T](result: Either[String, T]): T = result.fold(error, x=>x)
 	final def lazyFold[T](list: List[T])(f: T => Option[String]): Option[String] =
 		list match
 		{
