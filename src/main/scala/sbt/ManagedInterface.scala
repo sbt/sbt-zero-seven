@@ -7,6 +7,7 @@ import java.io.File
 import java.net.{URI, URL}
 import scala.xml.NodeSeq
 import org.apache.ivy.plugins.resolver.IBiblioResolver
+import org.apache.ivy.util.url.CredentialsStore
 
 sealed abstract class Manager extends NotNull
 /** This explicitly requests auto detection as a dependency manager.  It will first check for a 'pom.xml' file and if that does not exist, an 'ivy.xml' file.
@@ -277,4 +278,10 @@ object Artifact
 {
 	def apply(name: String): Artifact = Artifact(name, "jar", "jar")
 	def apply(name: String, `type`: String, extension: String): Artifact = Artifact(name, `type`, extension, Nil)
+}
+
+object Credentials
+{
+	def add(realm: String, host: String, userName: String, passwd: String): Unit =
+		CredentialsStore.INSTANCE.addCredentials(realm, host, userName, passwd)
 }
