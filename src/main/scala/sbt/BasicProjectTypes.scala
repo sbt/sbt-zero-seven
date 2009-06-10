@@ -173,7 +173,7 @@ trait ManagedProject extends ClasspathProject
 	implicit def toGroupID(groupID: String): GroupID =
 	{
 		nonEmpty(groupID, "Group ID")
-		new GroupID(groupID)
+		new GroupID(groupID, scalaVersionString)
 	}
 	implicit def toRepositoryName(name: String): RepositoryName =
 	{
@@ -417,9 +417,11 @@ object StringUtilities
 	}
 }
 import StringUtilities.nonEmpty
-final class GroupID private[sbt] (groupID: String) extends NotNull
+final class GroupID private[sbt] (groupID: String, appendScalaVersion: String) extends NotNull
 {
-	def % (artifactID: String) =
+	def % (artifactID: String) = groupArtifact(artifactID)
+	def %% (artifactID: String) = groupArtifact(artifactID + appendScalaVersion)
+	private def groupArtifact(artifactID: String) =
 	{
 		nonEmpty(artifactID, "Artifact ID")
 		new GroupArtifactID(groupID, artifactID)
