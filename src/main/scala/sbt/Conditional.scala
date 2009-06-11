@@ -192,6 +192,7 @@ abstract class AbstractCompileConfiguration extends NotNull
 	def options: Seq[String]
 	def javaOptions: Seq[String]
 	def maxErrors: Int
+	def compileOrder: CompileOrder.Value
 }
 abstract class CompileConfiguration extends AbstractCompileConfiguration
 {
@@ -316,7 +317,7 @@ abstract class AbstractCompileConditional(val config: AbstractCompileConfigurati
 		val id = AnalysisCallback.register(analysisCallback)
 		val allOptions = (("-Xplugin:" + FileUtilities.sbtJar.getCanonicalPath) ::
 			("-P:sbt-analyzer:callback:" + id.toString) :: Nil) ++ options
-		val r = (new Compile(config.maxErrors))(label, dirtySources, classpathString, outputDirectory, allOptions, javaOptions, log)
+		val r = (new Compile(config.maxErrors))(label, dirtySources, classpathString, outputDirectory, allOptions, javaOptions, compileOrder, log)
 		AnalysisCallback.unregister(id)
 		if(log.atLevel(Level.Debug))
 		{

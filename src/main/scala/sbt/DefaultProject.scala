@@ -45,6 +45,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 
 	val mainCompileConditional = new CompileConditional(mainCompileConfiguration)
 	val testCompileConditional = new CompileConditional(testCompileConfiguration)
+	
+	def compileOrder = CompileOrder.Mixed
 
 	/** The main artifact produced by this project. To redefine the main artifact, override `defaultMainArtifact`
 	* Additional artifacts are defined by `val`s of type `Artifact`.*/
@@ -177,6 +179,7 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		lazy val localBaseOptions = baseCompileOptions
 		def options = optionsAsString(localBaseOptions.filter(!_.isInstanceOf[MaxCompileErrors]))
 		def maxErrors = maximumErrors(localBaseOptions)
+		def compileOrder = BasicScalaProject.this.compileOrder
 	}
 	class MainCompileConfig extends BaseCompileConfig
 	{
@@ -242,8 +245,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	override protected def deliverLocalAction = super.deliverLocalAction dependsOn(`package`)
 	override protected def deliverAction = super.deliverAction dependsOn(`package`)
 	
-	protected def packageAction = packageTask(mainClasses +++ mainResources, jarPath, packageOptions).dependsOn(compile) describedAs PackageDescription
-	protected def packageTestAction = packageTask(testClasses +++ testResources, outputPath / (artifactBaseName + "-test.jar")).dependsOn(testCompile) describedAs TestPackageDescription
+	protected def packageAction = packageTask(packagePaths, jarPath, packageOptions).dependsOn(compile) describedAs PackageDescription
+	protected def packageTestAction = packageTask(packageTestPaths, outputPath / (artifactBaseName + "-test.jar")).dependsOn(testCompile) describedAs TestPackageDescription
 	protected def packageDocsAction = packageTask(mainDocPath ##, outputPath / (artifactBaseName + "-docs.jar"), Recursive).dependsOn(doc) describedAs DocPackageDescription
 	protected def packageSrcAction = packageTask(packageSourcePaths, outputPath / (artifactBaseName + "-src.jar")) describedAs SourcePackageDescription
 	protected def packageTestSrcAction = packageTask(packageTestSourcePaths, outputPath / (artifactBaseName + "-test-src.jar")) describedAs TestSourcePackageDescription

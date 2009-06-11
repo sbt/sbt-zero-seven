@@ -3,6 +3,10 @@
  */
 package sbt
 
+object CompileOrder extends Enumeration
+{
+	val Mixed, JavaThenScala, ScalaThenJava = Value
+}
 sealed abstract class CompilerCore
 {
 	val ClasspathOptionString = "-classpath"
@@ -18,8 +22,8 @@ sealed abstract class CompilerCore
 	def actionUnsuccessfulMessage: String
 
 	final def apply(label: String, sources: Iterable[Path], classpathString: String, outputDirectory: Path, options: Seq[String], log: Logger): Option[String] =
-		apply(label, sources, classpathString, outputDirectory, options, Nil, log)
-	final def apply(label: String, sources: Iterable[Path], classpathString: String, outputDirectory: Path, options: Seq[String], javaOptions: Seq[String], log: Logger): Option[String] =
+		apply(label, sources, classpathString, outputDirectory, options, Nil, CompileOrder.Mixed, log)
+	final def apply(label: String, sources: Iterable[Path], classpathString: String, outputDirectory: Path, options: Seq[String], javaOptions: Seq[String], order: CompileOrder.Value, log: Logger): Option[String] =
 	{
 		log.info(actionStartMessage(label))
 		val classpathOption: List[String] =
@@ -42,37 +46,45 @@ sealed abstract class CompilerCore
 				}
 				else
 				{
-					val arguments = (options ++ classpathAndOut ++ sourceList).toList
-					log.debug("Scala arguments: " + arguments.mkString(" "))
-					if(process(arguments, log))
+					def filteredSources(extension: String) = sourceList.filter(_.endsWith(extension))
+					def compile(label: String, sources: List[String], options: Seq[String])(process: (List[String], Logger) => Boolean) =
 					{
-						val javaSourceList = sourceList.filter(_.endsWith(".java"))
-						if(javaSourceList.isEmpty)
-							success(log)
+						if(sources.isEmpty)
+						{
+							log.debug("No "+label+" sources to compile.")
+							true
+						}
 						else
 						{
-							val javaArguments = javaOptions.toList ::: classpathAndOut ::: javaSourceList
-							log.debug("Java arguments: " + javaArguments.mkString(" "))
-							if(processJava(javaArguments, log))
-								success(log)
-							else
-								failure
+							val arguments = (options ++ classpathAndOut ++ sources).toList
+							log.debug(label + " arguments: " + arguments.mkString(" "))
+							process(arguments, log)
 						}
 					}
+					def scalaCompile = () =>
+					{
+						val scalaSourceList = if(order == CompileOrder.Mixed) sourceList else filteredSources(".scala")
+						compile("Scala", scalaSourceList, options)(process)
+					}
+					def javaCompile = () =>
+					{
+						val javaSourceList = filteredSources(".java")
+						compile("Java", javaSourceList, javaOptions)(processJava)
+					}
+					
+					val (first, second) = if(order == CompileOrder.JavaThenScala) (javaCompile, scalaCompile) else (scalaCompile, javaCompile)
+					if(first() && second())
+					{
+						log.info(actionSuccessfulMessage)
+						None
+					}
 					else
-						failure
+						Some(actionUnsuccessfulMessage)
 				}
 			}
 		}
 	}
-	private def success(log: Logger) =
-	{
-		log.info(actionSuccessfulMessage)
-		None
-	}
-	private def failure = Some(actionUnsuccessfulMessage)
 }
-
 
 sealed abstract class CompilerBase extends CompilerCore
 {
@@ -93,7 +105,7 @@ object ForkCompile
 {
 	def apply(config: ForkScalaCompiler, conditional: CompileConditional) =
 	{
-		import conditional.config.{classpath, javaOptions, label, log, options, outputDirectory, sources}
+		import conditional.config.{compileOrder, classpath, javaOptions, label, log, options, outputDirectory, sources}
 		// recompile only if any sources were modified after any classes or no classes exist
 		val sourcePaths = sources.get
 		val newestSource = (0L /: sourcePaths)(_ max _.lastModified)
@@ -105,7 +117,7 @@ object ForkCompile
 			FileUtilities.clean(outputDirectory :: Nil, log)
 			val compiler = new ForkCompile(config)
 			FileUtilities.createDirectory(outputDirectory.asFile, log)
-			compiler(label, sourcePaths, Path.makeString(classpath.get), outputDirectory, options, javaOptions, log)
+			compiler(label, sourcePaths, Path.makeString(classpath.get), outputDirectory, options, javaOptions, compileOrder, log)
 		}
 		else
 		{

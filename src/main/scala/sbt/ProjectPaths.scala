@@ -31,6 +31,10 @@ trait ScalaPaths extends NotNull
 	/** A PathFinder that selects all the classes compiled from the test sources.*/
 	def testClasses: PathFinder
 	
+	/** Declares all paths to be packaged by the package action.*/
+	def packagePaths: PathFinder
+	/** Declares all paths to be packaged by the package-test action.*/
+	def packageTestPaths: PathFinder
 	/** Declares all sources to be packaged by the package-src action.*/
 	def packageSourcePaths: PathFinder
 	/** Declares all sources to be packaged by the package-test-src action.*/
@@ -71,6 +75,8 @@ trait BasicScalaPaths extends Project with ScalaPaths
 	def mainClasses = (mainCompilePath ##) ** "*.class"
 	def testClasses = (testCompilePath ##) ** "*.class"
 	
+	def packagePaths = mainClasses +++ mainResources
+	def packageTestPaths = testClasses +++ testResources
 	def packageSourcePaths = mainSources +++ mainResources
 	def packageTestSourcePaths = testSources +++ testResources
 	def packageProjectPaths = descendents( (info.projectPath ##), "*") --- (packageProjectExcludes ** "*")

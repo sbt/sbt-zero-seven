@@ -77,6 +77,7 @@ private final class BuilderProject(val info: ProjectInfo, override protected val
 			def options = compileOptions.map(_.asString)
 			def javaOptions = javaCompileOptions
 			def maxErrors = ScalaProject.DefaultMaximumCompileErrors
+			def compileOrder = CompileOrder.Mixed
 		}
 		
 	def projectDefinition: Either[String, Option[String]] =
