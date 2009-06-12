@@ -2,7 +2,9 @@
  * Copyright 2009  Mark Harrah
  */
 package sbt
- 
+
+import StringUtilities.{appendable,nonEmpty}
+
 /** A project that provides a classpath. */
 trait ClasspathProject extends Project
 {
@@ -152,7 +154,7 @@ trait ManagedProject extends ClasspathProject
 	def cleanLibTask(managedDependencyPath: Path) = task { FileUtilities.clean(managedDependencyPath.get, log) }
 
 	/** This is the public ID of the project (used for publishing, for example) */
-	def moduleID: String = normalizedName + scalaVersionString
+	def moduleID: String = normalizedName + appendable(crossScalaVersionString)
 	/** This is the full public ID of the project (used for publishing, for example) */
 	def projectID: ModuleID = ModuleID(organization, moduleID, version.toString)
 
@@ -173,7 +175,7 @@ trait ManagedProject extends ClasspathProject
 	implicit def toGroupID(groupID: String): GroupID =
 	{
 		nonEmpty(groupID, "Group ID")
-		new GroupID(groupID, scalaVersionString)
+		new GroupID(groupID, currentScalaVersionString)
 	}
 	implicit def toRepositoryName(name: String): RepositoryName =
 	{
@@ -247,7 +249,7 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 			reflective
 	}
 	def useIntegrationTestConfiguration = false
-	def defaultConfiguration = if(useMavenConfigurations) Some(Configurations.Compile) else None
+	def defaultConfiguration = if(useMavenConfigurations) Some(config("compile->default")) else None
 	def useMavenConfigurations = false
 	def managedStyle: ManagedType = Auto
 	protected implicit final val defaultPatterns: RepositoryHelpers.Patterns =
@@ -415,12 +417,16 @@ object StringUtilities
 	{
 		require(s.trim.length > 0, label + " cannot be empty.")
 	}
+	def appendable(s: String) = if(s.isEmpty) "" else "_" + s
 }
-import StringUtilities.nonEmpty
-final class GroupID private[sbt] (groupID: String, appendScalaVersion: String) extends NotNull
+final class GroupID private[sbt] (groupID: String, scalaVersion: String) extends NotNull
 {
 	def % (artifactID: String) = groupArtifact(artifactID)
-	def %% (artifactID: String) = groupArtifact(artifactID + appendScalaVersion)
+	def %% (artifactID: String) =
+	{
+		require(!scalaVersion.isEmpty, "Cannot use %% when the sbt launcher is not used.")
+		groupArtifact(artifactID + appendable(scalaVersion))
+	}
 	private def groupArtifact(artifactID: String) =
 	{
 		nonEmpty(artifactID, "Artifact ID")

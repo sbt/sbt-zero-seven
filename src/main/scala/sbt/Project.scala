@@ -217,19 +217,24 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	/** If this project is cross-building, returns `base` with an additional path component containing the scala version.
 	* Otherwise, this returns `base`.
 	* By default, cross-building is enabled when a project is loaded by the loader and crossScalaVersions is not empty.*/
-	def crossPath(base: Path) = withCrossVersion(base / scalaCrossString(_), base)
-	/** The string to append to a module ID that has been built against multiple Scala versions.  If cross-building is
-	* not enabled, this is the empty string.*/
-	def scalaVersionString = withCrossVersion("_" + _, "")
-	private[sbt] def withCrossVersion[T](withVersion: String => T, disabled: => T): T =
+	def crossPath(base: Path) = withCrossVersion(disableCrossPaths)(base / scalaCrossString(_), base)
+	def currentScalaVersionString: String = scalaVersionString(false)
+	def crossScalaVersionString: String = scalaVersionString(disableCrossPaths)
+	private def scalaVersionString(crossDisabled: Boolean): String = withCrossVersion(crossDisabled)(x => x, "")
+	private[sbt] def withCrossVersion[T](crossDisabled: Boolean)(withVersion: String => T, disabled: => T): T =
 	{
-		currentScalaVersion match
+		if(crossDisabled)
+			disabled
+		else
 		{
-			case Some(scalaV) if !disableCrossPaths => withVersion(scalaV)
-			case _ => disabled
+			currentScalaVersion match
+			{
+				case Some(scalaV) => withVersion(scalaV)
+				case _ => disabled
+			}
 		}
 	}
-	/** True if crossPaths should be the identity function.*/
+	/** True if crossPath should be the identity function.*/
 	protected def disableCrossPaths = crossScalaVersions.isEmpty
 	/** By default, this is empty and cross-building is disabled.  Overriding this to a Set of Scala versions
 	* will enable cross-building against those versions.*/

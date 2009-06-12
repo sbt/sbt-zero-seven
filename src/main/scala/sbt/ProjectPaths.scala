@@ -3,8 +3,17 @@
  */
 package sbt
 
+trait PackagePaths extends NotNull
+{
+	def jarPath: Path
+	def packageTestJar: Path
+	def packageDocsJar: Path
+	def packageSrcJar: Path
+	def packageTestSrcJar: Path
+	def packageProjectZip: Path
+}
 /** These are the paths required by BasicScalaProject.*/
-trait ScalaPaths extends NotNull
+trait ScalaPaths extends PackagePaths
 {
 	/** A PathFinder that selects all main sources.*/
 	def mainSources: PathFinder
@@ -48,7 +57,6 @@ trait ScalaPaths extends NotNull
 	* to check a project and its dependencies for collisions.*/
 	def outputDirectories: Iterable[Path]
 	
-	def jarPath: Path
 	def artifactBaseName: String
 }
 
@@ -83,14 +91,10 @@ trait BasicScalaPaths extends Project with ScalaPaths
 	protected def packageProjectExcludes: PathFinder = outputRootPath +++ managedDependencyRootPath +++ info.bootPath +++ info.builderProjectOutputPath
 
 	override def outputDirectories = outputRootPath :: managedDependencyRootPath :: Nil
-	
-	def defaultJarBaseName: String = artifactBaseName
-	def defaultJarName = defaultJarBaseName + ".jar"
-	def jarPath = outputPath / defaultJarName
 }
 
 @deprecated trait BasicProjectPaths extends MavenStyleScalaPaths
-trait MavenStyleScalaPaths extends BasicScalaPaths
+trait MavenStyleScalaPaths extends BasicScalaPaths with BasicPackagePaths
 {
 	import BasicProjectPaths._
 	
@@ -142,6 +146,20 @@ trait MavenStyleScalaPaths extends BasicScalaPaths
 		
 	def mainSourceRoots = mainJavaSourcePath +++ mainScalaSourcePath
 	def testSourceRoots = testJavaSourcePath +++ testScalaSourcePath
+}
+
+trait BasicPackagePaths extends ScalaPaths with PackagePaths
+{
+	def outputPath: Path
+	
+	def defaultJarBaseName: String = artifactBaseName
+	def defaultJarName = defaultJarBaseName + ".jar"
+	def jarPath = outputPath / defaultJarName
+	def packageTestJar = outputPath / (artifactBaseName + "-test.jar")
+	def packageDocsJar = outputPath / (artifactBaseName + "-docs.jar")
+	def packageSrcJar= outputPath / (artifactBaseName + "-src.jar")
+	def packageTestSrcJar = outputPath / (artifactBaseName + "-test-src.jar")
+	def packageProjectZip = outputPath / (artifactBaseName + "-project.zip")
 }
 
 object BasicProjectPaths

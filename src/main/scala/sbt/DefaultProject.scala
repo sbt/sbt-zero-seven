@@ -246,11 +246,11 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	override protected def deliverAction = super.deliverAction dependsOn(`package`)
 	
 	protected def packageAction = packageTask(packagePaths, jarPath, packageOptions).dependsOn(compile) describedAs PackageDescription
-	protected def packageTestAction = packageTask(packageTestPaths, outputPath / (artifactBaseName + "-test.jar")).dependsOn(testCompile) describedAs TestPackageDescription
-	protected def packageDocsAction = packageTask(mainDocPath ##, outputPath / (artifactBaseName + "-docs.jar"), Recursive).dependsOn(doc) describedAs DocPackageDescription
-	protected def packageSrcAction = packageTask(packageSourcePaths, outputPath / (artifactBaseName + "-src.jar")) describedAs SourcePackageDescription
-	protected def packageTestSrcAction = packageTask(packageTestSourcePaths, outputPath / (artifactBaseName + "-test-src.jar")) describedAs TestSourcePackageDescription
-	protected def packageProjectAction = zipTask(packageProjectPaths, outputPath / (artifactBaseName + "-project.zip")) describedAs ProjectPackageDescription
+	protected def packageTestAction = packageTask(packageTestPaths, packageTestJar).dependsOn(testCompile) describedAs TestPackageDescription
+	protected def packageDocsAction = packageTask(mainDocPath ##, packageDocsJar, Recursive).dependsOn(doc) describedAs DocPackageDescription
+	protected def packageSrcAction = packageTask(packageSourcePaths, packageSrcJar) describedAs SourcePackageDescription
+	protected def packageTestSrcAction = packageTask(packageTestSourcePaths, packageTestSrcJar) describedAs TestSourcePackageDescription
+	protected def packageProjectAction = zipTask(packageProjectPaths, packageProjectZip) describedAs ProjectPackageDescription
 	
 	protected def docAllAction = (doc && docTest) describedAs DocAllDescription
 	protected def packageAllAction = task { None } dependsOn(`package`, packageTest, packageSrc, packageTestSrc, packageDocs) describedAs PackageAllDescription
