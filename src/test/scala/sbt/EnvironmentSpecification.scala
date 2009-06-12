@@ -15,7 +15,9 @@ object EnvironmentSpecification extends Properties("Environment")
 	specify("Optional user property assignment", testDefaultAssign _)
 	specify("Optional user property default and assignment", testDefault _)
 	specify("Optional user property default and then assignment", testDefaultThenAssign _)
-
+	specify("Uninitialized empty when all properties are initialized", testUninitializedEmpty _)
+	specify("Uninitialized empty when all properties have defaults", testDefaultUninitializedEmpty _)
+	
 	private def testAssign(value: Int) =
 	{
 		withEnvironment { env =>
@@ -46,6 +48,15 @@ object EnvironmentSpecification extends Properties("Environment")
 			}
 		}
 	}
+	private def testUninitializedEmpty(value: Int) =
+	{
+		withEnvironment { env =>
+			env.x() = value
+			env.uninitializedProperties.isEmpty
+		}
+	}
+	private def testDefaultUninitializedEmpty(default: Int) = withDefaultEnvironment(default)(_.uninitializedProperties.isEmpty)
+	
 	private def defaultEnvironment(default: Int)(backing: Path) = new DefaultEnv(backing) { val x = propertyOptional[Int](default) }
 	private def environment(backing: Path) = new DefaultEnv(backing) { val x = property[Int] }
 	
