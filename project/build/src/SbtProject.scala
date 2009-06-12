@@ -11,7 +11,11 @@ class SbtProject(info: ProjectInfo) extends ParentProject(info)
 	lazy val boot = project("boot", "Simple Build Tool Loader", new LoaderProject(_))
 	// Main builder sub project
 	lazy val main = project(info.projectPath, "Simple Build Tool", new MainProject(_))
-	
+	// Experimental installer sub projects
+	def installBasePath = path("install")
+	lazy val installExtractor: InstallExtractProject = project(installBasePath / "extract", "Installer Extractor", new InstallExtractProject(_, installPlugin), main)
+	lazy val installPlugin: InstallPluginProject = project(installBasePath / "plugin", "Installer Plugin", new InstallPluginProject(_, installExtractor), installExtractor)
+
 	// One-shot build for users building from trunk
 	lazy val fullBuild = task { None } dependsOn(boot.proguard, main.crossPublishLocal) describedAs
 		"Builds the loader and builds main sbt against all supported versions of Scala and installs to the local repository."
