@@ -17,7 +17,36 @@ object EnvironmentSpecification extends Properties("Environment")
 	specify("Optional user property default and then assignment", testDefaultThenAssign _)
 	specify("Uninitialized empty when all properties are initialized", testUninitializedEmpty _)
 	specify("Uninitialized empty when all properties have defaults", testDefaultUninitializedEmpty _)
+	specify("Property defaulting to another property ok", propertyDefaultsToProperty _)
+	specify("Project-style name+organization", (name: String) => projectEmulation(name.trim))
 	
+	private def projectEmulation(testName: String) =
+	{
+		import Prop._
+		(!testName.isEmpty) ==>
+		withBacking { backing =>
+			def env = new DefaultEnv(backing) {
+				final def name: String = projectName.value
+				final val projectName = propertyLocalF[String](NonEmptyStringFormat)
+				final val projectOrganization = propertyOptional[String](name, true)
+			}
+			val first = env
+			first.projectName() = testName
+			first.saveEnvironment
+			val second = env
+			env.projectOrganization.value == testName
+		}
+	}
+	private def propertyDefaultsToProperty(value: Int) =
+	{
+		withBacking { backing =>
+			val env = new DefaultEnv(backing) {
+				val base = propertyOptional[Int](value)
+				val chained = propertyOptional[Int](base.value)
+			}
+			env.chained.value == value
+		}
+	}
 	private def testAssign(value: Int) =
 	{
 		withEnvironment { env =>
