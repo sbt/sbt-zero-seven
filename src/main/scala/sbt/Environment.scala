@@ -72,6 +72,30 @@ trait BasicEnvironment extends Environment
 	private[sbt] def setEnvironmentModified(modified: Boolean) { synchronized { isModified = modified } }
 	private[this] def isEnvironmentModified = synchronized { isModified }
 	
+	
+	implicit val IntFormat: Format[Int] = new SimpleFormat[Int] { def fromString(s: String) = java.lang.Integer.parseInt(s) }
+	implicit val LongFormat: Format[Long] = new SimpleFormat[Long] { def fromString(s: String) = java.lang.Long.parseLong(s) }
+	implicit val DoubleFormat: Format[Double] = new SimpleFormat[Double] { def fromString(s: String) = java.lang.Double.parseDouble(s) }
+	implicit val BooleanFormat: Format[Boolean] = new SimpleFormat[Boolean] { def fromString(s: String) = java.lang.Boolean.valueOf(s).booleanValue }
+	implicit val StringFormat: Format[String] = Format.string
+	val NonEmptyStringFormat: Format[String] = new SimpleFormat[String]
+	{
+		def fromString(s: String) =
+		{
+			val trimmed = s.trim
+			if(trimmed.isEmpty)
+				error("The empty string is not allowed.")
+			trimmed
+		}
+	}
+	implicit val VersionFormat: Format[Version] =
+		new SimpleFormat[Version]
+		{
+			def fromString(s: String) = Version.fromString(s).fold(msg => error(msg), x => x)
+		}
+	implicit val FileFormat = Format.file
+	
+	
 	/** Implementation of 'Property' for user-defined properties. */
 	private[sbt] class UserProperty[T](lazyDefaultValue: => Option[T], format: Format[T], inheritEnabled: Boolean,
 		inheritFirst: Boolean, private[BasicEnvironment] val manifest: Manifest[T]) extends Property[T]
@@ -83,7 +107,11 @@ trait BasicEnvironment extends Environment
 		/** The lazily evaluated default value for this property.*/
 		private lazy val defaultValue = lazyDefaultValue
 		/** The explicitly set value for this property.*/
-		private[BasicEnvironment] var explicitValue = new LazyVar[Option[T]](propertyMap) // ensure propertyMap is initialized before a read occurs
+		private[BasicEnvironment] var explicitValue =
+		{
+			def initialValue = for(n <- name; stringValue <- initialValues.get(n)) yield format.fromString(stringValue)
+			new LazyVar[Option[T]](initialValue) // ensure propertyMap is initialized before a read occurs
+		}
 		def update(v: T): Unit = synchronized { explicitValue() = Some(v); setEnvironmentModified(true) }
 		def resolve: PropertyResolution[T] =
 			synchronized
@@ -205,15 +233,11 @@ trait BasicEnvironment extends Environment
 		new UserProperty[T](Some(defaultValue), format, true, inheritFirst, manifest)
 	
 	private type AnyUserProperty = UserProperty[_]
-	/** Maps property name to property.  The map is populated by 'initializeEnvironment'.  It should not be referenced
-	* during initialization.  Otherwise, subclass properties will be missed.**/
-	private lazy val propertyMap: Map[String, AnyUserProperty] = initializeEnvironment
-	
-	/** Initializes 'propertyMap' by reflectively listing the vals on this object that
-	* reference a UserProperty. */
-	private def initializeEnvironment =
+	/** Maps property name to property.  The map is constructed by reflecting vals defined on this object,
+	* so it should not be referenced during initialization or else subclass properties will be missed.**/
+	private lazy val propertyMap: Map[String, AnyUserProperty] =
 	{
-		log.debug("Initializing property map")
+		log.debug("Discovering properties")
 		val propertyMap = new scala.collection.mutable.HashMap[String, AnyUserProperty]
 		// AnyProperty is required because the return type of the property*[T] methods is Property[T]
 		// and so the vals we are looking for have type Property[T] and not UserProperty[T]
@@ -221,34 +245,16 @@ trait BasicEnvironment extends Environment
 		val vals = Environment.reflectiveMappings(this, classOf[Property[_]])
 		for( (name, property: AnyUserProperty) <- vals)
 			propertyMap(name) = property
-		
-		val properties = new java.util.Properties
-		for(errorMsg <- PropertiesUtilities.load(properties, envBackingPath, log))
-			log.error("Error loading properties from " + environmentLabel + " : " + errorMsg)
-
-		val storedPropertyNames = PropertiesUtilities.propertyNames(properties)
-		for(name <- storedPropertyNames)
-		{
-			val propertyValue = properties.getProperty(name)
-			propertyMap.get(name) match
-			{
-				case Some(property) =>
-					log.debug("Initializing " + name + " to " + propertyValue)
-					property.setStringValue(propertyValue)
-				case None =>
-				{
-					val p = new UserProperty[String](None, StringFormat, false, false, Manifest.classType(classOf[String]))
-					p() = propertyValue
-					propertyMap(name) = p
-					log.warn("Property '" + name + "' from " + environmentLabel + " is not used.")
-				}
-			}
-		}
-		for(name <- Set(propertyMap.keys.toList : _*) -- storedPropertyNames)
-			propertyMap(name).explicitValue() = None
-		setEnvironmentModified(false)
 		propertyMap.readOnly
 	}
+	private val initialValues: Map[String, String] =
+	{
+		val map = new scala.collection.mutable.HashMap[String, String]
+		for(errorMsg <- impl.MapUtilities.read(map, envBackingPath, log))
+			log.error("Error loading properties from " + environmentLabel + " : " + errorMsg)
+		map.readOnly
+	}
+	
 	def propertyNames: Iterable[String] = propertyMap.keys.toList
 	def getPropertyNamed(name: String): Option[UserProperty[_]] = propertyMap.get(name)
 	def propertyNamed(name: String): UserProperty[_] = propertyMap(name)
@@ -267,29 +273,6 @@ trait BasicEnvironment extends Environment
 			None
 	}
 	private[sbt] def uninitializedProperties: Iterable[(String, Property[_])] = propertyMap.filter(_._2.get.isEmpty)
-	
-	
-	implicit val IntFormat: Format[Int] = new SimpleFormat[Int] { def fromString(s: String) = java.lang.Integer.parseInt(s) }
-	implicit val LongFormat: Format[Long] = new SimpleFormat[Long] { def fromString(s: String) = java.lang.Long.parseLong(s) }
-	implicit val DoubleFormat: Format[Double] = new SimpleFormat[Double] { def fromString(s: String) = java.lang.Double.parseDouble(s) }
-	implicit val BooleanFormat: Format[Boolean] = new SimpleFormat[Boolean] { def fromString(s: String) = java.lang.Boolean.valueOf(s).booleanValue }
-	implicit val StringFormat: Format[String] = Format.string
-	val NonEmptyStringFormat: Format[String] = new SimpleFormat[String]
-	{
-		def fromString(s: String) =
-		{
-			val trimmed = s.trim
-			if(trimmed.isEmpty)
-				error("The empty string is not allowed.")
-			trimmed
-		}
-	}
-	implicit val VersionFormat: Format[Version] =
-		new SimpleFormat[Version]
-		{
-			def fromString(s: String) = Version.fromString(s).fold(msg => error(msg), x => x)
-		}
-	implicit val FileFormat = Format.file
 }
 private object Environment
 {
@@ -343,7 +326,7 @@ final case class DefinedValue[T](value: T, isInherited: Boolean, isDefault: Bool
 	def flatMap[R](f: T => PropertyResolution[R]) = f(value)
 	def foreach(f: T => Unit) { f(value) }
 }
-private final class LazyVar[T](initialize: => Unit) extends NotNull
+private final class LazyVar[T](initialValue: => T) extends NotNull
 {
 	private[this] var value: Option[T] = None
 	def apply() =
@@ -353,9 +336,9 @@ private final class LazyVar[T](initialize: => Unit) extends NotNull
 			{
 				case Some(v) => v
 				case None =>
-					initialize
-					assume(value.isDefined, "Initialization did not set initial value.")
-					value.get
+					val newValue = initialValue
+					value = Some(newValue)
+					newValue
 			}
 		}
 	def update(newValue: T) = synchronized { value = Some(newValue) }
