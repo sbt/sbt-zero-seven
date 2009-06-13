@@ -183,6 +183,7 @@ private[sbt] final class BuilderCompileAnalysis(analysisPath: Path, projectPath:
 {
 	private val projectDefinitionMap = new HashMap[Path, Set[String]]
 	override protected def mapsToClear = projectDefinitionMap :: super.mapsToClear
+	override protected def mapsToRemoveSource = projectDefinitionMap :: super.mapsToRemoveSource
 	def allProjects = all(projectDefinitionMap)
 	def addProjectDefinition(source: Path, className: String) = add(source, className, projectDefinitionMap)
 	

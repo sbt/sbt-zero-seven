@@ -275,7 +275,8 @@ abstract class AbstractCompileConditional(val config: AbstractCompileConfigurati
 	}
 	protected def hashModified(source: Path) =
 	{
-		analysis.hash(source) match
+		source.isDirectory ||
+		(analysis.hash(source) match
 		{
 			case None =>
 				log.debug("Source " + source + " had no hash, marking modified.")
@@ -298,7 +299,7 @@ abstract class AbstractCompileConditional(val config: AbstractCompileConfigurati
 						different
 				}
 			}
-		}
+		})
 	}
 	protected def execute(executeAnalysis: ConditionalAnalysis) =
 	{

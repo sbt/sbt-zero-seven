@@ -224,6 +224,11 @@ src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/project/
 src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/src/main/scala/A.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/src/main/scala/B.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/remove-test-b/test -text
+src/test/resources/sbt-test-resources/source-dependencies/replace-test-a/changes/first.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/replace-test-a/changes/second.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/replace-test-a/project/build.properties -text
+src/test/resources/sbt-test-resources/source-dependencies/replace-test-a/project/build/src/TestProject.scala -text
+src/test/resources/sbt-test-resources/source-dependencies/replace-test-a/test -text
 src/test/resources/sbt-test-resources/source-dependencies/transitive-a/changes/A2.scala -text
 src/test/resources/sbt-test-resources/source-dependencies/transitive-a/project/build.properties -text
 src/test/resources/sbt-test-resources/source-dependencies/transitive-a/src/main/scala/A.scala -text
