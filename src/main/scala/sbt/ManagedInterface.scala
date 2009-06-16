@@ -111,6 +111,11 @@ final case class FileRepository(name: String, configuration: FileConfiguration, 
 	def transactional() = copy(configuration.transactional())
 	def nonlocal() = copy(configuration.nonlocal())
 }
+final case class URLRepository(name: String, patterns: Patterns) extends PatternsBasedRepository
+{
+	type RepositoryType = URLRepository
+	protected def copy(patterns: Patterns): URLRepository = URLRepository(name, patterns)
+}
 /** sbt interface for an Ivy ssh-based repository (ssh and sftp).  Requires the Jsch library.. */
 sealed abstract class SshBasedRepository extends PatternsBasedRepository
 {
@@ -148,6 +153,10 @@ import Resolver._
 object ScalaToolsReleases extends MavenRepository(ScalaToolsReleasesName, ScalaToolsReleasesRoot)
 object ScalaToolsSnapshots extends MavenRepository(ScalaToolsSnapshotsName, ScalaToolsSnapshotsRoot)
 object DefaultMavenRepository extends MavenRepository("Maven2 Repository", IBiblioResolver.DEFAULT_M2_ROOT)
+object JavaNet1Repository extends Resolver
+{
+	def name = "java.net Maven1 Repository"
+}
 
 object Resolver
 {
@@ -207,12 +216,20 @@ object Resolver
 		def apply(name: String): FileRepository = FileRepository(name, defaultFileConfiguration, ivyStylePatterns)
 		/** Constructs a file resolver with the given name and base directory. */
 		def apply(name: String, baseDirectory: File)(implicit basePatterns: Patterns): FileRepository =
-		{
-			val baseURI = baseDirectory.toURI.normalize
-			val resolvedInitialPatterns = resolvePatterns(baseURI, basePatterns)
-			FileRepository(name, defaultFileConfiguration, resolvedInitialPatterns)
-		}
+			baseRepository(baseDirectory.toURI)(FileRepository(name, defaultFileConfiguration, _))
 	}
+	object url
+	{
+		/** Constructs a URL resolver with the given name.  The patterns to use must be explicitly specified
+		* using the `ivys` or `artifacts` methods on the constructed resolver object.*/
+		def apply(name: String): URLRepository = URLRepository(name, ivyStylePatterns)
+		/** Constructs a file resolver with the given name and base directory. */
+		def apply(name: String, baseURL: URL)(implicit basePatterns: Patterns): URLRepository =
+			baseRepository(baseURL.toURI)(URLRepository(name, _))
+	}
+	private def baseRepository[T](baseURI: java.net.URI)(construct: Patterns => T)(implicit basePatterns: Patterns): T =
+		construct(resolvePatterns(baseURI.normalize, basePatterns))
+	
 	/** If `base` is None, `patterns` is returned unchanged.
 	* Otherwise, the ivy file and artifact patterns in `patterns` are resolved against the given base. */
 	private def resolvePatterns(base: Option[String], patterns: Patterns): Patterns =

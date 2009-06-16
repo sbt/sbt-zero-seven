@@ -7,7 +7,6 @@ class TestProject3(info: ProjectInfo) extends ParentProject(info)
 	{
 		override def testFrameworks = framework.FrameworkScalaCheck :: Nil
 		
-		override def useMavenConfigurations = true
 		val sc = "org.scala-tools.testing" % "scalacheck" % "1.5" % "test->default"
 	}
 }

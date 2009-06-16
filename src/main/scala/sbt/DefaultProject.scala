@@ -125,7 +125,9 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 	/** A PathFinder that corresponds to Maven's optional scope.  It includes any managed libraries in the
 	* 'optional' configuration for this project only.*/
 	def optionalClasspath = managedClasspath(Optional)
-
+	/** A PathFinder that contains the jars that should be included in a comprehensive package.  This is
+	* by default the 'runtime' classpath excluding the 'provided' classpath.*/
+	def publicClasspath = runClasspath --- fullClasspath(Provided)
 
 	/** This returns the unmanaged classpath for only this project for the given configuration.  It by
 	* default includes the main compiled classes for this project and the libraries in this project's
@@ -305,13 +307,15 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	
 	lazy val prepareWebapp = prepareWebappAction
 	protected def prepareWebappAction =
-		prepareWebappTask(descendents(webappPath ##, "*") +++ extraWebappFiles, temporaryWarPath, runClasspath, mainDependencies.scalaJars) dependsOn(compile)
+		prepareWebappTask(descendents(webappPath ##, "*") +++ extraWebappFiles, temporaryWarPath, webappClasspath, mainDependencies.scalaJars) dependsOn(compile)
 	/** Additional files to include in the web application. */
 	protected def extraWebappFiles: PathFinder = Path.emptyPathFinder
 	
+	def webappClasspath = publicClasspath
+	def jettyRunClasspath = testClasspath
 	lazy val jettyRun = jettyRunAction
 	protected def jettyRunAction =
-		jettyRunTask(temporaryWarPath, jettyContextPath, jettyPort, testClasspath, "test", scanDirectories.map(_.asFile), scanInterval) dependsOn(prepareWebapp) describedAs(JettyRunDescription)
+		jettyRunTask(temporaryWarPath, jettyContextPath, jettyPort, jettyRunClasspath, "test", scanDirectories.map(_.asFile), scanInterval) dependsOn(prepareWebapp) describedAs(JettyRunDescription)
 		
 	/** The directories that should be watched to determine if the web application needs to be reloaded..*/
 	def scanDirectories: Seq[Path] = temporaryWarPath :: Nil

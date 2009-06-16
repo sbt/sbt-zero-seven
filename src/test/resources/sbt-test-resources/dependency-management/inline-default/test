@@ -1,4 +1,4 @@
-## run test with default value for useMavenConfigurations
+## run test with default value for useDefaultConfigurations
 
 # Download jars.  If successful, httpclient should be downloaded to the 'default' configuration 
 > update
@@ -17,8 +17,8 @@
 # reset test
 > clean-lib
 [success]
-# Indicate to the project definition that we now want useMavenConfigurations = true
-$ touch useMavenConfigurations
+# Indicate to the project definition that we now want useDefaultConfigurations = true
+$ touch useDefaultConfigurations
 [success]
 # Reload for change to take effect
 $ reload

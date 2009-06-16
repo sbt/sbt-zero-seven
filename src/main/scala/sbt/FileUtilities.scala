@@ -237,7 +237,10 @@ object FileUtilities
 							if(entry.isDirectory)
 								createDirectory(target, log)
 							else
+							{
+								set += target
 								writeStream(target.asFile, log) { out => FileUtilities.transfer(from, out, log) }
+							}
 						//target.asFile.setLastModified(entry.getTime)
 						result
 					}

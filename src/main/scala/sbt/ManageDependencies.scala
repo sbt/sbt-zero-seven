@@ -26,7 +26,7 @@ import plugins.parser.xml.XmlModuleDescriptorParser
 import plugins.repository.{BasicResource, Resource}
 import plugins.repository.url.URLResource
 import plugins.resolver.{ChainResolver, DependencyResolver, IBiblioResolver}
-import plugins.resolver.{AbstractPatternsBasedResolver, AbstractSshBasedResolver, FileSystemResolver, SFTPResolver, SshResolver}
+import plugins.resolver.{AbstractPatternsBasedResolver, AbstractSshBasedResolver, FileSystemResolver, SFTPResolver, SshResolver, URLResolver}
 import util.{Message, MessageLogger}
 
 final class IvyScala(val scalaVersion: String, val configurations: Iterable[Configuration], val checkExplicit: Boolean, val filterImplicit: Boolean) extends NotNull
@@ -588,9 +588,16 @@ private object ConvertResolver
 			case repo: MavenRepository =>
 			{
 				val resolver = new IBiblioResolver
-				resolver.setName(repo.name)
-				resolver.setM2compatible(true)
-				resolver.setRoot(repo.root)
+				initializeMavenStyle(resolver, repo.name, repo.root)
+				resolver
+			}
+			case JavaNet1Repository =>
+			{
+				// Thanks to Matthias Pfau for posting how to use the Maven 1 repository on java.net with Ivy:
+				// http://www.nabble.com/Using-gradle-Ivy-with-special-maven-repositories-td23775489.html
+				val resolver = new IBiblioResolver { override def convertM2IdForResourceSearch(mrid: ModuleRevisionId) = mrid }
+				initializeMavenStyle(resolver, JavaNet1Repository.name, "http://download.java.net/maven/1/")
+				resolver.setPattern("[organisation]/[ext]s/[module]-[revision](-[classifier]).[ext]")
 				resolver
 			}
 			case repo: SshRepository =>
@@ -616,7 +623,20 @@ private object ConvertResolver
 				isTransactional.foreach(value => resolver.setTransactional(value.toString))
 				resolver
 			}
+			case repo: URLRepository =>
+			{
+				val resolver = new URLResolver
+				resolver.setName(repo.name)
+				initializePatterns(resolver, repo.patterns)
+				resolver
+			}
 		}
+	}
+	private def initializeMavenStyle(resolver: IBiblioResolver, name: String, root: String)
+	{
+		resolver.setName(name)
+		resolver.setM2compatible(true)
+		resolver.setRoot(root)
 	}
 	private def initializeSSHResolver(resolver: AbstractSshBasedResolver, repo: SshBasedRepository)
 	{

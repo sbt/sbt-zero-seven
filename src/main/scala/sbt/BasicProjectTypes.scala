@@ -235,7 +235,7 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	override def ivyConfigurations: Iterable[Configuration] =
 	{
 		val reflective = super.ivyConfigurations
-		if(useMavenConfigurations)
+		if(useDefaultConfigurations)
 		{
 			val base = Configurations.defaultMavenConfigurations ++ reflective
 			val allConfigurations =
@@ -249,8 +249,9 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 			reflective
 	}
 	def useIntegrationTestConfiguration = false
-	def defaultConfiguration = if(useMavenConfigurations) Some(config("compile->default")) else None
-	def useMavenConfigurations = false
+	def defaultConfiguration = if(useDefaultConfigurations) Some(config("compile->compile(default)")) else None
+	def useMavenConfigurations = true  // TBD: to be deprecated
+	def useDefaultConfigurations = useMavenConfigurations
 	def managedStyle: ManagedType = Auto
 	protected implicit final val defaultPatterns: RepositoryHelpers.Patterns =
 	{

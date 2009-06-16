@@ -2,5 +2,6 @@ import sbt._
 
 class TestProject(info: ProjectInfo) extends DefaultProject(info)
 {
-	val sc = "org.scala-tools.testing" % "scalacheck" % "1.5" % "test->default"
+	val javaNet = JavaNet1Repository
+	val ejb = "javax.ejb" % "ejb-api" % "3.0"
 }

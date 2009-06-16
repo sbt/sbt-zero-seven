@@ -267,7 +267,7 @@ abstract class BasicWebstartProject extends BasicScalaProject with WebstartScala
 	def webstartSignConfiguration: Option[SignConfiguration] = None
 	
 	def webstartExtraLibraries = mainDependencies.scalaJars
-	def webstartLibraries = runClasspath +++ jarsOfProjectDependencies
+	def webstartLibraries = publicClasspath +++ jarsOfProjectDependencies
 	def webstartResources = descendents(jnlpResourcesPath ##, AllPassFilter)
 
 	def webstartPack200 = true
