@@ -2,6 +2,7 @@ import sbt._
 
 class TestProject(info: ProjectInfo) extends DefaultWebProject(info)
 {
+	override def useMavenConfigurations = true
 	private val provided = "useProvided".asFile.exists
 	private val configuration = if(provided) Configurations.Provided else Configurations.Compile
 	val j = "javax.servlet" % "servlet-api" % "2.5" % (configuration.name + "->default")

@@ -10,7 +10,7 @@ class TestProject(info: ProjectInfo) extends DefaultProject(info)
 
 	private def check(transitive: Boolean) =
 	{
-		val downloaded = configurationClasspath(Configurations.Default).get
+		val downloaded = compileClasspath.get
 		val jars = downloaded.size
 		if(transitive)
 		{

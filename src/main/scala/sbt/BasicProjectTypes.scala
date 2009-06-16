@@ -249,8 +249,8 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 			reflective
 	}
 	def useIntegrationTestConfiguration = false
-	def defaultConfiguration = if(useDefaultConfigurations) Some(config("compile->compile(default)")) else None
-	def useMavenConfigurations = true  // TBD: to be deprecated
+	def defaultConfiguration = if(useDefaultConfigurations) Some(config("compile->default")) else None
+	def useMavenConfigurations = false  // TBD: to be deprecated
 	def useDefaultConfigurations = useMavenConfigurations
 	def managedStyle: ManagedType = Auto
 	protected implicit final val defaultPatterns: RepositoryHelpers.Patterns =
