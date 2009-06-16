@@ -1,4 +1,4 @@
-## run test with default value for useDefaultConfigurations
+## run test with useDefaultConfigurations=false
 
 # Download jars.  If successful, httpclient should be downloaded to the 'default' configuration 
 > update
@@ -24,7 +24,7 @@ $ touch useDefaultConfigurations
 $ reload
 [success]
 
-## Rerun test with maven-style defaults
+## Rerun test with useDefaultConfigurations=true
 
 # Download jars.  If successful,  httpclient should be downloaded to the 'compile' configuration
 > update
