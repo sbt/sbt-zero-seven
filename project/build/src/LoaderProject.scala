@@ -11,7 +11,7 @@ protected/* removes the ambiguity as to which project is the entry point by maki
 {
 	val mainClassName = "sbt.boot.Boot"
 	val baseName = "sbt-launcher"
-	val proguardConfigurationPath: Path = "proguard.pro"
+	val proguardConfigurationPath: Path = outputPath / "proguard.pro"
 	lazy val outputJar: Path = rootProject.outputPath / (baseName + "-" + version + ".jar")
 	def rootProjectDirectory = rootProject.info.projectPath
 	

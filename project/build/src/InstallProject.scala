@@ -20,7 +20,7 @@ protected class InstallExtractProject(info: ProjectInfo, pluginProject: => Insta
 {
 	private lazy val plugin = pluginProject
 	val mainClassName = "sbt.extract.Main"
-	val proguardConfigurationPath: Path = "proguard.pro"
+	val proguardConfigurationPath: Path = outputPath / "proguard.pro"
 	val toolsConfig = config("tools")
 	val proguardJar = "net.sf.proguard" % "proguard" % "4.3" % "tools->default"
 	def rootProjectDirectory = rootProject.info.projectPath
