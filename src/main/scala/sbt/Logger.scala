@@ -110,7 +110,7 @@ final class MultiLogger(delegates: List[Logger]) extends BasicLogger
 * */
 final class BufferedLogger(delegate: Logger) extends Logger
 {
-	private[this] val buffers = new HashMap[Thread, Buffer[LogEvent]]
+	private[this] val buffers = wrap.Wrappers.weakMap[Thread, Buffer[LogEvent]]
 	/* The recording depth part is to enable a weak nesting of recording calls.  When recording is
 	*  nested (recordingDepth >= 2), calls to play/playAll add the buffers for worker Threads to the
 	*  serial buffer (main Thread) and calls to clear/clearAll clear worker Thread buffers only. */
@@ -147,12 +147,12 @@ final class BufferedLogger(delegate: Logger) extends Logger
 			}
 			else if(recordingDepth > 1)
 			{
-				for((key, buffer) <- buffers if key ne mainThread)
+				for((key, buffer) <- buffers.toList if key ne mainThread)
 					serialBuffer ++= buffer
 			}
 		}
 	/** Clears buffered events for the current thread.  It does not disable buffering. */
-	def clear(): Unit = synchronized { if(recordingDepth == 1 || inWorker) buffers.removeKey(key) }
+	def clear(): Unit = synchronized { if(recordingDepth == 1 || inWorker) buffers -= key }
 	/** Clears buffered events for all threads and disables buffering. */
 	def stop(): Unit =
 		synchronized

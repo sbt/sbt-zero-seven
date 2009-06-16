@@ -5,7 +5,7 @@
 
 import scala.collection.{immutable, mutable}
 import scala.collection.Map
-import sbt.wrap.IdentityHashMap
+import sbt.wrap.Wrappers.identityMap
 
 private[sbt] object RunTask
 {
@@ -102,24 +102,24 @@ private final class RunTask(root: Task, rootName: String, maximumTasks: Int) ext
 	}
 
 	/* Most of the following is for implicitly adding dependencies (see the expand method)*/
-	private val projectDependencyCache = new IdentityHashMap[Project, Iterable[Project]]
+	private val projectDependencyCache = identityMap[Project, Iterable[Project]]
 	private def dependencies(project: Project) = projectDependencyCache.getOrElseUpdate(project, project.topologicalSort.dropRight(1))
 
-	private val expandedCache = new IdentityHashMap[Task, Task]
+	private val expandedCache = identityMap[Task, Task]
 	private def expanded(task: Task): Task = expandedCache.getOrElseUpdate(task, expandImpl(task))
 
-	private val expandedTaskNameCache = new IdentityHashMap[Task, String]
+	private val expandedTaskNameCache = identityMap[Task, String]
 	private def expandedTaskName(task: Task) =
 		if(task == expandedRoot)
 			rootName
 		else
 			expandedTaskNameCache.getOrElse(task, task.name)
 
-	private val nameToTaskCache = new IdentityHashMap[Project, Map[String, Task]]
+	private val nameToTaskCache = identityMap[Project, Map[String, Task]]
 	private def nameToTaskMap(project: Project): Map[String, Task] = nameToTaskCache.getOrElseUpdate(project, project.tasks)
 	private def taskForName(project: Project, name: String): Option[Task] = nameToTaskMap(project).get(name)
 	
-	private val taskNameCache = new IdentityHashMap[Project, Map[Task, String]]
+	private val taskNameCache = identityMap[Project, Map[Task, String]]
 	private def taskName(task: Task) =
 	{
 		val project = task.manager

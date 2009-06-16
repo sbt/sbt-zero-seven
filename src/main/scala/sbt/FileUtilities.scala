@@ -6,11 +6,14 @@ package sbt
 import java.io.{Closeable, File, FileInputStream, FileOutputStream, InputStream, OutputStream}
 import java.io.{ByteArrayOutputStream, InputStreamReader, OutputStreamWriter}
 import java.io.{BufferedReader, BufferedWriter, FileReader, FileWriter, Reader, Writer}
+import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 import java.net.URL
 import java.nio.charset.{Charset, CharsetDecoder, CharsetEncoder}
 import java.nio.channels.FileChannel
-import java.util.jar.{Attributes, JarEntry, JarFile, JarOutputStream, Manifest}
-import java.util.zip.{GZIPOutputStream, ZipEntry, ZipInputStream, ZipOutputStream}
+import java.util.jar.{Attributes, JarEntry, JarFile, JarInputStream, JarOutputStream, Manifest}
+import java.util.zip.{GZIPOutputStream, ZipEntry, ZipFile, ZipInputStream, ZipOutputStream}
+
+import OpenResource._
 
 final class Preserved private[sbt](toRestore: scala.collection.Map[File, Path], temp: File) extends NotNull
 {
@@ -61,20 +64,25 @@ object FileUtilities
 		require(in != out, "Input file cannot be the same as the output file.")
 		readStream(in.asFile, log) { inputStream =>
 			writeStream(out.asFile, log) { outputStream =>
-				val gzStream = new GZIPOutputStream(outputStream)
-				Control.trapUnitAndFinally("Error gzipping '" + in + "' to '" + out + "': ", log)
-					{ transfer(inputStream, gzStream, log) }
-					{ gzStream.close() }
+				gzip(inputStream, outputStream, log)
 			}
 		}
 	}
 	/** Gzips the InputStream 'in' and writes it to 'output'.  Neither stream is closed.*/
 	def gzip(input: InputStream, output: OutputStream, log: Logger): Option[String] =
+		gzipOutputStream.ioOption(output, "gzipping", log) { gzStream => transfer(input, gzStream, log) }
+
+	def gunzip(input: InputStream, output: OutputStream, log: Logger): Option[String] =
+		gzipInputStream.ioOption(input, "gunzipping", log) { gzStream => transfer(gzStream, output, log) }
+	/** Gunzips the file 'in' and writes it to 'out'.  'in' cannot be the same file as 'out'. */
+	def gunzip(in: Path, out: Path, log: Logger): Option[String] =
 	{
-		val gzStream = new GZIPOutputStream(output)
-		Control.trapUnitAndFinally("Error gzipping: ", log)
-			{ transfer(input, gzStream, log) }
-			{ gzStream.finish() }
+		require(in != out, "Input file cannot be the same as the output file.")
+		readStream(in.asFile, log) { inputStream =>
+			writeStream(out.asFile, log) { outputStream =>
+				gunzip(inputStream, outputStream, log)
+			}
+		}
 	}
 	
 	/** Creates a jar file.
@@ -206,13 +214,7 @@ object FileUtilities
 		createDirectory(toDirectory, log) match
 		{
 			case Some(err) => Left(err)
-			case None =>
-			{
-				val zipInput = new ZipInputStream(from)
-				Control.trapAndFinally("Error unzipping: ", log)
-				{ extract(zipInput, toDirectory, filter, log) }
-				{ zipInput.close() }
-			}
+			case None => zipInputStream.io(from, "unzipping", log) { zipInput => extract(zipInput, toDirectory, filter, log) }
 		}
 	}
 	private def extract(from: ZipInputStream, toDirectory: Path, filter: NameFilter, log: Logger) =
@@ -580,6 +582,8 @@ object FileUtilities
 	}
 
 	
+	/** Deletes the given file recursively.*/
+	def clean(file: Path, log: Logger): Option[String] = clean(file :: Nil, log)
 	/** Deletes the given files recursively.*/
 	def clean(files: Iterable[Path], log: Logger): Option[String] = clean(files, false, log)
 	/** Deletes the given files recursively.  <code>quiet</code> determines the logging level.
@@ -635,8 +639,6 @@ object FileUtilities
 		else
 			Some("String cannot be encoded by default charset.")
 	}
-	
-	import OpenResource._
 	
 	/** Opens a <code>Writer</code> on the given file using the default encoding,
 	* passes it to the provided function, and closes the <code>Writer</code>.*/
@@ -802,12 +804,8 @@ object FileUtilities
 	private val Writing = "writing"
 	private val Appending = "appending"
 }
-class CloseableJarFile(f: File, verify: Boolean) extends JarFile(f, verify) with Closeable
-{
-	def this(f: File) = this(f, false)
-}
 
-private abstract class OpenResource[Source, T <: Closeable] extends NotNull
+private abstract class OpenResource[Source, T] extends NotNull
 {
 	import OpenResource.{unwrapEither, wrapEither}
 	protected def open(src: Source, log: Logger): Either[String, T]
@@ -818,10 +816,23 @@ private abstract class OpenResource[Source, T <: Closeable] extends NotNull
 		{
 			resource => Control.trapAndFinally("Error " + op + " "+ src + ": ", log)
 				{ f(resource) }
-				{ resource.close }
+				{ close(resource) }
 		}
+	protected def close(out: T): Unit
 }
-private abstract class OpenFile[T <: Closeable] extends OpenResource[File, T]
+private trait CloseableOpenResource[Source, T <: Closeable] extends OpenResource[Source, T]
+{
+	protected def close(out: T): Unit = out.close()
+}
+import scala.reflect.{Manifest => SManifest}
+private abstract class WrapOpenResource[Source, T <: Closeable](implicit srcMf: SManifest[Source], targetMf: SManifest[T]) extends CloseableOpenResource[Source, T]
+{
+	private def label[S](m: SManifest[S]) = m.erasure.getSimpleName
+	protected def open(source: Source): T
+	protected final def open(source: Source, log: Logger): Either[String, T] =
+		Control.trap("Error wrapping " + label(srcMf) + " in " + label(targetMf) + ": ", log) { Right(open(source)) }
+}
+private abstract class OpenFile[T] extends OpenResource[File, T]
 {
 	protected def open(file: File): T
 	protected final def open(file: File, log: Logger): Either[String, T] =
@@ -832,29 +843,47 @@ private abstract class OpenFile[T <: Closeable] extends OpenResource[File, T]
 		Control.trap("Error opening " + file + ": ", log) { Right(open(file)) }
 	}
 }
+private abstract class CloseableOpenFile[T <: Closeable] extends OpenFile[T] with CloseableOpenResource[File, T]
 private object OpenResource
 {
 	private def wrapEither[R](f: R => Option[String]): (R => Either[String, Unit]) = (r: R) => f(r).toLeft(())
 	private def unwrapEither(e: Either[String, Unit]): Option[String] = e.left.toOption
 	
 	def fileOutputStream(append: Boolean) =
-		new OpenFile[FileOutputStream] { protected def open(file: File) = new FileOutputStream(file, append) }
-	def fileInputStream = new OpenFile[FileInputStream]
+		new CloseableOpenFile[FileOutputStream] { protected def open(file: File) = new FileOutputStream(file, append) }
+	def fileInputStream = new CloseableOpenFile[FileInputStream]
 		{ protected def open(file: File) = new FileInputStream(file) }
-	def urlInputStream = new OpenResource[URL, InputStream]
+	def urlInputStream = new CloseableOpenResource[URL, InputStream]
 		{ protected def open(url: URL, log: Logger) = Control.trap("Error opening " + url + ": ", log) { Right(url.openStream) } }
-	def fileOutputChannel = new OpenFile[FileChannel]
+	def fileOutputChannel = new CloseableOpenFile[FileChannel]
 		{ protected def open(f: File) = (new FileOutputStream(f)).getChannel }
-	def fileInputChannel = new OpenFile[FileChannel]
+	def fileInputChannel = new CloseableOpenFile[FileChannel]
 		{ protected def open(f: File) = (new FileInputStream(f)).getChannel }
-	def fileWriter(charset: Charset, append: Boolean) = new OpenFile[Writer]
+	def fileWriter(charset: Charset, append: Boolean) = new CloseableOpenFile[Writer]
 		{ protected def open(f: File) = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f, append), charset)) }
-	def fileReader(charset: Charset) = new OpenFile[Reader]
+	def fileReader(charset: Charset) = new CloseableOpenFile[Reader]
 		{ protected def open(f: File) = new BufferedReader(new InputStreamReader(new FileInputStream(f), charset)) }
-	def openJarFile(verify: Boolean) = new OpenFile[CloseableJarFile]
-		{ protected def open(f: File) = new CloseableJarFile(f, verify) }
-	def streamReader = new OpenResource[(InputStream, Charset), Reader]
-		{ protected def open(streamCharset: (InputStream, Charset), log: Logger) =
-			Control.trap("Error wrapping InputStream in Reader: ", log) { Right(new InputStreamReader(streamCharset._1, streamCharset._2)) }
-		}
+	def jarFile(verify: Boolean) = new OpenFile[JarFile]
+		{ protected def open(f: File) = new JarFile(f, verify)
+		   override protected def close(j: JarFile) = j.close() }
+	def zipFile = new OpenFile[ZipFile]
+		{ protected def open(f: File) = new ZipFile(f)
+		   override protected def close(z: ZipFile) = z.close() }
+	def streamReader = new WrapOpenResource[(InputStream, Charset), Reader]
+		{ protected def open(streamCharset: (InputStream, Charset)) = new InputStreamReader(streamCharset._1, streamCharset._2) }
+	def gzipInputStream = new WrapOpenResource[InputStream, GZIPInputStream]
+		{ protected def open(in: InputStream) = new GZIPInputStream(in) }
+	def zipInputStream = new WrapOpenResource[InputStream, ZipInputStream]
+		{ protected def open(in: InputStream) = new ZipInputStream(in) }
+	def gzipOutputStream = new WrapOpenResource[OutputStream, GZIPOutputStream]
+		{ protected def open(out: OutputStream) = new GZIPOutputStream(out)
+		   override protected def close(out: GZIPOutputStream) = out.finish() }
+	def jarOutputStream = new WrapOpenResource[OutputStream, JarOutputStream]
+		{ protected def open(out: OutputStream) = new JarOutputStream(out) }
+	def jarInputStream = new WrapOpenResource[InputStream, JarInputStream]
+		{ protected def open(in: InputStream) = new JarInputStream(in) }
+	def zipEntry(zip: ZipFile) = new CloseableOpenResource[ZipEntry, InputStream] {
+		protected def open(entry: ZipEntry, log: Logger) =
+			Control.trap("Error opening " + entry.getName + " in " + zip + ": ", log) { Right(zip.getInputStream(entry)) }
+	}
 }

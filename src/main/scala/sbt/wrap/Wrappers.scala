@@ -9,6 +9,8 @@ import java.util.{Map => JMap, Set => JSet}
 
 private[sbt] object Wrappers
 {
+	def identityMap[K,V] = new MutableMapWrapper(new java.util.IdentityHashMap[K,V])
+	def weakMap[K,V] = new MutableMapWrapper(new java.util.WeakHashMap[K,V])
 	def toList[K,V](s: java.util.Map[K,V]): List[(K,V)] = toList(s.entrySet).map(e => (e.getKey, e.getValue))
 	def toList[T](s: java.util.Collection[T]): List[T] = toList(s.iterator)
 	def toList[T](s: java.util.Iterator[T]): List[T] =
@@ -89,6 +91,7 @@ private[sbt] sealed abstract class MapWrapper[K,V](val underlying: JMap[K,V]) ex
 			Some(value)
 	}
 	final def toList = Wrappers.toList(underlying)
+	final def values = toList.map(_._2)
 }
 private[sbt] sealed class MutableMapWrapper[K,V](wrapped: JMap[K,V]) extends MapWrapper[K,V](wrapped) with Removable[K] with Addable[(K,V)]
 {
@@ -101,9 +104,9 @@ private[sbt] sealed class MutableMapWrapper[K,V](wrapped: JMap[K,V]) extends Map
 				underlying.put(key, newValue)
 				newValue
 		}
+	final def clear() = underlying.clear()
 	final def update(key: K, value: V) { underlying.put(key, value) }
 	final def +=(pair: (K, V) ) { update(pair._1, pair._2) }
 	final def -=(key: K) { underlying.remove(key) }
 	final def readOnly: Map[K,V] = this
 }
-private[sbt] final class IdentityHashMap[K,V] extends MutableMapWrapper(new java.util.IdentityHashMap[K,V])

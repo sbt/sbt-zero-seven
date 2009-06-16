@@ -14,17 +14,15 @@ object Main
 	{
 		if(args.contains("debug"))
 			log.setLevel(Level.Debug)
-		val result =
-		Control.trapUnit("Error processing jar: ", log)
+		val result = OpenResource.zipFile.ioOption(FileUtilities.classLocationFile[Install], "processing", log)(process)
+		for(msg <- result)
 		{
-			import FileUtilities.classLocationFile
-			val asZip = new ZipFile(classLocationFile[Install])
-			Control.trapUnitAndFinally("Error processing jar: ", log)
-				{ process(asZip) }
-				{ asZip.close() }
+			log.error(msg)
+			System.exit(1)
 		}
-		result.foreach { msg => log.error(msg); System.exit(1) }
 	}
+	private[this] val packedGzip = ".pack.gz"
+	private def isArchive(name: String) = name.endsWith(".gz") || name.endsWith(".zip")
 	private def process(zip: ZipFile) =
 	{
 		val installEntry = zip.getEntry("install")
@@ -32,7 +30,7 @@ object Main
 			Some("Install commands not found.")
 		else
 		{
-			val jarAndZip = wrap.Wrappers.toList(zip.entries).filter(entry => ClasspathUtilities.isArchiveName(entry.getName)).partition(_.getName.endsWith(".jar"))
+			val jarAndZip = wrap.Wrappers.toList(zip.entries).filter(entry => isArchive(entry.getName)).partition(_.getName.endsWith(packedGzip))
 			jarAndZip match
 			{
 				case (Nil, _)=> Some("sbt loader not found.")
@@ -43,22 +41,32 @@ object Main
 	}
 	private def extractAndRun(zip: ZipFile, loaderEntry: ZipEntry, projectEntry: ZipEntry, installEntry: ZipEntry) =
 	{
-		val zipResource = new OpenResource[ZipEntry, InputStream]
-			{ protected def open(entry: ZipEntry, log: Logger) = Control.trap("Error opening " + entry.getName + " in " + zip + ": ", log) { Right(zip.getInputStream(entry)) } }
-			
-		def ioOption(entry: ZipEntry)(f: InputStream => Option[String]) = zipResource.ioOption(entry, "reading", log)(f)
-		def io[R](entry: ZipEntry)(f: InputStream => Either[String, R]) = zipResource.io(entry, "reading", log)(f)
+		val zipResource = OpenResource.zipEntry(zip)
 		
-		import FileUtilities.{readString, transfer, unzip, writeStream}
-		val directory = new File(".", trimExtension(projectEntry.getName))
-		val loaderFile = new File(directory, loaderEntry.getName)
+		import FileUtilities.{gunzip, readString, transfer, unzip, writeStream}
+		val directory = new File(".", trimExtension(projectEntry.getName, ".zip"))
 		assume(!directory.exists, "Could not extract project: directory " + projectEntry.getName + " exists.")
+		
+		val loaderBaseName = trimExtension(loaderEntry.getName, packedGzip)
+		val loaderFile = new File(directory, loaderBaseName + ".jar")
+		val tempLoaderFile = new File(directory, loaderBaseName + ".pack")
+		
+		def extractLoader() =
+		{
+			implicit def fileToPath(f: File) = Path.fromFile(f)
+			val result =
+				writeStream(tempLoaderFile, log) { out => zipResource.ioOption(loaderEntry, "reading", log)(gunzip(_, out, log)) } orElse
+				Pack.unpack(tempLoaderFile, loaderFile, log)
+			FileUtilities.clean(tempLoaderFile, log)
+			result.toLeft(loaderFile)
+		}
 
-		Control.thread(io(installEntry)(readString(_, log))) { installString =>
+		Control.thread(zipResource.io(installEntry, "reading", log)(readString(_, log))) { installString =>
 			Control.thread(parseInstall(installString)) { install =>
-				io(projectEntry)(unzip(_, Path.fromFile(directory), log)).left.toOption orElse
-				writeStream(loaderFile, log) { out => ioOption(loaderEntry)(transfer(_, out, log)) } orElse
-				run(loaderFile, directory, install)
+				zipResource.io(projectEntry, "reading", log)(unzip(_, Path.fromFile(directory), log)).left.toOption orElse
+				Control.thread(extractLoader()) { loaderFile =>
+					run(loaderFile, directory, install)
+				}
 			}
 		}
 	}
@@ -87,11 +95,12 @@ object Main
 		else
 			Some("sbt exited with nonzero exit code: " + exitCode)
 	}
-	private def trimExtension(name: String) =
+	private def trimExtension(name: String, ext: String) =
 	{
-		val i = name.lastIndexOf('.')
-		if(i > 0) name.substring(0, i)
-		else name
+		if(name.endsWith(ext))
+			name.substring(0, name.length - ext.length)
+		else
+			name
 	}
 	// keep this in sync with sbt.extract.SelfExtractingProject
 	private def separator = "===================="

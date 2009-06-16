@@ -17,8 +17,11 @@ object Pack
 		val properties = new wrap.MutableMapWrapper(packer.properties)
 		properties ++= options
 		 
-		OpenResource.openJarFile(false).ioOption(jarPath.asFile, "applying pack200 compression to jar", log) {
-			f => writeStream(out.asFile, log) { stream => packer.pack(f, stream); None }
+		OpenResource.jarFile(false).ioOption(jarPath.asFile, "applying pack200 compression to jar", log) { f =>
+			writeStream(out.asFile, log) { stream =>
+				packer.pack(f, stream)
+				None
+			}
 		}
 	}
 	def unpack(packedPath: Path, toJarPath: Path, log: Logger): Option[String] =

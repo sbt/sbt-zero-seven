@@ -27,7 +27,9 @@ trait SelfExtractingProject extends Project
 			val tmpPath = Path.fromFile(tmp)
 			write(new File(tmp, "install"), installContents, log) orElse
 			unzip(this.getClass.getResource(extractorJarLocation), tmpPath, log).left.toOption orElse
-			zip( (tmpPath ##) :: flat(projectZip) :: loaderJar :: Nil, outputJar, true, log)
+			Control.thread(compressLoader(loaderJar)) { compressedLoader =>
+				zip( (tmpPath ##) :: flat(projectZip) :: compressedLoader :: Nil, outputJar, true, log)
+			}
 		}
 	}
 	private def withTemporaryDirectory(log: Logger)(f: File => Option[String]) =
@@ -37,6 +39,21 @@ trait SelfExtractingProject extends Project
 				{ f(dir) }
 				{ clean(Path.fromFile(dir) :: Nil, true, log) }
 		}
+	}
+	private def compressLoader(loaderJar: Path): Either[String, Path] =
+	{
+		val jarName = loaderJar.asFile.getName
+		val dotIndex = jarName.lastIndexOf('.')
+		val baseName =
+			if(dotIndex > 0) jarName.substring(0, dotIndex)
+			else jarName
+		val packedName = baseName + ".pack"
+		val packed = outputPath / packedName
+		val packedAndGzip = (outputPath ##) / (packedName + ".gz")
+		val result =
+			Pack.pack(loaderJar, packed, log) orElse
+			FileUtilities.gzip(packed, packedAndGzip, log)
+		result.toLeft(packedAndGzip)
 	}
 }
 trait BasicSelfExtractingProject extends BasicScalaProject with SelfExtractingProject
