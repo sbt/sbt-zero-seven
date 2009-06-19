@@ -36,19 +36,22 @@ final class SimpleManager private[sbt] (val dependenciesXML: NodeSeq, val autode
 	val module: ModuleID, val resolvers: Iterable[Resolver], val configurations: Iterable[Configuration],
 	val defaultConfiguration: Option[Configuration], val artifacts: Iterable[Artifact], val dependencies: ModuleID*) extends SbtManager
 
-final case class ModuleID(organization: String, name: String, revision: String, configurations: Option[String], isChanging: Boolean, isTransitive: Boolean) extends NotNull
+final case class ModuleID(organization: String, name: String, revision: String, configurations: Option[String], isChanging: Boolean, isTransitive: Boolean, url: Option[URL]) extends NotNull
 {
 	override def toString = organization + ":" + name + ":" + revision
 	// () required for chaining
 	def notTransitive() = intransitive()
-	def intransitive() = ModuleID(organization, name, revision, configurations, isChanging, false)
-	def changing() = ModuleID(organization, name, revision, configurations, true, isTransitive)
+	def intransitive() = ModuleID(organization, name, revision, configurations, isChanging, false, url)
+	def changing() = ModuleID(organization, name, revision, configurations, true, isTransitive, url)
+	def from(u: URL) = ModuleID(organization, name, revision, configurations, isChanging, isTransitive, Some(u))
 }
 object ModuleID
 {
 	def apply(organization: String, name: String, revision: String): ModuleID = ModuleID(organization, name, revision, None)
 	def apply(organization: String, name: String, revision: String, configurations: Option[String]): ModuleID =
 		ModuleID(organization, name, revision, configurations, false, true)
+	def apply(organization: String, name: String, revision: String, configurations: Option[String], isChanging: Boolean, isTransitive: Boolean): ModuleID =
+		ModuleID(organization, name, revision, configurations, isChanging, isTransitive, None)
 }
 sealed trait Resolver extends NotNull
 {

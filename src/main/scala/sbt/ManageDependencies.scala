@@ -12,7 +12,8 @@ import org.apache.ivy.{core, plugins, util, Ivy}
 import core.LogOptions
 import core.cache.DefaultRepositoryCacheManager
 import core.deliver.DeliverOptions
-import core.module.descriptor.{DefaultArtifact, DefaultDependencyDescriptor, DefaultModuleDescriptor, DependencyDescriptor, MDArtifact, ModuleDescriptor}
+import core.module.descriptor.{DefaultArtifact, DefaultDependencyArtifactDescriptor, MDArtifact}
+import core.module.descriptor.{DefaultDependencyDescriptor, DefaultModuleDescriptor, DependencyDescriptor, ModuleDescriptor}
 import core.module.descriptor.{DefaultExcludeRule, ExcludeRule}
 import core.module.id.{ArtifactId,ModuleId, ModuleRevisionId}
 import core.publish.PublishOptions
@@ -479,6 +480,12 @@ object ManageDependencies
 					parser.parseDepsConfs(parser.getDefaultConf, dependencyDescriptor)
 				case Some(confs) => // The configuration mapping (looks like: test->default) was specified for this dependency
 					parser.parseDepsConfs(confs, dependencyDescriptor)
+			}
+			for(url <- dependency.url)
+			{
+				val artifact = new DefaultDependencyArtifactDescriptor(dependencyDescriptor, dependency.name, "jar", "jar", url, null)
+				for(conf <- dependencyDescriptor.getModuleConfigurations)
+					dependencyDescriptor.addDependencyArtifact(conf, artifact)
 			}
 			moduleID.addDependency(dependencyDescriptor)
 		}

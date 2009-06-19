@@ -141,6 +141,9 @@ src/test/resources/sbt-test-resources/dependency-management/java.net/test -text
 src/test/resources/sbt-test-resources/dependency-management/provided/project/build.properties -text
 src/test/resources/sbt-test-resources/dependency-management/provided/project/build/src/TestProject.scala -text
 src/test/resources/sbt-test-resources/dependency-management/provided/test -text
+src/test/resources/sbt-test-resources/dependency-management/url/project/build.properties -text
+src/test/resources/sbt-test-resources/dependency-management/url/project/build/src/TestProject.scala -text
+src/test/resources/sbt-test-resources/dependency-management/url/test -text
 src/test/resources/sbt-test-resources/java/analysis/project/build.properties -text
 src/test/resources/sbt-test-resources/java/analysis/src/main/java/test/R.java -text
 src/test/resources/sbt-test-resources/java/analysis/test -text
