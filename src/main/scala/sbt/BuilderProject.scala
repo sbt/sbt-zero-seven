@@ -9,7 +9,7 @@ private final class BuilderProject(val info: ProjectInfo, override protected val
 	import BasicProjectPaths._
 	
 	def compilePath = outputPath / DefaultMainCompileDirectoryName
-	def sourcePath = path(DefaultSourceDirectoryName)
+	def mainSources = (info.projectPath * "*.scala") +++ path(DefaultSourceDirectoryName).descendentsExcept("*.scala", defaultExcludes)
 	def mainResourcesPath = path(DefaultResourcesDirectoryName)
 	def dependencyPath = path(DefaultDependencyDirectoryName)
 	
@@ -68,7 +68,7 @@ private final class BuilderProject(val info: ProjectInfo, override protected val
 		new AbstractCompileConfiguration
 		{
 			def label = "builder"
-			def sources = sourcePath.descendentsExcept("*.scala", defaultExcludes)
+			def sources = mainSources
 			def outputDirectory = compilePath
 			def classpath = projectClasspath
 			def analysisPath = outputPath / DefaultMainAnalysisDirectoryName
