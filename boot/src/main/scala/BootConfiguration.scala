@@ -56,6 +56,7 @@ private object BootConfiguration
 	val ScalaHomeProperty = "scala.home"
 	val UpdateLogName = "update.log"
 	
+	val CrossBuildPrefix = "+"
 	val RebootCommand = "reboot"
 	val RebootExitCode = -1
 	val NormalExitCode = 0

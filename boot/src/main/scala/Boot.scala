@@ -63,6 +63,10 @@ object Boot
 			case RebootCommand :: tail =>
 				doLoad()
 				runBatch(tail, Nil, loaderCache)
+			case action :: tail if action.trim.startsWith(CrossBuildPrefix) =>
+				doLoad()
+				load(Array(action), loaderCache) // call main with the single cross-build argument, preserving the '+' prefix, with which it knows what to do
+				runBatch(tail, Nil, loaderCache)
 			case notReload :: tail => runBatch(tail, notReload :: accumulateReversed, loaderCache)
 		}
 	}

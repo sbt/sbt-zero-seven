@@ -91,35 +91,42 @@ object Main
 		project.log.info("Building project " + project.name + " " + project.version.toString + " using " + project.getClass.getName)
 		for(sbtVersion <- project.sbtVersion.get; scalaVersion <- project.scalaVersion.get if !sbtVersion.isEmpty  && !scalaVersion.isEmpty)
 			project.log.info("   with sbt " + sbtVersion + " and Scala " + scalaVersion)
-		if(args.length == 0)
+		args match
 		{
-			CrossBuild.load() match
-			{
-				case None =>
-					project.log.info("No actions specified, interactive session started. Execute 'help' for more information.")
-					val doNext = interactive(project)
-					printTime(project, startTime, "session")
-					doNext
-				case Some(cross) =>
-					crossBuildNext(project, cross)
-					new Exit(RebootExitCode)
-			}
-		}
-		else
-		{
-			val exitCode =
-				Control.lazyFold(args.toList)(handleBatchCommand(project)) match
+			case Array() =>
+				CrossBuild.load() match
 				{
-					case None => project.log.success("Build completed successfully."); NormalExitCode
-					case Some(errorMessage) =>
-						project.log.error("Error during build" + (if(errorMessage.isEmpty) "." else ": " + errorMessage) )
-						BuildErrorExitCode
+					case None =>
+						project.log.info("No actions specified, interactive session started. Execute 'help' for more information.")
+						val doNext = interactive(project)
+						printTime(project, startTime, "session")
+						doNext
+					case Some(cross) =>
+						crossBuildNext(project, cross)
+						new Exit(RebootExitCode)
 				}
-			printTime(project, startTime, "build")
-			new Exit(exitCode)
+			case CrossBuild(action) =>
+				val exitCode =
+					CrossBuild.load() match
+					{
+						case None => if(startCrossBuild(project, action)) RebootExitCode else BuildErrorExitCode
+						case Some(cross) => if(crossBuildNext(project, cross)) RebootExitCode else NormalExitCode
+					}
+				new Exit(exitCode)
+			case _ =>
+				val exitCode =
+					Control.lazyFold(args.toList)(handleBatchCommand(project)) match
+					{
+						case None => project.log.success("Build completed successfully."); NormalExitCode
+						case Some(errorMessage) =>
+							project.log.error("Error during build" + (if(errorMessage.isEmpty) "." else ": " + errorMessage) )
+							BuildErrorExitCode
+					}
+				printTime(project, startTime, "build")
+				new Exit(exitCode)
 		}
 	}
-	private def crossBuildNext(project: Project, cross: CrossBuild)
+	private def crossBuildNext(project: Project, cross: CrossBuild) =
 	{
 		val setScalaVersion =
 			(newVersion: String) =>
@@ -135,6 +142,7 @@ object Main
 				cross.error(setScalaVersion)
 		if(complete)
 			printTime(project, cross.startTime, "cross-build")
+		!complete
 	}
 	
 	/** The name of the command that loads a console with access to the current project through the variable 'project'.*/
@@ -167,6 +175,8 @@ object Main
 	val ContinuousExecutePrefix = "~"
 	/** The prefix used to identify a request to execute the remaining input across multiple Scala versions.*/
 	val CrossBuildPrefix = "+"
+	/** Error message for when the user tries to prefix an action with CrossBuildPrefix but the loader is not used.*/
+	val CrossBuildUnsupported = "Cross-building is not supported when the loader is not used."
 	
 	/** The number of seconds between polling by the continuous compile command.*/
 	val ContinuousCompilePollDelaySeconds = 1
@@ -219,7 +229,7 @@ object Main
 						new Exit(RebootExitCode)
 					else if(trimmed.startsWith(CrossBuildPrefix))
 					{
-						if(startCrossBuild(currentProject, trimmed.substring(1).trim))
+						if(startCrossBuild(currentProject, trimmed.substring(CrossBuildPrefix.length).trim))
 							new Exit(RebootExitCode)
 						else
 							loop(currentProject)
@@ -304,34 +314,23 @@ object Main
 
 	private def startCrossBuild(project: Project, action: String) =
 	{
-		if(checkBooted && checkAction(project, action))
+		checkBooted && checkAction(project, action) &&
 		{
 			val againstScalaVersions = project.crossScalaVersions
-			if(againstScalaVersions.isEmpty)
-			{
-				Console.println("Project does not declare any Scala versions to cross-build against.")
-				false
-			}
+			val versionsDefined = !againstScalaVersions.isEmpty
+			if(versionsDefined)
+				CrossBuild(Project.sbtScalaVersion, againstScalaVersions, action, System.currentTimeMillis)
 			else
-			{
-				val currentScalaVersion = Project.sbtScalaVersion
-				CrossBuild(currentScalaVersion, againstScalaVersions, action, System.currentTimeMillis)
-				true
-			}
+				Console.println("Project does not declare any Scala versions to cross-build against.")
+			versionsDefined
 		}
-		else
-			false
 	}
 	private def checkBooted =
-	{
-		if(Project.booted)
-			true
-		else
+		Project.booted ||
 		{
-			Console.println("Cross-building is not supported when the loader is not used.")
+			Console.println(CrossBuildUnsupported)
 			false
 		}
-	}
 	
 	/** Handles the given command string provided by batch mode execution..*/
 	private def handleBatchCommand(project: Project)(command: String): Option[String] =
@@ -340,6 +339,7 @@ object Main
 		{
 			case HelpAction => displayBatchHelp(); None
 			case ShowActions => showActions(project); None
+			case CrossBuild(crossBuildAction) => Some(CrossBuildUnsupported)
 			case action => if(handleAction(project, action)) None else Some("")
 		}
 	}
@@ -665,4 +665,19 @@ private object CrossBuild
 		setProperties(initialScalaVersion, remainingScalaVersions, command, startTime.toString)
 		new CrossBuild(initialScalaVersion, remainingScalaVersions, command, startTime)
 	}
+	import Main.CrossBuildPrefix
+	def unapply(s: String): Option[String] =
+	{
+		val trimmed = s.trim
+		if(trimmed.startsWith(CrossBuildPrefix))
+			Some(trimmed.substring(CrossBuildPrefix.length).trim)
+		else
+			None
+	}
+	def unapply(s: Array[String]): Option[String] =
+		s match
+		{
+			case Array(CrossBuild(crossBuildAction)) => Some(crossBuildAction)
+			case _ => None
+		}
 }
