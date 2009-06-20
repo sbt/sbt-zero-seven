@@ -5,7 +5,7 @@ import java.net.{URL, URLClassLoader}
 class TestProject(info: ProjectInfo) extends DefaultProject(info)
 {
 	override def useMavenConfigurations = true
-	val direct = "slinky" % "slinky" % "2.1" % "test->default" from new URL("http://slinky2.googlecode.com/svn/artifacts/2.1/slinky.jar")
+	val direct = "slinky" % "slinky" % "2.1" % "test->default" from "http://slinky2.googlecode.com/svn/artifacts/2.1/slinky.jar"
 	lazy val checkInTest = checkClasspath(testClasspath)
 	lazy val checkInCompile = checkClasspath(compileClasspath)
 	private def checkClasspath(cp: PathFinder) =

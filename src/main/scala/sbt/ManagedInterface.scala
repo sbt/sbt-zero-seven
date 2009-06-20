@@ -43,7 +43,7 @@ final case class ModuleID(organization: String, name: String, revision: String, 
 	def notTransitive() = intransitive()
 	def intransitive() = ModuleID(organization, name, revision, configurations, isChanging, false, url)
 	def changing() = ModuleID(organization, name, revision, configurations, true, isTransitive, url)
-	def from(u: URL) = ModuleID(organization, name, revision, configurations, isChanging, isTransitive, Some(u))
+	def from(url: String) = ModuleID(organization, name, revision, configurations, isChanging, isTransitive, Some(new URL(url)))
 }
 object ModuleID
 {
