@@ -196,29 +196,21 @@ private final class Update(bootDirectory: File, sbtVersion: String, scalaVersion
 		resolver.addArtifactPattern(pattern)
 		resolver
 	}
-	private def mavenLocal =
-	{
-		val localPattern = System.getProperty("user.home") + "/.m2/repository/[organisation]/[module]/[revision]/[artifact]-[revision](-[classifier]).[ext]"
-		val resolver = new FileSystemResolver
-		resolver.setName("Maven2 Local")
-		resolver.addArtifactPattern(localPattern)
-		resolver.setM2compatible(true)
-		resolver
-	}
+	private def mavenLocal = mavenResolver("Maven2 Local", "file://" + System.getProperty("user.home") + "/.m2/repository/")
 	/** Creates a maven-style resolver.*/
 	private def mavenResolver(name: String, root: String) =
 	{
-		val resolver = new IBiblioResolver
-		resolver.setName(name)
-		resolver.setM2compatible(true)
+		val resolver = defaultMavenResolver(name)
 		resolver.setRoot(root)
 		resolver
 	}
 	/** Creates a resolver for Maven Central.*/
-	private def mavenMainResolver =
+	private def mavenMainResolver = defaultMavenResolver("Maven Central")
+	/** Creates a maven-style resolver with the default root.*/
+	private def defaultMavenResolver(name: String) =
 	{
 		val resolver = new IBiblioResolver
-		resolver.setName("Maven Central")
+		resolver.setName(name)
 		resolver.setM2compatible(true)
 		resolver
 	}
