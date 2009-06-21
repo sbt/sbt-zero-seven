@@ -9,13 +9,7 @@ object SourceModificationWatch
 	{
 		def sourceFiles: Iterable[java.io.File] =
 			sourcesFinder.get.map(Path.relativize(project.info.projectPath, _)).filter(_.isDefined).map(_.get.asFile)
-	
-		def sourcesFinder: PathFinder = project.topologicalSort.foldLeft(Path.emptyPathFinder) {
-			(acc, prj) => acc +++ (prj match {
-				case prj: BasicScalaProject => prj.mainSources +++ prj.testSources
-				case _ => Path.emptyPathFinder
-			})
-		}
+		def sourcesFinder: PathFinder = (Path.emptyPathFinder /: project.topologicalSort)(_ +++ _.watchPaths)
 		def loop(lastCallbackCallTime: Long, previousFileCount: Int)
 		{
 			val (lastModifiedTime, fileCount) = sourceFiles.foldLeft((0L, 0)){(acc, file) => (Math.max(acc._1, file.lastModified), acc._2 + 1)}

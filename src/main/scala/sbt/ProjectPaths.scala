@@ -188,7 +188,7 @@ object BasicProjectPaths
 trait WebScalaPaths extends ScalaPaths
 {
 	def temporaryWarPath: Path
-	def webappPath: Path
+	def webappResources: PathFinder
 	def jettyContextPath: String
 	def warPath: Path
 }
@@ -202,6 +202,9 @@ trait MavenStyleWebScalaPaths extends WebScalaPaths with MavenStyleScalaPaths
 	def jettyContextPath = DefaultJettyContextPath
 	def defaultWarName = defaultJarBaseName + ".war"
 	def warPath = outputPath / defaultWarName
+	/** Additional files to include in the web application. */
+	protected def extraWebappFiles: PathFinder = Path.emptyPathFinder
+	def webappResources = descendents(webappPath ##, "*") +++ extraWebappFiles
 }
 object WebProjectPaths
 {

@@ -11,6 +11,11 @@ import scala.collection.mutable.{HashSet, ListBuffer}
 
 private[sbt] object ClasspathUtilities
 {
+	def toClasspath(finder: PathFinder): Array[URL] = toClasspath(finder.get)
+	def toClasspath(paths: Iterable[Path]): Array[URL] = paths.map(_.asURL).toSeq.toArray
+	def toLoader(finder: PathFinder): ClassLoader = toLoader(finder.get)
+	def toLoader(paths: Iterable[Path]): ClassLoader = new URLClassLoader(toClasspath(paths), getClass.getClassLoader)
+	
 	def isArchive(path: Path): Boolean = isArchive(path.asFile)
 	def isArchive(file: File): Boolean = isArchiveName(file.getName)
 	def isArchiveName(fileName: String) = fileName.endsWith(".jar") || fileName.endsWith(".zip")

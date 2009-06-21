@@ -300,16 +300,16 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		mapScalaModule(snapshot.scalaLibrary, ManageDependencies.ScalaLibraryID) ++
 		mapScalaModule(snapshot.scalaCompiler, ManageDependencies.ScalaCompilerID)
 	}
+	override def watchPaths = mainSources +++ testSources +++ mainResources +++ testResources
 }
 abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProject with WebScalaPaths
 {
 	import BasicWebScalaProject._
+	override def watchPaths = super.watchPaths +++ webappResources
 	
 	lazy val prepareWebapp = prepareWebappAction
 	protected def prepareWebappAction =
-		prepareWebappTask(descendents(webappPath ##, "*") +++ extraWebappFiles, temporaryWarPath, webappClasspath, mainDependencies.scalaJars) dependsOn(compile)
-	/** Additional files to include in the web application. */
-	protected def extraWebappFiles: PathFinder = Path.emptyPathFinder
+		prepareWebappTask(webappResources, temporaryWarPath, webappClasspath, mainDependencies.scalaJars) dependsOn(compile)
 	
 	def webappClasspath = publicClasspath
 	def jettyRunClasspath = testClasspath

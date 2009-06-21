@@ -101,18 +101,21 @@ trait Conditional[Source, Product, External] extends NotNull
 		}
 		
 		val handled = new scala.collection.mutable.HashSet[Source]
+		val transitive = !java.lang.Boolean.getBoolean("sbt.intransitive")
 		def markModified(changed: Iterable[Source]) { for(c <- changed if !handled.contains(c)) markSourceModified(c) }
 		def markSourceModified(src: Source)
 		{
 			unmodified -= src
 			modified += src
 			handled += src
-			markDependenciesModified(src)
+			if(transitive)
+				markDependenciesModified(src)
 		}
 		def markDependenciesModified(src: Source) { analysis.removeDependencies(src).map(markModified) }
 
 		markModified(modified.toList)
-		removedSources.foreach(markDependenciesModified)
+		if(transitive)
+			removedSources.foreach(markDependenciesModified)
 		
 		for(changed <- removedSources ++ modified)
 			analysis.removeSource(changed)

@@ -1,5 +1,5 @@
 /* sbt -- Simple Build Tool
- * Copyright 2008 Mark Harrah, David MacIver
+ * Copyright 2008, 2009  Mark Harrah, David MacIver
  */
 package sbt
 
@@ -188,7 +188,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	/** The path to the file that provides persistence for properties.*/
 	final def envBackingPath = info.builderPath / Project.DefaultEnvBackingName
 	/** The path to the file that provides persistence for history. */
-	def historyPath = Some(outputRootPath / ".history")
+	def historyPath: Option[Path] = Some(outputRootPath / ".history")
 	def outputPath = crossPath(outputRootPath)
 	def outputRootPath = outputDirectoryName
 	def outputDirectoryName = DefaultOutputDirectoryName
@@ -239,6 +239,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	/** By default, this is empty and cross-building is disabled.  Overriding this to a Set of Scala versions
 	* will enable cross-building against those versions.*/
 	def crossScalaVersions = scala.collection.immutable.Set.empty[String]
+	def watchPaths: PathFinder = Path.emptyPathFinder
 	
 	protected final override def parentEnvironment = info.parent
 	
@@ -267,6 +268,8 @@ object Project
 	
 	/** The name of the directory for project definitions.*/
 	val BuilderProjectDirectoryName = "build"
+	/** The name of the directory for plugin definitions.*/
+	val PluginProjectDirectoryName = "plugins"
 	/** The name of the class that all projects must inherit from.*/
 	val ProjectClassName = classOf[Project].getName
 	
@@ -352,7 +355,7 @@ object Project
 		new LoadError("Error loading project: " + e.toString)
 	}
 	/** Loads the project for the given `info` and represented by an instance of 'builderClass'.*/
-	private def constructProject[P <: Project](info: ProjectInfo, builderClass: Class[P]): P =
+	private[sbt] def constructProject[P <: Project](info: ProjectInfo, builderClass: Class[P]): P =
 		builderClass.getConstructor(classOf[ProjectInfo]).newInstance(info)
 	/** Checks the project's dependencies, initializes its environment, and possibly its directories.*/
 	private def initialize[P <: Project](p: P, setupInfo: Option[SetupInfo], log: Logger): P =
@@ -393,18 +396,11 @@ object Project
 		val builderProjectPath = info.builderPath / BuilderProjectDirectoryName
 		if(builderProjectPath.asFile.isDirectory)
 		{
-			val builderProject = new BuilderProject(ProjectInfo(builderProjectPath.asFile, Nil, None), buildLog)
+			val pluginProjectPath = info.builderPath / PluginProjectDirectoryName
+			val builderProject = new BuilderProject(ProjectInfo(builderProjectPath.asFile, Nil, None), pluginProjectPath, buildLog)
 			builderProject.compile.run.toLeft(()).right.flatMap { ignore =>
 				builderProject.projectDefinition.right.map {
-					case Some(definition) =>
-					{
-						val compileClassPath = builderProject.projectClasspath.get.map(_.asURL).toSeq.toArray
-						import java.net.URLClassLoader
-						val loader = new URLClassLoader(compileClassPath, getClass.getClassLoader)
-						val builderClass = Class.forName(definition, false, loader)
-						require(classOf[Project].isAssignableFrom(builderClass), "Builder class '" + builderClass + "' does not extend Project.")
-						builderClass.asSubclass(classOf[Project])
-					}
+					case Some(definition) => getProjectClass[Project](definition, builderProject.projectClasspath)
 					case None => DefaultBuilderClass
 				}
 			}
@@ -461,6 +457,15 @@ object Project
 			new LoadError("The same directory is used for output for multiple projects:\n\t" + sharedString +
 			"\n  (If this is intentional, use 'override def shouldCheckOutputDirectories = false' in your project definition.)")
 		}
+	}
+	import scala.reflect.Manifest
+	private[sbt] def getProjectClass[P <: Project](name: String, classpath: PathFinder)(implicit mf: Manifest[P]): Class[P] =
+	{
+		val loader =ClasspathUtilities.toLoader(classpath)
+		val builderClass = Class.forName(name, false, loader)
+		val projectClass = mf.erasure
+		require(projectClass.isAssignableFrom(builderClass), "Builder class '" + builderClass + "' does not extend " + projectClass.getName + ".")
+		builderClass.asSubclass(projectClass).asInstanceOf[Class[P]]
 	}
 	
 	/** Writes the project name and a separator to the project's log at the info level.*/
