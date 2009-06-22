@@ -36,14 +36,15 @@ final class SimpleManager private[sbt] (val dependenciesXML: NodeSeq, val autode
 	val module: ModuleID, val resolvers: Iterable[Resolver], val configurations: Iterable[Configuration],
 	val defaultConfiguration: Option[Configuration], val artifacts: Iterable[Artifact], val dependencies: ModuleID*) extends SbtManager
 
-final case class ModuleID(organization: String, name: String, revision: String, configurations: Option[String], isChanging: Boolean, isTransitive: Boolean, url: Option[URL]) extends NotNull
+final case class ModuleID(organization: String, name: String, revision: String, configurations: Option[String], isChanging: Boolean, isTransitive: Boolean, explicitArtifacts: Seq[Artifact]) extends NotNull
 {
 	override def toString = organization + ":" + name + ":" + revision
 	// () required for chaining
 	def notTransitive() = intransitive()
-	def intransitive() = ModuleID(organization, name, revision, configurations, isChanging, false, url)
-	def changing() = ModuleID(organization, name, revision, configurations, true, isTransitive, url)
-	def from(url: String) = ModuleID(organization, name, revision, configurations, isChanging, isTransitive, Some(new URL(url)))
+	def intransitive() = ModuleID(organization, name, revision, configurations, isChanging, false, explicitArtifacts)
+	def changing() = ModuleID(organization, name, revision, configurations, true, isTransitive, explicitArtifacts)
+	def from(url: String) = artifacts(Artifact(name, new URL(url)))
+	def artifacts(newArtifacts: Artifact*) = ModuleID(organization, name, revision, configurations, isChanging, isTransitive, newArtifacts ++ explicitArtifacts)
 }
 object ModuleID
 {
@@ -51,7 +52,7 @@ object ModuleID
 	def apply(organization: String, name: String, revision: String, configurations: Option[String]): ModuleID =
 		ModuleID(organization, name, revision, configurations, false, true)
 	def apply(organization: String, name: String, revision: String, configurations: Option[String], isChanging: Boolean, isTransitive: Boolean): ModuleID =
-		ModuleID(organization, name, revision, configurations, isChanging, isTransitive, None)
+		ModuleID(organization, name, revision, configurations, isChanging, isTransitive, Nil)
 }
 sealed trait Resolver extends NotNull
 {
@@ -293,11 +294,14 @@ final case class Configuration(name: String, description: String, isPublic: Bool
 	override def toString = name
 }
 
-final case class Artifact(name: String, `type`: String, extension: String, configurations: Iterable[Configuration]) extends NotNull
+final case class Artifact(name: String, `type`: String, extension: String, configurations: Iterable[Configuration], url: Option[URL]) extends NotNull
 object Artifact
 {
-	def apply(name: String): Artifact = Artifact(name, "jar", "jar")
-	def apply(name: String, `type`: String, extension: String): Artifact = Artifact(name, `type`, extension, Nil)
+	def apply(name: String): Artifact = Artifact(name, defaultType, defaultExtension, Nil, None)
+	def apply(name: String, `type`: String, extension: String): Artifact = Artifact(name, `type`, extension, Nil, None)
+	def apply(name: String, url: URL): Artifact = Artifact(name, defaultType, defaultExtension, Nil, Some(url))
+	val defaultExtension = "jar"
+	val defaultType = "jar"
 }
 
 object Credentials

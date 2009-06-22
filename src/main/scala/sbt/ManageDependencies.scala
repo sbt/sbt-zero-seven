@@ -8,6 +8,8 @@ import java.net.URL
 import java.util.Collections
 import scala.collection.mutable.HashSet
 
+import Artifact.{defaultExtension, defaultType}
+
 import org.apache.ivy.{core, plugins, util, Ivy}
 import core.LogOptions
 import core.cache.DefaultRepositoryCacheManager
@@ -353,7 +355,7 @@ object ManageDependencies
 		withIvy(config)(doMakePom)
 	}
 	private def addDefaultArtifact(defaultConf: String, moduleID: DefaultModuleDescriptor) =
-		moduleID.addArtifact(defaultConf, new MDArtifact(moduleID, moduleID.getModuleRevisionId.getName, "jar", "jar"))
+		moduleID.addArtifact(defaultConf, new MDArtifact(moduleID, moduleID.getModuleRevisionId.getName, defaultType, defaultExtension))
 	// todo: correct default configuration for extra dependencies
 	private def addLateDependencies(ivy: Ivy, md: ModuleDescriptor, defaultConfiguration: String, extraDependencies: Iterable[ModuleID]) =
 	{
@@ -481,11 +483,12 @@ object ManageDependencies
 				case Some(confs) => // The configuration mapping (looks like: test->default) was specified for this dependency
 					parser.parseDepsConfs(confs, dependencyDescriptor)
 			}
-			for(url <- dependency.url)
+			for(artifact <- dependency.explicitArtifacts)
 			{
-				val artifact = new DefaultDependencyArtifactDescriptor(dependencyDescriptor, dependency.name, "jar", "jar", url, null)
+				import artifact.{name, `type`, extension, url}
+				val ivyArtifact = new DefaultDependencyArtifactDescriptor(dependencyDescriptor, name, `type`, extension, url.getOrElse(null), null)
 				for(conf <- dependencyDescriptor.getModuleConfigurations)
-					dependencyDescriptor.addDependencyArtifact(conf, artifact)
+					dependencyDescriptor.addDependencyArtifact(conf, ivyArtifact)
 			}
 			moduleID.addDependency(dependencyDescriptor)
 		}

@@ -77,6 +77,7 @@ src/main/scala/sbt/ReflectUtilities.scala -text
 src/main/scala/sbt/Resources.scala -text
 src/main/scala/sbt/Run.scala -text
 src/main/scala/sbt/ScalaProject.scala -text
+src/main/scala/sbt/ScalaVersion.scala -text
 src/main/scala/sbt/SourceModificationWatch.scala -text
 src/main/scala/sbt/TaskManager.scala -text
 src/main/scala/sbt/TestFramework.scala -text

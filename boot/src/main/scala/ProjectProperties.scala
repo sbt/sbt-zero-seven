@@ -8,8 +8,8 @@ Project does not exist, create new project? [y/N] y
 Name: 
 Organization [empty]:
 Version [1.0]: 
-Scala version [2.7.4]: 
-sbt version [0.4.6]: 
+Scala version [2.7.5]: 
+sbt version [0.5]: 
 */
 import java.io.File
 /** Constants related to reading/writing the build.properties file in a project.
@@ -29,6 +29,8 @@ private object ProjectProperties
 	/** The properties key to communicate to the main component of sbt that the project
 	* should be initialized after being loaded, typically by creating a default directory structure.*/
 	val InitializeProjectKey = "project.initialize"
+	/** The properties key that configures the project to be flattened a bit for use by quick throwaway projects.*/
+	val ScratchKey = "project.scratch"
 	
 	/** The label used when prompting for the name of the user's project.*/
 	val NameLabel = "Name"
@@ -42,44 +44,60 @@ private object ProjectProperties
 	val SbtVersionLabel = "sbt version"
 	
 	/** The default organization of the new user project when the user doesn't explicitly specify one when prompted.*/
-	val DefaultOrganization = "empty"
+	val DefaultOrganization = ""
 	/** The default version of the new user project when the user doesn't explicitly specify a version when prompted.*/
 	val DefaultVersion = "1.0"
 	/** The default version of sbt when the user doesn't explicitly specify a version when prompted.*/
-	val DefaultSbtVersion = "0.4.6"
+	val DefaultSbtVersion = "0.4.7-p11"
 	/** The default version of Scala when the user doesn't explicitly specify a version when prompted.*/
 	val DefaultScalaVersion = "2.7.5"
 
-	// (scala version, sbt version)
+	// sets up the project properties for a throwaway project (flattens src and lib to the root project directory)
+	def scratch(file: File)
+	{
+		withProperties(file) { properties =>
+			for( (key, _, default, _) <- propertyDefinitions(false))
+				properties(key) = default.getOrElse("scratch")
+			properties(ScratchKey) = true.toString
+		}
+	}
+	// returns (scala version, sbt version)
 	def apply(file: File, setInitializeProject: Boolean): (String, String) = applyImpl(file, setInitializeProject, Nil)
 	def forcePrompt(file: File, propertyKeys: String*) = applyImpl(file, false, propertyKeys)
 	private def applyImpl(file: File, setInitializeProject: Boolean, propertyKeys: Iterable[String]): (String, String) =
 	{
 		val organizationOptional = file.exists
-		val properties = new ProjectProperties(file)
-		properties -= propertyKeys
-		
-		prompt(properties, organizationOptional)
-		if(setInitializeProject)
-			properties(InitializeProjectKey) = true.toString
-		properties.save
-		(properties(ScalaVersionKey), properties(SbtVersionKey))
+		withProperties(file) { properties =>
+			properties -= propertyKeys
+			
+			prompt(properties, organizationOptional)
+			if(setInitializeProject)
+				properties(InitializeProjectKey) = true.toString
+		}
 	}
+	// (key, label, defaultValue, promptRequired)
+	private def propertyDefinitions(organizationOptional: Boolean) = 
+		(NameKey, NameLabel, None, true) :: 
+		(OrganizationKey, OrganizationLabel, Some(DefaultOrganization), !organizationOptional) ::
+		(VersionKey, VersionLabel, Some(DefaultVersion), true) ::
+		(ScalaVersionKey, ScalaVersionLabel, Some(DefaultScalaVersion), true) ::
+		(SbtVersionKey, SbtVersionLabel, Some(DefaultSbtVersion), true) ::
+		Nil
 	private def prompt(fill: ProjectProperties, organizationOptional: Boolean)
 	{
-		val properties =
-			(NameKey, NameLabel, None, false) :: 
-			(OrganizationKey, OrganizationLabel, Some(DefaultOrganization), organizationOptional) ::
-			(VersionKey, VersionLabel, Some(DefaultVersion), false) ::
-			(ScalaVersionKey, ScalaVersionLabel, Some(DefaultScalaVersion), false) ::
-			(SbtVersionKey, SbtVersionLabel, Some(DefaultSbtVersion), false) ::
-			Nil
-		for( (key, label, default, optional) <- properties)
+		for( (key, label, default, promptRequired) <- propertyDefinitions(organizationOptional))
 		{
 			val value = fill(key)
-			if(value == null && !optional)
+			if(value == null && promptRequired)
 				fill(key) = readLine(label, default)
 		}
+	}
+	private def withProperties(file: File)(f: ProjectProperties => Unit) =
+	{
+		val properties = new ProjectProperties(file)
+		f(properties)
+		properties.save
+		(properties(ScalaVersionKey), properties(SbtVersionKey))
 	}
 	private def readLine(label: String, default: Option[String]): String =
 	{

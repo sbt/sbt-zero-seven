@@ -24,6 +24,8 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	final def version: Version = projectVersion.value
 	/** The project organization. */
 	final def organization: String = projectOrganization.value
+	/** True if the project should cater to a quick throwaway project setup.*/
+	def scratch = projectScratch.value
 	
 	final type ManagerType = Project
 	final type ManagedTask = Project#Task
@@ -207,38 +209,32 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	/** The property for the project's name. */
 	final val projectName = propertyLocalF[String](NonEmptyStringFormat)
 	/** The property for the project's organization.  Defaults to the parent project's organization or the project name if there is no parent. */
-	final val projectOrganization = propertyOptional[String](name, true)
-	/** The property that defines the version of Scala to build this project with.  It is only used by `sbt` on startup and reboot.
-	* Note that this means that the property can be out of sync with the current version of Scala being used to build the project.*/
+	final val projectOrganization = propertyOptional[String](normalizedName, true)
+	/** The property that defines the version of Scala to build this project with by default.  This property is only
+	* ready by `sbt` on startup and reboot.  When cross-building, this value may be different from the actual
+	* version of Scala being used to build the project.  ScalaVersion.current and ScalaVersion.cross should be used
+	* to read the version of Scala building the project.  This should only be used to change the version of Scala used
+	* for normal development (not cross-building)*/
 	final val scalaVersion = propertyOptional[String]("")
 	final val sbtVersion = propertyOptional[String]("")
 	final val projectInitialize = propertyOptional[Boolean](false)
+	final val projectScratch = propertyOptional[Boolean](false)
 
 	/** If this project is cross-building, returns `base` with an additional path component containing the scala version.
 	* Otherwise, this returns `base`.
 	* By default, cross-building is enabled when a project is loaded by the loader and crossScalaVersions is not empty.*/
-	def crossPath(base: Path) = withCrossVersion(disableCrossPaths)(base / scalaCrossString(_), base)
-	def currentScalaVersionString: String = scalaVersionString(false)
-	def crossScalaVersionString: String = scalaVersionString(disableCrossPaths)
-	private def scalaVersionString(crossDisabled: Boolean): String = withCrossVersion(crossDisabled)(x => x, "")
-	private[sbt] def withCrossVersion[T](crossDisabled: Boolean)(withVersion: String => T, disabled: => T): T =
-	{
-		if(crossDisabled)
-			disabled
-		else
-		{
-			currentScalaVersion match
-			{
-				case Some(scalaV) => withVersion(scalaV)
-				case _ => disabled
-			}
-		}
-	}
+	def crossPath(base: Path) = ScalaVersion.withCross(disableCrossPaths)(base / ScalaVersion.crossString(_), base)
+	/** If modifying paths for cross-building is enabled, this returns ScalaVersion.currentString.
+	* Otherwise, this returns the empty string. */
+	def crossScalaVersionString: String = if(disableCrossPaths) "" else ScalaVersion.currentString
+	
 	/** True if crossPath should be the identity function.*/
 	protected def disableCrossPaths = crossScalaVersions.isEmpty
 	/** By default, this is empty and cross-building is disabled.  Overriding this to a Set of Scala versions
 	* will enable cross-building against those versions.*/
 	def crossScalaVersions = scala.collection.immutable.Set.empty[String]
+	/** A `PathFinder` that determines the files watched when an action is run with a preceeding ~ when this is the current
+	* project.  This project does not need to include the watched paths for projects that this project depends on.*/
 	def watchPaths: PathFinder = Path.emptyPathFinder
 	
 	protected final override def parentEnvironment = info.parent
@@ -249,7 +245,7 @@ trait Project extends TaskManager with Dag[Project] with BasicEnvironment
 	def descendents(parent: PathFinder, include: FileFilter) = parent.descendentsExcept(include, defaultExcludes)
 	override def toString = "Project " + projectName.get.getOrElse("at " + environmentLabel)
 	
-	def normalizedName = name.toLowerCase.replaceAll("""\s+""", "-")
+	def normalizedName = StringUtilities.normalize(name)
 }
 private[sbt] sealed trait LoadResult extends NotNull
 private[sbt] final class LoadSuccess(val project: Project) extends LoadResult
@@ -282,27 +278,7 @@ object Project
 		log
 	}
 
-	private[sbt] def scalaCrossString(v: String) = "scala_" + v
 	private[sbt] def booted = java.lang.Boolean.getBoolean("sbt.boot")
-	private[sbt] def sbtScalaVersion =
-	{
-		val v = System.getProperty("sbt.scala.version")
-		if(v == null)
-			""
-		else
-			v.trim
-	}
-	/** Returns the current version of Scala being used to build the project.  If the sbt loader is not being
-	* used, this returns None.  Otherwise, the value returned by this method is fixed for the duration of
-	* a Project's existence.  It only changes on reboot (during which a Project is recreated).*/
-	val currentScalaVersion: Option[String] =
-	{
-		val sv = sbtScalaVersion
-		if(sv.isEmpty)
-			None
-		else
-			Some(sv)
-	}
 	
 	/** Loads the project in the current working directory.*/
 	private[sbt] def loadProject: LoadResult = loadProject(bootLogger)

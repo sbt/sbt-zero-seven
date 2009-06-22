@@ -33,10 +33,13 @@ private object BootConfiguration
 	/** The Ivy pattern used for the local Ivy repository.*/
 	def LocalIvyPattern = LocalPattern
 		
-	/** The name of the property declaring the version of scala to use to build the project.*/
+	/** The name of the property declaring the version of scala to use to build the project when not cross-building.*/
 	val ScalaVersion = "scala.version"
 	/** The name of the property declaring the version of sbt to use to build the project.*/
 	val SbtVersion = "sbt.version"
+	/** The name of the system property containing the version of scala actually used to build a project.
+	* This might be different from the ScalaVersion property when cross-building.*/
+	val SbtScalaVersionKey = "sbt.scala.version"
 	/** The class name prefix used to hide the Scala classes used by this loader from sbt
 	* and the project definition*/
 	val ScalaPackage = "scala."

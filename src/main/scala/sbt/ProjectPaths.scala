@@ -72,7 +72,14 @@ trait BasicScalaPaths extends Project with ScalaPaths
 	protected def sources(base: PathFinder) = descendents(base, sourceExtensions)	
 	protected def sourceExtensions = "*.scala" | "*.java"
 	
-	def mainSources = sources(mainSourceRoots)
+	def mainSources =
+	{
+		val normal = sources(mainSourceRoots)
+		if(scratch)
+			normal +++ (info.projectPath * sourceExtensions)
+		else
+			normal
+	}
 	def testSources = sources(testSourceRoots)
 	
 	def mainResourceClasspath = mainResourcesPath
@@ -155,11 +162,12 @@ trait BasicPackagePaths extends ScalaPaths with PackagePaths
 	def defaultJarBaseName: String = artifactBaseName
 	def defaultJarName = defaultJarBaseName + ".jar"
 	def jarPath = outputPath / defaultJarName
-	def packageTestJar = outputPath / (artifactBaseName + "-test.jar")
-	def packageDocsJar = outputPath / (artifactBaseName + "-docs.jar")
-	def packageSrcJar= outputPath / (artifactBaseName + "-src.jar")
-	def packageTestSrcJar = outputPath / (artifactBaseName + "-test-src.jar")
-	def packageProjectZip = outputPath / (artifactBaseName + "-project.zip")
+	def packageTestJar = defaultJarPath("-test.jar")
+	def packageDocsJar = defaultJarPath("-docs.jar")
+	def packageSrcJar= defaultJarPath("-src.jar")
+	def packageTestSrcJar = defaultJarPath("-test-src.jar")
+	def packageProjectZip = defaultJarPath("-project.zip")
+	def defaultJarPath(extension: String) = outputPath / (artifactBaseName + extension)
 }
 
 object BasicProjectPaths

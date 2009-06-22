@@ -74,15 +74,17 @@ private final class BaseDirectory(private[sbt] val path: Path) extends Path
 	def projectRelativePathString(separator: String) = path.projectRelativePathString(separator)
 	private[sbt] def prependTo(s: String) = "." + sep + s
 }
-private[sbt] final class FilePath(val asFile: File) extends Path
+private[sbt] final class FilePath(file: File) extends Path
 {
+	lazy val asFile = file.getAbsoluteFile
 	override def toString = absolutePath
 	def relativePathString(separator: String) = asFile.getName
 	def projectRelativePathString(separator: String) = relativePathString(separator)
 	private[sbt] def prependTo(s: String) = absolutePath + sep + s
 }
-private[sbt] final class ProjectDirectory(val asFile: File) extends Path
+private[sbt] final class ProjectDirectory(file: File) extends Path
 {
+	lazy val asFile = file.getAbsoluteFile
 	override def toString = "."
 	def relativePathString(separator: String) = ""
 	def projectRelativePathString(separator: String) = ""

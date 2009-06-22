@@ -394,7 +394,7 @@ object BasicScalaProject
 	}
 	private def mapScalaModule(in: Iterable[_], id: String) =
 	{
-		Project.currentScalaVersion.toList.flatMap { scalaVersion => 
+		ScalaVersion.current.toList.flatMap { scalaVersion => 
 			in.map(jar => ModuleID(ManageDependencies.ScalaOrganization, id, scalaVersion))
 		}
 	}

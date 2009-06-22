@@ -15,12 +15,21 @@ sealed abstract class InternalProject extends Project
 private sealed abstract class BasicBuilderProject extends InternalProject with SimpleScalaProject
 {
 	def sourceFilter = "*.scala" | "*.java"
-	def jarFilter = "*.jar"
+	def jarFilter: NameFilter = "*.jar"
 	def compilePath = outputPath / DefaultMainCompileDirectoryName
 	def mainResourcesPath = path(DefaultResourcesDirectoryName)
 	def dependencyPath = path(DefaultDependencyDirectoryName)
 	def libraries = descendents(dependencyPath, jarFilter)
 	override final def dependencies = Nil
+	
+	protected final def logInfo(messages: String*): Unit = atInfo { messages.foreach(message => log.info(message)) }
+	protected final def atInfo(action: => Unit)
+	{
+		val oldLevel = log.getLevel
+		log.setLevel(Level.Info)
+		action
+		log.setLevel(oldLevel)
+	}
 	
 	def projectClasspath = compilePath +++ libraries +++ sbtJarPath
 	def sbtJarPath = Path.lazyPathFinder { Path.fromFile(FileUtilities.sbtJar) :: Nil }
@@ -59,11 +68,9 @@ private sealed abstract class BasicBuilderProject extends InternalProject with S
 			else
 			{
 				definitionChanged()
-				val oldLevel = log.getLevel
-				log.setLevel(Level.Info)
-				log.info("Recompiling " + tpe + " definition...")
-				log.info("\t" + cAnalysis.toString)
-				log.setLevel(oldLevel)
+				logInfo(
+					"Recompiling " + tpe + " definition...",
+					 "\t" + cAnalysis.toString)
 				super.execute(cAnalysis)
 			}
 		}
@@ -119,6 +126,7 @@ private final class BuilderProject(val info: ProjectInfo, val pluginPath: Path, 
 		val pluginUptodate = propertyOptional[Boolean](false)
 		def tpe = "plugin"
 		def managedSourcePath = path("src_managed")
+		def managedDependencyPath = crossPath(BasicDependencyPaths.DefaultManagedDirectoryName)
 		override protected def definitionChanged() { setUptodate(false) }
 		private def setUptodate(flag: Boolean)
 		{
@@ -131,30 +139,35 @@ private final class BuilderProject(val info: ProjectInfo, val pluginPath: Path, 
 		lazy val syncPlugins = pluginTask(sync()) dependsOn(extractSources)
 		lazy val extractSources = pluginTask(extract()) dependsOn(update)
 		lazy val update = pluginTask(loadAndUpdate()) dependsOn(compile)
+		
 		private def sync() = pluginCompileConditional.run orElse { setUptodate(true); None }
 		private def extract() =
 		{
-			val sourcePluginJars = sourcePlugins.get
 			FileUtilities.clean(managedSourcePath, log) orElse
-			Control.lazyFold(sourcePluginJars.toList) { jar =>
-				log.info("\tExtracting source plugin " + jar)
-				FileUtilities.unzip(jar, extractTo(jar), log).left.toOption
+			Control.lazyFold(plugins.get.toList) { jar =>
+				Control.thread(FileUtilities.unzip(jar, extractTo(jar), sourceFilter, log)) { extracted =>
+					if(!extracted.isEmpty)
+						logInfo("\tExtracted source plugin " + jar + " ...")
+					None
+				}
 			}
 		}
 		private def loadAndUpdate() =
 		{
 			Control.thread(projectDefinition) {
 				case Some(definition) =>
-					log.info("\nUpdating plugins")
+					logInfo("\nUpdating plugins")
 					val pluginInfo = ProjectInfo(info.projectPath.asFile, Nil, None)
-					val pluginBuilder = Project.constructProject(pluginInfo, Project.getProjectClass[PluginProject](definition, projectClasspath))
+					val pluginBuilder = Project.constructProject(pluginInfo, Project.getProjectClass[PluginDefinition](definition, projectClasspath))
 					pluginBuilder.projectName() = "Plugin builder"
 					pluginBuilder.projectVersion() = OpaqueVersion("1.0")
 					val result = pluginBuilder.update.run
 					if(result.isEmpty)
 					{
-						log.success("Plugins updated successfully.")
-						log.info("")
+						atInfo {
+							log.success("Plugins updated successfully.")
+							log.info("")
+						}
 					}
 					result
 				case None => None
@@ -165,8 +178,8 @@ private final class BuilderProject(val info: ProjectInfo, val pluginPath: Path, 
 			val name = jar.asFile.getName
 			managedSourcePath / name.substring(0, name.length - ".jar".length)
 		}
-		def sourcePlugins = descendents("source", jarFilter)
-		def pluginClasspath = descendents("jar", jarFilter) +++ pluginCompileConfiguration.outputDirectory
+		def plugins = descendents(managedDependencyPath, jarFilter)
+		def pluginClasspath = plugins +++ pluginCompileConfiguration.outputDirectory
 		
 		lazy val pluginCompileConditional = new BuilderCompileConditional(pluginCompileConfiguration)
 		lazy val pluginCompileConfiguration =
@@ -180,11 +193,18 @@ private final class BuilderProject(val info: ProjectInfo, val pluginPath: Path, 
 			}
 	}
 }
-class PluginProject(val info: ProjectInfo) extends InternalProject with BasicManagedProject
+class PluginDefinition(val info: ProjectInfo) extends InternalProject with BasicManagedProject
 {
-	override final def outputPattern = "[type]/[artifact](-[revision]).[ext]"
+	override final def outputPattern = "[artifact](-[revision]).[ext]"
 	override final val tasks = Map("update" -> update)
 	override def projectClasspath(config: Configuration) = Path.emptyPathFinder
 	override def dependencies = info.dependencies
-	override def managedDependencyPath = info.projectPath
+}
+class PluginProject(info: ProjectInfo) extends DefaultProject(info)
+{
+	override def unmanagedClasspath = super.unmanagedClasspath +++ Path.lazyPathFinder(Path.fromFile(FileUtilities.sbtJar) :: Nil)
+	override def packageAction = packageSrc
+	override def packageSrcJar = jarPath
+	override def useMavenConfigurations = true
+	override def managedStyle = ManagedStyle.Maven
 }

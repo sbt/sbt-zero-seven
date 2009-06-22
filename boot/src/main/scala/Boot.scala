@@ -142,9 +142,11 @@ private class Paths extends NotNull
 	{
 		if(!ProjectDirectory.exists)
 		{
-			val line = SimpleReader.readLine("Project does not exist, create new project? (y/N) : ")
+			val line = SimpleReader.readLine("Project does not exist, create new project? (y/N/s) : ")
 			if(Setup.isYes(line))
 				ProjectProperties(PropertiesFile, true)
+			else if(Setup.isScratch(line))
+				ProjectProperties.scratch(PropertiesFile)
 			else
 				System.exit(1)
 		}
@@ -155,13 +157,13 @@ private class Paths extends NotNull
 private class Setup(loaderCache: LoaderCache) extends Paths
 {
 	/** Checks that the requested version of sbt and scala have been downloaded.
-	* It performs a simple check that the appropriate directories exist.  It does
-	* not actually verify that appropriate classes are resolvable.  It uses Ivy
+	* It performs a simple check that the appropriate directories exist.  It uses Ivy
 	* to resolve and retrieve any necessary libraries. The classpath to use is returned.*/
 	final def loader(): ClassLoader = loader(Nil)
 	private final def loader(forcePrompt: Seq[String]): ClassLoader =
 	{
-		val (scalaVersion, sbtVersion) = ProjectProperties.forcePrompt(PropertiesFile, forcePrompt : _*)
+		val (normalScalaVersion, sbtVersion) = ProjectProperties.forcePrompt(PropertiesFile, forcePrompt : _*)
+		val scalaVersion = crossScalaVersion(normalScalaVersion)
 		loaderCache( scalaVersion, sbtVersion ) match
 		{
 			case Some(existingLoader) =>
@@ -178,6 +180,14 @@ private class Setup(loaderCache: LoaderCache) extends Paths
 				}
 			}
 		}
+	}
+	private def crossScalaVersion(simpleScalaVersion: String): String =
+	{
+		val crossScalaVersion = System.getProperty(SbtScalaVersionKey)
+		if(crossScalaVersion == null || crossScalaVersion.isEmpty)
+			simpleScalaVersion
+		else
+			crossScalaVersion
 	}
 	private def getLoader(scalaVersion: String, sbtVersion: String): Either[Seq[String], ClassLoader] =
 	{
@@ -225,7 +235,7 @@ private class Setup(loaderCache: LoaderCache) extends Paths
 		val classpath = Setup.getJars(dirs : _*)
 		new URLClassLoader(classpath.toArray, new BootFilteredLoader)
 	}
-	private def setScalaVersion(scalaVersion: String) { System.setProperty("sbt.scala.version", scalaVersion) }
+	private def setScalaVersion(scalaVersion: String) { System.setProperty(SbtScalaVersionKey, scalaVersion) }
 }
 private final class LoaderCache
 {
@@ -269,12 +279,12 @@ private object Setup
 		}
 		catch { case e: ClassNotFoundException => ifFailure }
 	}
-	def isYes(so: Option[String]) =
+	def isYes(so: Option[String]) = isValue("y", "yes")(so)
+	def isScratch(so: Option[String]) = isValue("s", "scratch")(so)
+	def isValue(values: String*)(so: Option[String]) =
 		so match
 		{
-			case Some(s) =>
-				val check = s.toLowerCase
-				check == "y" || check == "yes"
+			case Some(s) => values.contains(s.toLowerCase)
 			case None => false
 		}
 	private def getJars(directories: File*) = directories.flatMap(file => wrapNull(file.listFiles(JarFilter))).map(_.toURI.toURL)

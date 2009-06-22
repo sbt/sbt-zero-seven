@@ -40,7 +40,14 @@ trait UnmanagedClasspathProject extends ClasspathProject
 	/** The location of the manually managed (unmanaged) dependency directory.*/
 	def dependencyPath: Path
 	/** The classpath containing all jars in the unmanaged directory. */
-	def unmanagedClasspath: PathFinder = descendents(dependencyPath, "*.jar")
+	def unmanagedClasspath: PathFinder =
+	{
+		val base = descendents(dependencyPath, "*.jar")
+		if(scratch)
+			base +++ (info.projectPath * "*.jar")
+		else
+			base
+	}
 	/** The classpath containing all unmanaged classpath elements for the given configuration. This typically includes
 	* at least 'unmanagedClasspath'.*/
 	def fullUnmanagedClasspath(config: Configuration): PathFinder
@@ -175,7 +182,7 @@ trait ManagedProject extends ClasspathProject
 	implicit def toGroupID(groupID: String): GroupID =
 	{
 		nonEmpty(groupID, "Group ID")
-		new GroupID(groupID, currentScalaVersionString)
+		new GroupID(groupID, ScalaVersion.currentString)
 	}
 	implicit def toRepositoryName(name: String): RepositoryName =
 	{
@@ -418,6 +425,7 @@ object BasicDependencyPaths
 
 object StringUtilities
 {
+	def normalize(s: String) = s.toLowerCase.replaceAll("""\s+""", "-")
 	def nonEmpty(s: String, label: String)
 	{
 		require(s.trim.length > 0, label + " cannot be empty.")
