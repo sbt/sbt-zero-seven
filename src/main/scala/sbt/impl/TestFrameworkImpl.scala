@@ -45,7 +45,7 @@ private[sbt] class ScalaTestRunner(val log: Logger, val listeners: Seq[TestRepor
 		val test = testClass.newInstance
 		val reporter = new ScalaTestReporter
 		val stopper = new Stopper { override def stopRequested = false }
-		test.execute(None, reporter, stopper, Set.empty, Set.empty, Map.empty, None)
+		test.execute(None, reporter, stopper, Set.empty, Set("org.scalatest.Ignore"), Map.empty, None)
 		if(reporter.succeeded)
 			Result.Passed
 		else
