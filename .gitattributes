@@ -276,6 +276,10 @@ src/test/resources/sbt-test-resources/tests/scalacheck-a/project/build.propertie
 src/test/resources/sbt-test-resources/tests/scalacheck-a/project/build/src/TestProject.scala -text
 src/test/resources/sbt-test-resources/tests/scalacheck-a/src/test/scala/DummyTest.scala -text
 src/test/resources/sbt-test-resources/tests/scalacheck-a/test -text
+src/test/resources/sbt-test-resources/tests/scalatest-ignore/project/build.properties -text
+src/test/resources/sbt-test-resources/tests/scalatest-ignore/project/build/Test.scala -text
+src/test/resources/sbt-test-resources/tests/scalatest-ignore/src/test/scala/IgnoreTest.scala -text
+src/test/resources/sbt-test-resources/tests/scalatest-ignore/test -text
 src/test/resources/sbt-test-resources/tests/specs-a/changes/BasicTest.scala -text
 src/test/resources/sbt-test-resources/tests/specs-a/changes/FailTest.scala -text
 src/test/resources/sbt-test-resources/tests/specs-a/project/build.properties -text
