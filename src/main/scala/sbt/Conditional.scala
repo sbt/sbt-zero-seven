@@ -319,7 +319,7 @@ abstract class AbstractCompileConditional(val config: AbstractCompileConfigurati
 			checkClasspath(cp)
 		val classpathString = Path.makeString(cp)
 		val id = AnalysisCallback.register(analysisCallback)
-		val allOptions = (("-Xplugin:" + FileUtilities.sbtJar.getCanonicalPath) ::
+		val allOptions = (("-Xplugin:" + FileUtilities.sbtJar.getAbsolutePath) ::
 			("-P:sbt-analyzer:callback:" + id.toString) :: Nil) ++ options
 		val r = (new Compile(config.maxErrors))(label, dirtySources, classpathString, outputDirectory, allOptions, javaOptions, compileOrder, log)
 		AnalysisCallback.unregister(id)
@@ -368,7 +368,7 @@ abstract class AbstractCompileConditional(val config: AbstractCompileConfigurati
 			if(jars.size > 1)
 			{
 				log.warn("Possible duplicate classpath locations for jar " + name + ": ")
-				for(jar <- jars) log.warn("\t" + jar.asFile.getCanonicalPath)
+				for(jar <- jars) log.warn("\t" + jar.absolutePath)
 			}
 		}
 	}

@@ -313,12 +313,13 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 	
 	def webappClasspath = publicClasspath
 	def jettyRunClasspath = testClasspath
+	def jettyWebappPath = temporaryWarPath
 	lazy val jettyRun = jettyRunAction
 	protected def jettyRunAction =
-		jettyRunTask(temporaryWarPath, jettyContextPath, jettyPort, jettyRunClasspath, "test", scanDirectories.map(_.asFile), scanInterval) dependsOn(prepareWebapp) describedAs(JettyRunDescription)
+		jettyRunTask(jettyWebappPath, jettyContextPath, jettyPort, jettyRunClasspath, "test", scanDirectories.map(_.asFile), scanInterval) dependsOn(prepareWebapp) describedAs(JettyRunDescription)
 		
 	/** The directories that should be watched to determine if the web application needs to be reloaded..*/
-	def scanDirectories: Seq[Path] = temporaryWarPath :: Nil
+	def scanDirectories: Seq[Path] = jettyWebappPath :: Nil
 	/** The time in seconds between scans that check whether the web application should be reloaded.*/
 	def scanInterval: Int = 3
 	/** The port that Jetty runs on. */

@@ -66,7 +66,7 @@ trait BasicEnvironment extends Environment
 	/** The environment from which user-defined properties inherit (if enabled). */
 	protected def parentEnvironment: Option[BasicEnvironment] = None
 	/** The identifier used in messages to refer to this environment. */
-	def environmentLabel = envBackingPath.asFile.getCanonicalPath
+	def environmentLabel = envBackingPath.absolutePath
 	
 	private[this] var isModified = false
 	private[sbt] def setEnvironmentModified(modified: Boolean) { synchronized { isModified = modified } }

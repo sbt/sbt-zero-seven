@@ -24,8 +24,8 @@ object Format
 	}
 	implicit val file: Format[File] = new Format[File]
 	{
-		def toString(file: File) = file.getCanonicalPath
-		def fromString(s: String) = (new File(s)).getCanonicalFile
+		def toString(file: File) = file.getAbsolutePath
+		def fromString(s: String) = (new File(s)).getAbsoluteFile
 	}
 	implicit val hash: Format[Array[Byte]] = new Format[Array[Byte]]
 	{

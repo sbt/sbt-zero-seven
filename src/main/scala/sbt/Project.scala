@@ -361,7 +361,7 @@ object Project
 						log.error(errorMessage)
 				}
 		}
-		val useName = p.projectName.get.getOrElse("at " + p.info.projectDirectory.getCanonicalPath)
+		val useName = p.projectName.get.getOrElse("at " + p.info.projectDirectory.getAbsolutePath)
 		checkDependencies(useName, p.info.dependencies, log)
 		p
 	}

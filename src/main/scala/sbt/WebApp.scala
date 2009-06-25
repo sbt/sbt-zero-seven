@@ -115,7 +115,7 @@ private object LazyJettyRun extends JettyRun
 			{
 				configureDefaultConnector(server, port)
 				def createLoader = new URLClassLoader(classpathURLs.toArray, this.getClass.getClassLoader)
-				val webapp = new WebAppContext(war.asFile.getCanonicalPath, defaultContextPath)
+				val webapp = new WebAppContext(war.absolutePath, defaultContextPath)
 				webapp.setClassLoader(createLoader)
 				server.setHandler(webapp)
 				

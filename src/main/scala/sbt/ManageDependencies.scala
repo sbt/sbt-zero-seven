@@ -444,7 +444,7 @@ object ManageDependencies
 				{
 					val retrieveOptions = new RetrieveOptions
 					retrieveOptions.setSync(synchronize)
-					val patternBase = ivyConfig.paths.managedLibDirectory.asFile.getCanonicalPath
+					val patternBase = ivyConfig.paths.managedLibDirectory.absolutePath
 					val pattern =
 						if(patternBase.endsWith(File.separator))
 							patternBase + outputPattern

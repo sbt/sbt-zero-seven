@@ -179,7 +179,7 @@ object Path
 		basePathString(basePath) flatMap { baseString => relativize(basePath, baseString, file) }
 	def relativize(basePath: Path, basePathString: String, file: File): Option[Path] =
 	{
-		val pathString = file.getCanonicalPath
+		val pathString = file.getAbsolutePath
 		if(pathString.startsWith(basePathString))
 			Some(fromString(basePath, pathString.substring(basePathString.length)))
 		else
@@ -187,7 +187,7 @@ object Path
 	}
 	private[sbt] def relativize(baseFile: File, file: File): Option[String] =
 	{
-		val pathString = file.getCanonicalPath
+		val pathString = file.getAbsolutePath
 		baseFileString(baseFile) flatMap
 		{
 			baseString =>
@@ -204,7 +204,7 @@ object Path
 	{
 		if(baseFile.isDirectory)
 		{
-			val cp = baseFile.getCanonicalPath
+			val cp = baseFile.getAbsolutePath
 			assert(cp.length > 0)
 			if(cp.charAt(cp.length - 1) == File.separatorChar)
 				Some(cp)
