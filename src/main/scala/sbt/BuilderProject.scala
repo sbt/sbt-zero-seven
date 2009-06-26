@@ -55,8 +55,8 @@ private sealed abstract class BasicBuilderProject extends InternalProject with S
 		
 	def tpe: String
 
-	val definitionCompileConditional = new BuilderCompileConditional(definitionCompileConfiguration)
-	final class BuilderCompileConditional(config: BuilderCompileConfiguration) extends AbstractCompileConditional(config)
+	val definitionCompileConditional = new BuilderCompileConditional(definitionCompileConfiguration, tpe)
+	final class BuilderCompileConditional(config: BuilderCompileConfiguration, tpe: String) extends AbstractCompileConditional(config)
 	{
 		type AnalysisType = BuilderCompileAnalysis
 		override protected def constructAnalysis(analysisPath: Path, projectPath: Path, log: Logger) =
@@ -69,7 +69,7 @@ private sealed abstract class BasicBuilderProject extends InternalProject with S
 			{
 				definitionChanged()
 				logInfo(
-					"Recompiling " + tpe + " definition...",
+					"Recompiling " + tpe + "...",
 					 "\t" + cAnalysis.toString)
 				super.execute(cAnalysis)
 			}
@@ -82,7 +82,7 @@ private sealed abstract class BasicBuilderProject extends InternalProject with S
 				{
 					if(superclassName == Project.ProjectClassName && !isModule)
 					{
-						log.debug("Found " + tpe + " definition " + subclassName)
+						log.debug("Found " + tpe + " " + subclassName)
 						analysis.addProjectDefinition(sourcePath, subclassName)
 					}
 				}
@@ -97,10 +97,10 @@ private sealed abstract class BasicBuilderProject extends InternalProject with S
 		definitionCompileConditional.analysis.allProjects.toList match
 		{
 			case Nil => 
-				log.debug("No " + tpe + " definitions detected using default project.")
+				log.debug("No " + tpe + "s detected using default project.")
 				Right(None)
 			case singleDefinition :: Nil => Right(Some(singleDefinition))
-			case multipleDefinitions =>Left(multipleDefinitions.mkString("Multiple " + tpe + " definitions detected: \n\t","\n\t","\n"))
+			case multipleDefinitions =>Left(multipleDefinitions.mkString("Multiple " + tpe + "s detected: \n\t","\n\t","\n"))
 		}
 	}
 	override final def methods = Map.empty
@@ -116,7 +116,7 @@ private final class BuilderProject(val info: ProjectInfo, val pluginPath: Path, 
 			None
 	}
 	override def projectClasspath = super.projectClasspath +++ pluginProject.map(_.pluginClasspath).getOrElse(Path.emptyPathFinder)
-	def tpe = "project"
+	def tpe = "project definition"
 
 	override def compileTask = super.compileTask dependsOn(pluginProject.map(_.syncPlugins).toList : _*)
 		
@@ -124,8 +124,8 @@ private final class BuilderProject(val info: ProjectInfo, val pluginPath: Path, 
 	{
 		override protected def logImpl = BuilderProject.this.log
 		val pluginUptodate = propertyOptional[Boolean](false)
-		def tpe = "plugin"
-		def managedSourcePath = path("src_managed")
+		def tpe = "plugin definition"
+		def managedSourcePath = path(BasicDependencyPaths.DefaultManagedSourceDirectoryName)
 		def managedDependencyPath = crossPath(BasicDependencyPaths.DefaultManagedDirectoryName)
 		override protected def definitionChanged() { setUptodate(false) }
 		private def setUptodate(flag: Boolean)
@@ -181,7 +181,7 @@ private final class BuilderProject(val info: ProjectInfo, val pluginPath: Path, 
 		def plugins = descendents(managedDependencyPath, jarFilter)
 		def pluginClasspath = plugins +++ pluginCompileConfiguration.outputDirectory
 		
-		lazy val pluginCompileConditional = new BuilderCompileConditional(pluginCompileConfiguration)
+		lazy val pluginCompileConditional = new BuilderCompileConditional(pluginCompileConfiguration, "plugin")
 		lazy val pluginCompileConfiguration =
 			new BuilderCompileConfiguration
 			{

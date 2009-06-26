@@ -95,7 +95,10 @@ trait BasicScalaPaths extends Project with ScalaPaths
 	def packageSourcePaths = mainSources +++ mainResources
 	def packageTestSourcePaths = testSources +++ testResources
 	def packageProjectPaths = descendents( (info.projectPath ##), "*") --- (packageProjectExcludes ** "*")
-	protected def packageProjectExcludes: PathFinder = outputRootPath +++ managedDependencyRootPath +++ info.bootPath +++ info.builderProjectOutputPath
+	protected def packageProjectExcludes: PathFinder =
+		outputRootPath +++ managedDependencyRootPath +++
+		info.bootPath +++ info.builderProjectOutputPath +++
+		info.pluginsOutputPath +++ info.pluginsManagedSourcePath +++ info.pluginsManagedDependencyPath
 
 	override def outputDirectories = outputRootPath :: managedDependencyRootPath :: Nil
 }

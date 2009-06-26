@@ -23,6 +23,7 @@ final class IvyManager(val configuration: Option[Path], val dependencies: Path) 
 * Ivy XML file. */
 sealed trait SbtManager extends Manager
 {
+	def autodetect: Boolean
 	def module: ModuleID
 	def resolvers: Iterable[Resolver]
 	def dependencies: Iterable[ModuleID]
@@ -33,8 +34,23 @@ sealed trait SbtManager extends Manager
 	def artifacts: Iterable[Artifact]
 }
 final class SimpleManager private[sbt] (val dependenciesXML: NodeSeq, val autodetectUnspecified: Boolean,
-	val module: ModuleID, val resolvers: Iterable[Resolver], val configurations: Iterable[Configuration],
+	val module: ModuleID, val resolvers: Iterable[Resolver], explicitConfigurations: Iterable[Configuration],
 	val defaultConfiguration: Option[Configuration], val artifacts: Iterable[Artifact], val dependencies: ModuleID*) extends SbtManager
+{
+	def autodetect = dependencies.isEmpty && dependenciesXML.isEmpty && artifacts.isEmpty && explicitConfigurations.isEmpty && autodetectUnspecified
+	def configurations =
+		if(explicitConfigurations.isEmpty && !autodetect)
+		{
+			defaultConfiguration match
+			{
+				case Some(Configurations.DefaultIvyConfiguration) => Configurations.Default :: Nil
+				case Some(Configurations.DefaultMavenConfiguration) => Configurations.defaultMavenConfigurations
+				case _ => Nil
+			}
+		}
+		else
+			explicitConfigurations
+}
 
 final case class ModuleID(organization: String, name: String, revision: String, configurations: Option[String], isChanging: Boolean, isTransitive: Boolean, explicitArtifacts: Seq[Artifact]) extends NotNull
 {
@@ -278,6 +294,15 @@ object Configurations
 
 	lazy val CompilerPlugin = config("plugin") hide
 	
+	private[sbt] val DefaultMavenConfiguration = defaultConfiguration(true)
+	private[sbt] val DefaultIvyConfiguration = defaultConfiguration(false)
+	private[sbt] def DefaultConfiguration(mavenStyle: Boolean) = if(mavenStyle) DefaultMavenConfiguration else DefaultIvyConfiguration
+	private[sbt] def defaultConfiguration(mavenStyle: Boolean) = 
+	{
+		val base = if(mavenStyle) Configurations.Compile else Configurations.Default
+		config(base.name + "->default(compile)")
+	}
+	
 	private[sbt] def removeDuplicates(configs: Iterable[Configuration]) = Set(scala.collection.mutable.Map(configs.map(config => (config.name, config)).toSeq: _*).values.toList: _*)
 }
 /** Represents an Ivy configuration. */
@@ -299,13 +324,53 @@ object Artifact
 {
 	def apply(name: String): Artifact = Artifact(name, defaultType, defaultExtension, Nil, None)
 	def apply(name: String, `type`: String, extension: String): Artifact = Artifact(name, `type`, extension, Nil, None)
-	def apply(name: String, url: URL): Artifact = Artifact(name, defaultType, defaultExtension, Nil, Some(url))
+	def apply(name: String, url: URL): Artifact =Artifact(name, extract(url, defaultType), extract(url, defaultExtension), Nil, Some(url))
 	val defaultExtension = "jar"
 	val defaultType = "jar"
+	private[this] def extract(url: URL, default: String) =
+	{
+		val s = url.toString
+		val i = s.lastIndexOf('.')
+		if(i >= 0)
+			s.substring(i+1)
+		else
+			default
+	}
 }
 
 object Credentials
 {
+	/** Add the provided credentials to Ivy's credentials cache.*/
 	def add(realm: String, host: String, userName: String, passwd: String): Unit =
 		CredentialsStore.INSTANCE.addCredentials(realm, host, userName, passwd)
+	/** Load credentials from the given file into Ivy's credentials cache.*/
+	def apply(file: String, log: Logger): Unit = apply(Path.fromFile(file), log)
+	/** Load credentials from the given file into Ivy's credentials cache.*/
+	def apply(file: File, log: Logger): Unit = apply(Path.fromFile(file), log)
+	/** Load credentials from the given file into Ivy's credentials cache.*/
+	def apply(path: Path, log: Logger)
+	{
+		val msg =
+			if(path.exists)
+			{
+				val properties = new scala.collection.mutable.HashMap[String, String]
+				def get(keys: List[String]) = keys.flatMap(properties.get).firstOption.toRight(keys.head + " not specified in credentials file: " + path)
+					
+					impl.MapUtilities.read(properties, path, log) orElse
+					{
+						List.separate( List(RealmKeys, HostKeys, UserKeys, PasswordKeys).map(get) ) match
+						{
+							case (Nil, List(realm, host, user, pass)) => add(realm, host, user, pass); None
+							case (errors, _) => Some(errors.mkString("\n"))
+						}
+					}
+			}
+			else
+				Some("Credentials file " + path + " does not exist")
+		msg.foreach(x => log.warn(x))
+	}
+	private[this] val RealmKeys = List("realm")
+	private[this] val HostKeys = List("host", "hostname")
+	private[this] val UserKeys = List("user", "user.name", "username")
+	private[this] val PasswordKeys = List("password", "pwd", "pass", "passwd")
 }

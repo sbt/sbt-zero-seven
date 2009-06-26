@@ -15,7 +15,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 	private val version2_7_3 = "2.7.3"
 	private val version2_7_4 = "2.7.4"
 	private val version2_7_5 = "2.7.5"
-	private val version2_8_0 = "2.8.0-SNAPSHOT"
+	private val version2_8_0 = "2.8.0.r18093-b20090623200909"
 	private val base = "base"
 
 	/* The configurations for the versions of Scala.*/
@@ -28,7 +28,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 	// the list of all configurations cross-compile supports
 	private val allConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_7_5 :: conf_2_8_0 :: Nil
 	// the list of configurations to actually build against
-	private val buildConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_7_5 :: conf_2_8_0 :: Nil//allConfigurations not currently used because of issues with 2.8.0
+	private val buildConfigurations = conf_2_7_2 :: conf_2_7_3 :: conf_2_7_4 :: conf_2_7_5 :: Nil//allConfigurations not currently used because of issues with 2.8.0
 	// the configuration to use for normal development (when cross-building is not done)
 	private def developmentVersion = buildConfigurations.first
 	
@@ -63,7 +63,6 @@ abstract class CrossCompileProject extends BasicScalaProject
 			<!-- Dependencies that are the same across all Scala versions -->
 			<dependency org="org.apache.ivy" name="ivy" rev="2.0.0" transitive="false" conf={depConf(conf_base)}/>
 			<dependency org="com.jcraft" name="jsch" rev="0.1.31" transitive="false" conf={depConf(conf_base)}/>
-			{testDependency("scalacheck", "1.5", false, conf_base)}
 			<dependency org="org.mortbay.jetty" name="jetty" rev="6.1.14" transitive="true" conf={depConf(optional(conf_base))}/>
 
 			<!-- the dependencies that are different dependeding on the version of Scala -->
@@ -98,8 +97,16 @@ abstract class CrossCompileProject extends BasicScalaProject
 		if(buildConfigurations.contains(scalaVersion))
 		{
 			scalaComment(scalaVersion) ++
-			testDependency("scalatest", scalaTestVersion, uniformTestOrg, scalaVersion) ++
-			testDependency("specs", specsVersion, uniformTestOrg, scalaVersion) ++
+			{
+				if(scalaVersion eq conf_2_8_0)
+					Nil
+				else
+				{
+					testDependency("scalatest", scalaTestVersion, uniformTestOrg, scalaVersion) ++
+					testDependency("specs", specsVersion, uniformTestOrg, scalaVersion) ++
+					testDependency("scalacheck", "1.5", false, scalaVersion)
+				}
+			} ++
 			scalaDependency("scala-compiler", scalaVersion) ++ scalaDependency("scala-library", scalaVersion) ++
 			{
 				if(scalaVersion == conf_2_8_0)
@@ -186,7 +193,7 @@ abstract class CrossCompileProject extends BasicScalaProject
 			val compilerArguments: List[String] = compilerOptions ::: sources
 			
 			// the compiler classpath has to be appended to the boot classpath to work properly
-			val allArguments = "-Xmx256M" :: ("-Xbootclasspath/a:" + compilerClasspath) :: CompilerMainClass :: compilerArguments
+			val allArguments = "-Xmx512M" :: ("-Xbootclasspath/a:" + compilerClasspath) :: CompilerMainClass :: compilerArguments
 			log.debug("Running external compiler with command: java " + allArguments.mkString(" "))
 			val exitValue = Process("java", allArguments) ! log
 			if(exitValue == 0)

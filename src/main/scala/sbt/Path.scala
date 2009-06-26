@@ -76,7 +76,7 @@ private final class BaseDirectory(private[sbt] val path: Path) extends Path
 }
 private[sbt] final class FilePath(file: File) extends Path
 {
-	lazy val asFile = file.getAbsoluteFile
+	lazy val asFile = absolute(file)
 	override def toString = absolutePath
 	def relativePathString(separator: String) = asFile.getName
 	def projectRelativePathString(separator: String) = relativePathString(separator)
@@ -84,7 +84,7 @@ private[sbt] final class FilePath(file: File) extends Path
 }
 private[sbt] final class ProjectDirectory(file: File) extends Path
 {
-	lazy val asFile = file.getAbsoluteFile
+	lazy val asFile = absolute(file)
 	override def toString = "."
 	def relativePathString(separator: String) = ""
 	def projectRelativePathString(separator: String) = ""
@@ -111,6 +111,10 @@ object Path
 	import java.io.File
 	import File.pathSeparator
 	
+	def fileProperty(name: String) = Path.fromFile(System.getProperty(name))
+	def userHome = fileProperty("user.home")
+	
+	def absolute(file: File) = new File(file.toURI.normalize).getAbsoluteFile
 	/** Constructs a String representation of <code>Path</code>s.  The absolute path String of each <code>Path</code> is
 	* separated by the platform's path separator.*/
 	def makeString(paths: Iterable[Path]): String = paths.map(_.absolutePath).mkString(pathSeparator)
@@ -214,6 +218,7 @@ object Path
 		else
 			None
 	}
+	def fromFile(file: String): Path = fromFile(new File(file))
 	def fromFile(file: File): Path = new FilePath(file)
 }
 

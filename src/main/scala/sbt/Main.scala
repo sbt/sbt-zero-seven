@@ -281,6 +281,7 @@ object Main
 		printCmd("<action name>", "Executes the project specified action.")
 		printCmd("<method name> <parameter>*", "Executes the project specified method.")
 		printCmd(ContinuousExecutePrefix + " <command>", "Executes the project specified action or method whenever source files change.")
+		printCmd(CrossBuildPrefix + " <command>", "Executes the project specified action or method for all versions of Scala defined in crossScalaVersions.")
 		printCmd(ShowActions, "Shows all available actions.")
 		printCmd(RebootCommand, "Changes to scala.version or sbt.version are processed and the project definition is reloaded.")
 		printCmd(HelpAction, "Displays this help message.")

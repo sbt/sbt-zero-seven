@@ -6,7 +6,12 @@ import sbt._
 import java.io.File
 import java.nio.charset.Charset
 
-protected class InstallPluginProject(info: ProjectInfo, extract: => InstallExtractProject) extends DefaultProject(info)
+class InstallerProject(info: ProjectInfo) extends ParentProject(info)
+{
+	lazy val installExtractor: InstallExtractProject = project("extract", "Installer Extractor", new InstallExtractProject(_, installPlugin))
+	lazy val installPlugin: InstallPluginProject = project("plugin", "Installer Plugin", new InstallPluginProject(_, installExtractor), installExtractor)
+}
+protected class InstallPluginProject(info: ProjectInfo, extract: => InstallExtractProject) extends PluginProject(info)
 {
 	private lazy val extractProject = extract
 	override def crossScalaVersions = Set("2.7.2", "2.7.3", "2.7.4", "2.7.5")
@@ -15,17 +20,23 @@ protected class InstallPluginProject(info: ProjectInfo, extract: => InstallExtra
 	def extractLocation = (outputPath ##) / "extract.location"
 	lazy val writeProperties = task { FileUtilities.write(extractLocation.asFile, extractProject.outputJar.relativePath, Charset.forName("UTF-8"), log) }
 	override def packageAction = super.packageAction dependsOn(extractProject.proguard, writeProperties)
+	
+	val publishTo = "Scala Tools Nexus" at "http://nexus.scala-tools.org/content/repositories/releases/"
+	Credentials(Path.fromFile(System.getProperty("user.home")) / ".ivy2" / ".credentials", log)
 }
 protected class InstallExtractProject(info: ProjectInfo, pluginProject: => InstallPluginProject) extends DefaultProject(info)
 {
+	override def publishLocalAction = publishAction
+	override def publishAction = task {None}
+	override def unmanagedClasspath = super.unmanagedClasspath +++ Path.lazyPathFinder(Path.fromFile(FileUtilities.sbtJar) :: Nil)
 	private lazy val plugin = pluginProject
 	val mainClassName = "sbt.extract.Main"
 	val proguardConfigurationPath: Path = outputPath / "proguard.pro"
 	val toolsConfig = config("tools")
+	val defaultConfig = Configurations.Default
 	val proguardJar = "net.sf.proguard" % "proguard" % "4.3" % "tools->default"
 	def rootProjectDirectory = rootProject.info.projectPath
 	def outputJar = (plugin.outputPath ##) / defaultJarName
-	def jarPath = outputPath / defaultJarName
 	
 	/******** Proguard *******/
 	lazy val proguard = proguardTask dependsOn(`package`, writeProguardConfiguration)
@@ -60,19 +71,20 @@ protected class InstallExtractProject(info: ProjectInfo, pluginProject: => Insta
 			val defaultJar = jarPath.absolutePath
 			log.debug("proguard configuration using main jar " + defaultJar)
 			val externalDependencies = (mainCompileConditional.analysis.allExternals).map(_.getAbsoluteFile).filter(_.getName.endsWith(".jar"))
-			log.debug("proguard configuration external dependencies: \n\t" + externalDependencies.mkString("\n\t"))
-			val projectDependencies = dependencies flatMap { case sc: BasicScalaProject => (sc.outputPath / sc.defaultJarName) :: Nil; case _ => Nil }
+			debugJars("external dependencies", externalDependencies)
 			// partition jars from the external jar dependencies of this project by whether they are located in the project directory
 			// if they are, they are specified with -injars, otherwise they are specified with -libraryjars
-			val (externalJars, libraryJars) = externalDependencies.toList.partition(jar => Path.relativize(rootProjectDirectory, jar).isDefined)
-			log.debug("proguard configuration library jars locations: " + libraryJars.mkString(", "))
-			val sbtJarStrings = projectDependencies.toList.map(_.absolutePath + "(!META-INF/**,!licenses/**,LICENSE,NOTICE,!*.xml)")
+			val (externalJars, libraryJars) = externalDependencies.toList.partition{jar => Path.relativize(rootProjectDirectory, jar).isDefined}
+			debugJars("library jars", libraryJars)
+			val sbtJarString = FileUtilities.sbtJar.getAbsolutePath + "(!META-INF/**,!licenses/**,LICENSE,NOTICE,!*.xml)"
 			val externalJarStrings = externalJars.map( _ + "(!META-INF/**,!*.properties)")
 			// exclude properties files and manifests from scala-library jar
-			val inJars = (defaultJar :: sbtJarStrings ::: externalJarStrings).map("-injars " + _).mkString("\n")
+			val inJars = (defaultJar :: externalJarStrings).map("-injars " + _).mkString("\n")
 			
 			val proguardConfiguration = outTemplate.stripMargin.format(libraryJars.mkString(File.pathSeparator), inJars, outputJar.absolutePath, mainClassName)
 			log.debug("Proguard configuration written to " + proguardConfigurationPath)
 			FileUtilities.write(proguardConfigurationPath.asFile, proguardConfiguration, log)
 		}
+	private def debugJars[T](label: String, jars: Iterable[T]): Unit =
+		log.debug("proguard configuration " + label + ": \n\t" + jars.mkString("\n\t"))
 }

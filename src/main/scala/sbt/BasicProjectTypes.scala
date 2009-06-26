@@ -176,7 +176,9 @@ trait ManagedProject extends ClasspathProject
 	* so that the Ivy 'extends' mechanism is not required.  That way, the jars are only copied to one configuration.*/
 	def managedClasspath(config: Configuration): PathFinder = configurationClasspath(config)
 	/** All dependencies in the given configuration. */
-	final def configurationClasspath(config: Configuration): PathFinder = descendents(managedDependencyPath / config.toString, "*.jar")
+	final def configurationClasspath(config: Configuration): PathFinder = descendents(configurationPath(config), "*.jar")
+	/** The base path to which dependencies in configuration 'config' are downloaded.*/
+	def configurationPath(config: Configuration): Path = managedDependencyPath / config.toString
 	
 	import StringUtilities.nonEmpty
 	implicit def toGroupID(groupID: String): GroupID =
@@ -195,6 +197,7 @@ trait ManagedProject extends ClasspathProject
 		new ModuleIDConfigurable(m)
 	}
 	
+	/** Creates a new configuration with the given name.*/
 	def config(name: String) = new Configuration(name)
 }
 /** This class groups required configuration for the deliver and publish tasks. */
@@ -220,9 +223,9 @@ trait PublishConfiguration extends NotNull
 }
 object ManagedStyle extends Enumeration
 {
-	val Maven, Ivy, Auto = Value
+	val Maven, Ivy = Value
 }
-import ManagedStyle.{Auto, Ivy, Maven, Value => ManagedType}
+import ManagedStyle.{Ivy, Maven, Value => ManagedType}
 trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject with BasicDependencyPaths
 {
 	import BasicManagedProject._
@@ -244,33 +247,33 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 		val reflective = super.ivyConfigurations
 		if(useDefaultConfigurations)
 		{
-			val base = Configurations.defaultMavenConfigurations ++ reflective
-			val allConfigurations =
-				if(useIntegrationTestConfiguration)
-					base ++ List(Configurations.IntegrationTest)
-				else
-					base
-			Configurations.removeDuplicates(allConfigurations)
+			if(reflective.isEmpty && !useIntegrationTestConfiguration)
+				Nil
+			else
+			{
+				val base = Configurations.defaultMavenConfigurations ++ reflective
+				val allConfigurations =
+					if(useIntegrationTestConfiguration)
+						base ++ List(Configurations.IntegrationTest)
+					else
+						base
+				Configurations.removeDuplicates(allConfigurations)
+			}
 		}
 		else
 			reflective
 	}
 	def useIntegrationTestConfiguration = false
-	def defaultConfiguration: Option[Configuration] =
-	{
-		val base = if(useDefaultConfigurations) Configurations.Compile else Configurations.Default
-		Some(config(base.name + "->default(compile)"))
-	}
-	def useMavenConfigurations = false  // TBD: set to true and deprecate
+	def defaultConfiguration: Option[Configuration] = Some(Configurations.DefaultConfiguration(useDefaultConfigurations))
+	def useMavenConfigurations = true // TBD: set to true and deprecate
 	def useDefaultConfigurations = useMavenConfigurations
-	def managedStyle: ManagedType = Auto
+	def managedStyle: ManagedType = Maven
 	protected implicit final val defaultPatterns: RepositoryHelpers.Patterns =
 	{
 		managedStyle match
 		{
 			case Maven => Resolver.mavenStylePatterns
 			case Ivy => Resolver.ivyStylePatterns
-			case Auto => Resolver.defaultPatterns
 		}
 	}
 	/** The options provided to the 'update' action.  This is by default the options in 'baseUpdateOptions'.
@@ -297,7 +300,14 @@ trait BasicManagedProject extends ManagedProject with ReflectiveManagedProject w
 	* be more appropriate, however.*/
 	def filterScalaJars = true
 	/** The configurations to check/filter.*/
-	def checkScalaInConfigurations: Iterable[Configuration] = ivyConfigurations
+	def checkScalaInConfigurations: Iterable[Configuration] =
+	{
+		val all = ivyConfigurations
+		if(all.isEmpty)
+			Configurations.defaultMavenConfigurations
+		else
+			all
+	}
 	def checkScalaVersion = CheckScalaVersion(checkScalaInConfigurations, checkExplicitScalaDependencies, filterScalaJars)
 	def defaultPublishRepository: Option[Resolver] =
 	{
@@ -419,6 +429,7 @@ trait BasicDependencyPaths extends ManagedProject
 object BasicDependencyPaths
 {
 	val DefaultManagedDirectoryName = "lib_managed"
+	val DefaultManagedSourceDirectoryName = "src_managed"
 	val DefaultDependencyDirectoryName = "lib"
 	val PomExtension = ".pom"
 }
@@ -544,7 +555,6 @@ trait ReflectiveArtifacts extends ManagedProject
 		{
 			case Maven =>reflective ++ List(Artifact(artifactID, "pom", "pom"))
 			case Ivy => reflective
-			case Auto => Set.empty
 		}
 	}
 	def reflectiveArtifacts: Set[Artifact] = Set(Reflective.reflectiveMappings[Artifact](this).values.toList: _*)

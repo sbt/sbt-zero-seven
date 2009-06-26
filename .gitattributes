@@ -13,17 +13,10 @@ boot/src/main/scala/FilteredLoader.scala -text
 boot/src/main/scala/ProjectProperties.scala -text
 boot/src/main/scala/SimpleReader.scala -text
 boot/src/main/scala/Update.scala -text
-/build -text
-/clean -text
 install/extract/src/main/scala/Main.scala -text
 install/plugin/src/main/scala/SelfExtractingProject.scala -text
-lib/ScalaCheck-1.5.jar -text
-lib/ivy-2.0.0.jar -text
-lib/jetty-6.1.14.jar -text
-lib/jetty-util-6.1.14.jar -text
-lib/scalatest-0.9.3.jar -text
-lib/servlet-api-2.5-6.1.14.jar -text
-lib/specs-1.4.0.jar -text
+install/project/build.properties -text
+install/project/build/InstallProject.scala -text
 licenses/LICENSE_Apache -text
 licenses/LICENSE_Scala -text
 licenses/LICENSE_ScalaCheck -text
@@ -31,7 +24,6 @@ licenses/LICENSE_sbt -text
 licenses/LICENSE_specs -text
 project/build.properties -text
 project/build/src/CrossCompileProject.scala -text
-project/build/src/InstallProject.scala -text
 project/build/src/LoaderProject.scala -text
 project/build/src/SbtProject.scala -text
 project/build/src/ScriptedLoader.scala -text

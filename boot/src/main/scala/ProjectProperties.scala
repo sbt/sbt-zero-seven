@@ -6,7 +6,7 @@ package sbt.boot
 /*
 Project does not exist, create new project? [y/N] y
 Name: 
-Organization [empty]:
+Organization []:
 Version [1.0]: 
 Scala version [2.7.5]: 
 sbt version [0.5]: 
@@ -48,7 +48,7 @@ private object ProjectProperties
 	/** The default version of the new user project when the user doesn't explicitly specify a version when prompted.*/
 	val DefaultVersion = "1.0"
 	/** The default version of sbt when the user doesn't explicitly specify a version when prompted.*/
-	val DefaultSbtVersion = "0.4.7-p11"
+	val DefaultSbtVersion = "0.5"
 	/** The default version of Scala when the user doesn't explicitly specify a version when prompted.*/
 	val DefaultScalaVersion = "2.7.5"
 

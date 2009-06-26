@@ -57,7 +57,7 @@ object Main
 			val result =
 				writeStream(tempLoaderFile, log) { out => zipResource.ioOption(loaderEntry, "reading", log)(gunzip(_, out, log)) } orElse
 				Pack.unpack(tempLoaderFile, loaderFile, log)
-			FileUtilities.clean(tempLoaderFile, log)
+			FileUtilities.clean(tempLoaderFile :: Nil, true, log)
 			result.toLeft(loaderFile)
 		}
 

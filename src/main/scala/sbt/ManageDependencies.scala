@@ -201,7 +201,7 @@ object ManageDependencies
 						val extra = if(flags.addScalaTools) ScalaToolsReleases :: resolvers.toList else resolvers
 						addResolvers(ivy.getSettings, extra, log)
 					}
-					if(dependencies.isEmpty && dependenciesXML.isEmpty && artifacts.isEmpty && configurations.isEmpty && autodetectUnspecified)
+					if(autodetect)
 						autodetectDependencies(toID(module))
 					else
 					{
