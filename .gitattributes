@@ -29,6 +29,12 @@ project/build/src/SbtProject.scala -text
 project/build/src/ScriptedLoader.scala -text
 project/build/src/ScriptedTests.scala -text
 project/build/src/TestScriptParser.scala -text
+scripted/project/build.properties -text
+scripted/project/build/SbtTest.scala -text
+scripted/src/main/scala/Scripted.scala -text
+scripted/src/main/scala/ScriptedLoader.scala -text
+scripted/src/main/scala/ScriptedTests.scala -text
+scripted/src/main/scala/TestScriptParser.scala -text
 src/main/resources/scalac-plugin.xml -text
 src/main/scala/sbt/Analysis.scala -text
 src/main/scala/sbt/AnalysisCallback.scala -text
