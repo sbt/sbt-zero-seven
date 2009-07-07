@@ -23,12 +23,10 @@ licenses/LICENSE_ScalaCheck -text
 licenses/LICENSE_sbt -text
 licenses/LICENSE_specs -text
 project/build.properties -text
-project/build/src/CrossCompileProject.scala -text
-project/build/src/LoaderProject.scala -text
-project/build/src/SbtProject.scala -text
-project/build/src/ScriptedLoader.scala -text
-project/build/src/ScriptedTests.scala -text
-project/build/src/TestScriptParser.scala -text
+project/build/CrossCompileProject.scala -text
+project/build/LoaderProject.scala -text
+project/build/SbtProject.scala -text
+project/plugins/Plugins.scala -text
 scripted/project/build.properties -text
 scripted/project/build/SbtTest.scala -text
 scripted/src/main/scala/Scripted.scala -text
