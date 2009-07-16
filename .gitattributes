@@ -191,6 +191,10 @@ src/sbt-test/project/multi/changes/SingleProject.scala -text
 src/sbt-test/project/multi/changes/SinglePublicProject.scala -text
 src/sbt-test/project/multi/project/build.properties -text
 src/sbt-test/project/multi/test -text
+src/sbt-test/project/plugins/project/build.properties -text
+src/sbt-test/project/plugins/project/build/UsePlugin.scala -text
+src/sbt-test/project/plugins/project/plugins/Plugins.scala -text
+src/sbt-test/project/plugins/test -text
 src/sbt-test/properties/multi-project-a/project/build.properties -text
 src/sbt-test/properties/multi-project-a/project/build/src/TestProject.scala -text
 src/sbt-test/properties/multi-project-a/test -text
