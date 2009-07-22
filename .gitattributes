@@ -106,6 +106,9 @@ src/sbt-test/compiler-project/run-test/project/build/src/TestProject.scala -text
 src/sbt-test/compiler-project/run-test/src/main/scala/Foo.scala -text
 src/sbt-test/compiler-project/run-test/src/test/scala/FooTest.scala -text
 src/sbt-test/compiler-project/run-test/test -text
+src/sbt-test/dependency-management/classifier/project/build.properties -text
+src/sbt-test/dependency-management/classifier/project/build/Test.scala -text
+src/sbt-test/dependency-management/classifier/test -text
 src/sbt-test/dependency-management/exclude-transitive/project/build.properties -text
 src/sbt-test/dependency-management/exclude-transitive/project/build/src/TestProject.scala -text
 src/sbt-test/dependency-management/exclude-transitive/test -text
