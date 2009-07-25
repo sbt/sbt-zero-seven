@@ -30,7 +30,7 @@ project/plugins/Plugins.scala -text
 scripted/project/build.properties -text
 scripted/project/build/SbtTest.scala -text
 scripted/src/main/scala/Scripted.scala -text
-scripted/src/main/scala/ScriptedLoader.scala -text
+scripted/src/main/scala/ScriptedLogger.scala -text
 scripted/src/main/scala/ScriptedTests.scala -text
 scripted/src/main/scala/TestScriptParser.scala -text
 src/main/resources/scalac-plugin.xml -text
