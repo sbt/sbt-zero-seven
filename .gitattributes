@@ -82,6 +82,9 @@ src/main/scala/sbt/TrapExit.scala -text
 src/main/scala/sbt/Version.scala -text
 src/main/scala/sbt/WebApp.scala -text
 src/main/scala/sbt/Webstart.scala -text
+src/main/scala/sbt/classfile/Analyze.scala -text
+src/main/scala/sbt/classfile/ClassFile.scala -text
+src/main/scala/sbt/classfile/Parser.scala -text
 src/main/scala/sbt/impl/CommandParser.scala -text
 src/main/scala/sbt/impl/MapUtilities.scala -text
 src/main/scala/sbt/impl/ProcessImpl.scala -text
@@ -156,6 +159,12 @@ src/sbt-test/java/options/project/build/src/JavaProject.scala -text
 src/sbt-test/java/options/src/main/java/test/R.java -text
 src/sbt-test/java/options/src/main/scala/S.scala -text
 src/sbt-test/java/options/test -text
+src/sbt-test/java/separate/project/build.properties -text
+src/sbt-test/java/separate/project/build/src/TestProject.scala -text
+src/sbt-test/java/separate/src/main/java/F.java -text
+src/sbt-test/java/separate/src/main/scala/Dual.scala -text
+src/sbt-test/java/separate/src/main/scala/FImpl.scala -text
+src/sbt-test/java/separate/test -text
 src/sbt-test/package/lazy-name/project/build.properties -text
 src/sbt-test/package/lazy-name/test -text
 src/sbt-test/package/manifest/project/build.properties -text
@@ -228,6 +237,13 @@ src/sbt-test/source-dependencies/empty-a/changes/A2.scala -text
 src/sbt-test/source-dependencies/empty-a/changes/B.scala -text
 src/sbt-test/source-dependencies/empty-a/project/build.properties -text
 src/sbt-test/source-dependencies/empty-a/test -text
+src/sbt-test/source-dependencies/java-basic/changes/A.java -text
+src/sbt-test/source-dependencies/java-basic/changes/A2.java -text
+src/sbt-test/source-dependencies/java-basic/changes/B1.java -text
+src/sbt-test/source-dependencies/java-basic/changes/B2.java -text
+src/sbt-test/source-dependencies/java-basic/changes/B3.java -text
+src/sbt-test/source-dependencies/java-basic/project/build.properties -text
+src/sbt-test/source-dependencies/java-basic/test -text
 src/sbt-test/source-dependencies/java-static/changes/J1.java -text
 src/sbt-test/source-dependencies/java-static/changes/J2.java -text
 src/sbt-test/source-dependencies/java-static/changes/S.scala -text
