@@ -20,6 +20,7 @@ install/project/build/InstallProject.scala -text
 licenses/LICENSE_Apache -text
 licenses/LICENSE_Scala -text
 licenses/LICENSE_ScalaCheck -text
+licenses/LICENSE_jdepend -text
 licenses/LICENSE_sbt -text
 licenses/LICENSE_specs -text
 project/build.properties -text
