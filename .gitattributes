@@ -166,6 +166,10 @@ src/sbt-test/java/separate/src/main/java/F.java -text
 src/sbt-test/java/separate/src/main/scala/Dual.scala -text
 src/sbt-test/java/separate/src/main/scala/FImpl.scala -text
 src/sbt-test/java/separate/test -text
+src/sbt-test/java/track-anonymous/changes/Anon.java -text
+src/sbt-test/java/track-anonymous/project/build.properties -text
+src/sbt-test/java/track-anonymous/project/build/AnonTest.scala -text
+src/sbt-test/java/track-anonymous/test -text
 src/sbt-test/package/lazy-name/project/build.properties -text
 src/sbt-test/package/lazy-name/test -text
 src/sbt-test/package/manifest/project/build.properties -text
