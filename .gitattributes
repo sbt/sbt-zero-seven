@@ -227,6 +227,11 @@ src/sbt-test/run/daemon-exit/test -text
 src/sbt-test/run/daemon/project/build.properties -text
 src/sbt-test/run/daemon/src/main/scala/Daemon.scala -text
 src/sbt-test/run/daemon/test -text
+src/sbt-test/run/error/changes/RunFailureMain.scala -text
+src/sbt-test/run/error/changes/RunSuccess.scala -text
+src/sbt-test/run/error/changes/ThreadRunError.scala -text
+src/sbt-test/run/error/project/build.properties -text
+src/sbt-test/run/error/test -text
 src/sbt-test/run/spawn-exit/project/build.properties -text
 src/sbt-test/run/spawn-exit/src/main/scala/Spawn.scala -text
 src/sbt-test/run/spawn-exit/test -text
