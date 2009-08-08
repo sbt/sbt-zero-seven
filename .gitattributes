@@ -339,6 +339,10 @@ src/sbt-test/tests/test-failed/changes/Success.scala -text
 src/sbt-test/tests/test-failed/project/build.properties -text
 src/sbt-test/tests/test-failed/project/build/TestQuickProject.scala -text
 src/sbt-test/tests/test-failed/test -text
+src/sbt-test/web/jsp/project/build.properties -text
+src/sbt-test/web/jsp/project/build/JSP.scala -text
+src/sbt-test/web/jsp/src/main/webapp/index.jsp -text
+src/sbt-test/web/jsp/test -text
 src/test/scala/sbt/DagSpecification.scala -text
 src/test/scala/sbt/EnvironmentSpecification.scala -text
 src/test/scala/sbt/FileUtilitiesSpecification.scala -text
