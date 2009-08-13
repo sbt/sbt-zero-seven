@@ -87,6 +87,8 @@ src/main/scala/sbt/classfile/Analyze.scala -text
 src/main/scala/sbt/classfile/ClassFile.scala -text
 src/main/scala/sbt/classfile/Parser.scala -text
 src/main/scala/sbt/impl/CommandParser.scala -text
+src/main/scala/sbt/impl/ConvertResolver.scala -text
+src/main/scala/sbt/impl/ManagedImpl.scala -text
 src/main/scala/sbt/impl/MapUtilities.scala -text
 src/main/scala/sbt/impl/ProcessImpl.scala -text
 src/main/scala/sbt/impl/RunTask.scala -text
