@@ -144,6 +144,9 @@ src/sbt-test/dependency-management/ivy-settings-b/test -text
 src/sbt-test/dependency-management/java.net/project/build.properties -text
 src/sbt-test/dependency-management/java.net/project/build/src/TestProject.scala -text
 src/sbt-test/dependency-management/java.net/test -text
+src/sbt-test/dependency-management/parent-publish/project/build.properties -text
+src/sbt-test/dependency-management/parent-publish/project/build/Parent.scala -text
+src/sbt-test/dependency-management/parent-publish/test -text
 src/sbt-test/dependency-management/provided/project/build.properties -text
 src/sbt-test/dependency-management/provided/project/build/src/TestProject.scala -text
 src/sbt-test/dependency-management/provided/test -text
