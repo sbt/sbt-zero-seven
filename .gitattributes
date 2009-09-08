@@ -118,6 +118,14 @@ src/sbt-test/dependency-management/classifier/test -text
 src/sbt-test/dependency-management/exclude-transitive/project/build.properties -text
 src/sbt-test/dependency-management/exclude-transitive/project/build/src/TestProject.scala -text
 src/sbt-test/dependency-management/exclude-transitive/test -text
+src/sbt-test/dependency-management/extra/changes/UseColor.scala -text
+src/sbt-test/dependency-management/extra/changes/blue -text
+src/sbt-test/dependency-management/extra/changes/build.properties -text
+src/sbt-test/dependency-management/extra/changes/color -text
+src/sbt-test/dependency-management/extra/changes/red -text
+src/sbt-test/dependency-management/extra/project/build.properties -text
+src/sbt-test/dependency-management/extra/project/build/DefineColor.scala -text
+src/sbt-test/dependency-management/extra/test -text
 src/sbt-test/dependency-management/inherit-repo/changes/CorrectProject.scala -text
 src/sbt-test/dependency-management/inherit-repo/changes/CorrectProject2.scala -text
 src/sbt-test/dependency-management/inherit-repo/changes/CorrectProject3.scala -text
