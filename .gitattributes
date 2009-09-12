@@ -26,6 +26,7 @@ licenses/LICENSE_specs -text
 project/build.properties -text
 project/build/CrossCompileProject.scala -text
 project/build/LoaderProject.scala -text
+project/build/ReleaseProject.scala -text
 project/build/SbtProject.scala -text
 project/plugins/Plugins.scala -text
 scripted/project/build.properties -text
