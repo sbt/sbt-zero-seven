@@ -154,6 +154,12 @@ src/sbt-test/dependency-management/ivy-settings-b/test -text
 src/sbt-test/dependency-management/java.net/project/build.properties -text
 src/sbt-test/dependency-management/java.net/project/build/src/TestProject.scala -text
 src/sbt-test/dependency-management/java.net/test -text
+src/sbt-test/dependency-management/module-confs/changes/WrongOrg.scala -text
+src/sbt-test/dependency-management/module-confs/changes/WrongPattern.scala -text
+src/sbt-test/dependency-management/module-confs/changes/WrongVersion.scala -text
+src/sbt-test/dependency-management/module-confs/project/build.properties -text
+src/sbt-test/dependency-management/module-confs/project/build/Test.scala -text
+src/sbt-test/dependency-management/module-confs/test -text
 src/sbt-test/dependency-management/parent-ivy-settings/changes/ivysettings.xml -text
 src/sbt-test/dependency-management/parent-ivy-settings/project/build.properties -text
 src/sbt-test/dependency-management/parent-ivy-settings/project/build/SettingsTest.scala -text
