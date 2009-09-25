@@ -17,6 +17,7 @@ install/extract/src/main/scala/Main.scala -text
 install/plugin/src/main/scala/SelfExtractingProject.scala -text
 install/project/build.properties -text
 install/project/build/InstallProject.scala -text
+/ivysettings.xml -text
 licenses/LICENSE_Apache -text
 licenses/LICENSE_Scala -text
 licenses/LICENSE_ScalaCheck -text
