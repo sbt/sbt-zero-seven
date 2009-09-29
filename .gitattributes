@@ -186,6 +186,9 @@ src/sbt-test/dependency-management/provided/test -text
 src/sbt-test/dependency-management/publish-local/project/build.properties -text
 src/sbt-test/dependency-management/publish-local/project/build/MultiPublishTest.scala -text
 src/sbt-test/dependency-management/publish-local/test -text
+src/sbt-test/dependency-management/sources/project/build.properties -text
+src/sbt-test/dependency-management/sources/project/build/Test.scala -text
+src/sbt-test/dependency-management/sources/test -text
 src/sbt-test/dependency-management/url/project/build.properties -text
 src/sbt-test/dependency-management/url/project/build/src/TestProject.scala -text
 src/sbt-test/dependency-management/url/test -text
