@@ -176,14 +176,20 @@ final class Scaladoc(maximumErrors: Int) extends CompilerCore
 	protected def scalaClasspathForJava = CompilerCore.scalaClasspathForJava
 	protected def process(arguments: List[String], log: Logger) =
 	{
-		import scala.tools.nsc.{doc, CompilerCommand, FatalError, Global, reporters, util}
-		import util.FakePos
+		import scala.tools.nsc.{doc, CompilerCommand, Global}
 		val reporter = new LoggerReporter(maximumErrors, log)
 		val docSettings: doc.Settings = new doc.Settings(reporter.error)
 		val command = new CompilerCommand(arguments, docSettings, error, false)
-		object compiler extends Global(command.settings, reporter)
+		trait Compat27 { def computeInternalPhases(): Unit = () }
+		val phasesSet = scala.collection.mutable.Set[scala.tools.nsc.SubComponent]()
+		object compiler extends Global(command.settings, reporter) with Compat27
 		{
-			override val onlyPresentation = true
+			override def onlyPresentation = true
+			override def computeInternalPhases() {
+				phasesSet += syntaxAnalyzer
+				phasesSet += analyzer.namerFactory
+				phasesSet += analyzer.typerFactory
+			}
 		}
 		if(!reporter.hasErrors)
 		{
