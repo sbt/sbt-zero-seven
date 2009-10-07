@@ -14,11 +14,13 @@ import java.net.{URL, URLClassLoader}
 trait ScalaRun
 {
 	def console(classpath: Iterable[Path], log: Logger): Option[String]
+	def console(classpath: Iterable[Path], initialCommands: String, log: Logger): Option[String]
 	def run(mainClass: String, classpath: Iterable[Path], options: Seq[String], log: Logger): Option[String]
 }
 class ForkRun(config: ForkScalaRun) extends ScalaRun
 {
-	def console(classpath: Iterable[Path], log: Logger): Option[String] =
+	def console(classpath: Iterable[Path], log: Logger): Option[String] = console(classpath, "", log)
+	def console(classpath: Iterable[Path], initialCommands: String, log: Logger): Option[String] =
 	{
 		error("Forking the interpreter is not implemented.")
 		//val exitCode = Fork.scala(config.javaHome, config.runJVMOptions, config.scalaJars, classpathOption(classpath), config.workingDirectory, log)
@@ -47,7 +49,9 @@ class ForkRun(config: ForkScalaRun) extends ScalaRun
 object Run extends ScalaRun
 {
 	/** Starts an interactive scala interpreter session with the given classpath.*/
-	def console(classpath: Iterable[Path], log: Logger) =
+	def console(classpath: Iterable[Path], log: Logger): Option[String] =
+		console(classpath, "", log)
+	def console(classpath: Iterable[Path], initialCommands: String, log: Logger): Option[String] =
 		createSettings(log)
 		{
 			(settings: Settings) =>
@@ -59,7 +63,12 @@ object Run extends ScalaRun
 				Control.trapUnit("Error during session: ", log)
 				{
 					JLine.withJLine {
-						val loop = new InterpreterLoop
+						val loop = new InterpreterLoop {
+							override def createInterpreter() = {
+								super.createInterpreter()
+								if(!initialCommands.isEmpty) interpreter.interpret(initialCommands)
+							}
+						}
 						executeTrapExit(loop.main(settings), log)
 					}
 				}
@@ -140,8 +149,9 @@ object Run extends ScalaRun
 		}}
 	}
 	/** A custom InterpreterLoop with the purpose of creating an interpreter with Project 'project' bound to the value 'current',
-	* and the following two lines interpreted:
+	* and the following three lines interpreted:
 	*   import sbt._
+	*   import Process._
 	*   import current._.
 	* To do this,
 	* 1)  The compiler uses a different settings instance: 'compilerSettings', which will have its classpath set to include the classpath

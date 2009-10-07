@@ -95,6 +95,8 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		TestFilter(new impl.TestQuickFilter(analysis, failedOnly, path, log))  :: TestListeners(new impl.TestStatusReporter(path, log) :: Nil) :: Nil
 	}
 
+	def consoleInit = ""
+
 	protected def includeTest(test: String): Boolean = true
 
 	/** This is called to create the initial directories when a user makes a new project from
@@ -229,14 +231,16 @@ abstract class BasicScalaProject extends ScalaProject with BasicDependencyProjec
 		}
 	}
 
+	def basicConsoleTask = consoleTask(consoleClasspath, consoleInit, Run)
+
 	protected def runTask(mainClass: String): MethodTask = task { args => runTask(Some(mainClass), runClasspath, args) dependsOn(compile, copyResources) }
 
 	protected def compileAction = task { doCompile(mainCompileConditional) } describedAs MainCompileDescription
 	protected def testCompileAction = task { doCompile(testCompileConditional) } dependsOn compile describedAs TestCompileDescription
 	protected def cleanAction = cleanTask(outputPath, cleanOptions) describedAs CleanDescription
 	protected def runAction = task { args => runTask(getMainClass(true), runClasspath, args, getRunner) dependsOn(compile, copyResources) } describedAs RunDescription
-	protected def consoleQuickAction = consoleTask(consoleClasspath, Run) describedAs ConsoleQuickDescription
-	protected def consoleAction = consoleTask(consoleClasspath, Run).dependsOn(testCompile, copyResources, copyTestResources) describedAs ConsoleDescription
+	protected def consoleQuickAction = basicConsoleTask describedAs ConsoleQuickDescription
+	protected def consoleAction = basicConsoleTask.dependsOn(testCompile, copyResources, copyTestResources) describedAs ConsoleDescription
 	protected def docAction = scaladocTask(mainLabel, mainSources, mainDocPath, docClasspath, documentOptions).dependsOn(compile) describedAs DocDescription
 	protected def docTestAction = scaladocTask(testLabel, testSources, testDocPath, docClasspath, documentOptions).dependsOn(testCompile) describedAs TestDocDescription
 	protected def testAction = defaultTestTask(testOptions)
@@ -327,7 +331,7 @@ abstract class BasicWebScalaProject extends BasicScalaProject with WebScalaProje
 
 	lazy val jettyInstance = new JettyRunner(jettyConfiguration)
 
-	def jettyConfiguration =
+	def jettyConfiguration: JettyConfiguration =
 		new DefaultJettyConfiguration
 		{
 			def classpath = jettyRunClasspath

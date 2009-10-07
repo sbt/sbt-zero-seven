@@ -124,10 +124,11 @@ trait ScalaProject extends SimpleScalaProject with FileTasks with MultiTaskProje
 		classes.map(_.replace(java.io.File.separatorChar, '.').toList.dropRight(".class".length).mkString).toSeq
 	}
 	
-	def consoleTask(classpath : PathFinder): Task = 
-		consoleTask(classpath, Run)
-	def consoleTask(classpath : PathFinder, runner: ScalaRun): Task =
-		interactiveTask { runner.console(classpath.get, log) }
+	def consoleTask(classpath : PathFinder): Task = consoleTask(classpath, Run)
+	def consoleTask(classpath : PathFinder, initialCommands: => String): Task = consoleTask(classpath, initialCommands, Run)
+	def consoleTask(classpath : PathFinder, runner: ScalaRun): Task = consoleTask(classpath, "", runner)
+	def consoleTask(classpath : PathFinder, initialCommands: => String, runner: ScalaRun): Task =
+		interactiveTask { runner.console(classpath.get, initialCommands, log) }
 
 	def runTask(mainClass: => Option[String], classpath: PathFinder, options: String*): Task =
 		runTask(mainClass, classpath, options)
