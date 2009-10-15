@@ -94,6 +94,7 @@ src/main/scala/sbt/impl/ManagedImpl.scala -text
 src/main/scala/sbt/impl/MapUtilities.scala -text
 src/main/scala/sbt/impl/ProcessImpl.scala -text
 src/main/scala/sbt/impl/RunTask.scala -text
+src/main/scala/sbt/impl/ScalaTestRunner1_0.scala -text
 src/main/scala/sbt/impl/SelectMainClass.scala -text
 src/main/scala/sbt/impl/TestFrameworkImpl.scala -text
 src/main/scala/sbt/impl/TestParser.scala -text
@@ -141,6 +142,9 @@ src/sbt-test/dependency-management/extra/changes/red -text
 src/sbt-test/dependency-management/extra/project/build.properties -text
 src/sbt-test/dependency-management/extra/project/build/DefineColor.scala -text
 src/sbt-test/dependency-management/extra/test -text
+src/sbt-test/dependency-management/info/project/build.properties -text
+src/sbt-test/dependency-management/info/project/build/InfoTest.scala -text
+src/sbt-test/dependency-management/info/test -text
 src/sbt-test/dependency-management/inherit-repo/changes/CorrectProject.scala -text
 src/sbt-test/dependency-management/inherit-repo/changes/CorrectProject2.scala -text
 src/sbt-test/dependency-management/inherit-repo/changes/CorrectProject3.scala -text
@@ -375,6 +379,13 @@ src/sbt-test/tests/specs-nested/project/build.properties -text
 src/sbt-test/tests/specs-nested/project/build/src/TestProject.scala -text
 src/sbt-test/tests/specs-nested/src/test/scala/TestSpecification.scala -text
 src/sbt-test/tests/specs-nested/test -text
+src/sbt-test/tests/specs-run/changes/ClassFailModuleFail.scala -text
+src/sbt-test/tests/specs-run/changes/ClassFailModuleSuccess.scala -text
+src/sbt-test/tests/specs-run/changes/ClassSuccessModuleFail.scala -text
+src/sbt-test/tests/specs-run/changes/ClassSuccessModuleSuccess.scala -text
+src/sbt-test/tests/specs-run/project/build.properties -text
+src/sbt-test/tests/specs-run/project/build/TestProject.scala -text
+src/sbt-test/tests/specs-run/test -text
 src/sbt-test/tests/test-failed/changes/Fail.scala -text
 src/sbt-test/tests/test-failed/changes/Success.scala -text
 src/sbt-test/tests/test-failed/project/build.properties -text

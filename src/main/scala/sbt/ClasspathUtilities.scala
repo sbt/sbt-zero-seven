@@ -17,10 +17,10 @@ object ClasspathUtilities
 	def toLoader(finder: PathFinder, parent: ClassLoader): ClassLoader = toLoader(finder.get, parent)
 	def toLoader(paths: Iterable[Path]): ClassLoader = new URLClassLoader(toClasspath(paths), getClass.getClassLoader)
 	def toLoader(paths: Iterable[Path], parent: ClassLoader): ClassLoader = new URLClassLoader(toClasspath(paths), parent)
-	
+
 	private[sbt] def printSource(c: Class[_]) =
 		println(c.getName + " loader=" +c.getClassLoader + " location=" + FileUtilities.classLocationFile(c))
-	
+
 	def isArchive(path: Path): Boolean = isArchive(path.asFile)
 	def isArchive(file: File): Boolean = isArchiveName(file.getName)
 	def isArchiveName(fileName: String) = fileName.endsWith(".jar") || fileName.endsWith(".zip")
@@ -41,7 +41,7 @@ object ClasspathUtilities
 		else
 			classpathDirectories.toList.find(Path.relativize(_, f).isDefined).isDefined
 	}
-	
+
 	/** Returns all entries in 'classpath' that correspond to a compiler plugin.*/
 	private[sbt] def compilerPlugins(classpath: Iterable[Path]): Iterable[File] =
 	{
@@ -66,7 +66,7 @@ object ClasspathUtilities
 		}
 		catch { case e: Exception => Nil }
 	}
-	
+
 	private lazy val (extraJars, extraDirs) =
 	{
 		import scala.tools.nsc.GenericRunnerCommand
@@ -108,7 +108,7 @@ private abstract class LoaderBase(urls: Array[URL], parent: ClassLoader) extends
 				doLoadClass(className)
 			else
 				loaded
-			
+
 		if(resolve)
 			resolveClass(found)
 		found
@@ -134,7 +134,7 @@ private class FilteredLoader(parent: ClassLoader, filter: ClassFilter) extends C
 {
 	require(parent != null) // included because a null parent is legitimate in Java
 	def this(parent: ClassLoader, excludePackages: Iterable[String]) = this(parent, new ExcludePackagesFilter(excludePackages))
-	
+
 	@throws(classOf[ClassNotFoundException])
 	override final def loadClass(className: String, resolve: Boolean): Class[_] =
 	{
@@ -148,7 +148,7 @@ private class SelectiveLoader(urls: Array[URL], parent: ClassLoader, filter: Cla
 {
 	require(parent != null) // included because a null parent is legitimate in Java
 	def this(urls: Array[URL], parent: ClassLoader, includePackages: Iterable[String]) = this(urls, parent, new IncludePackagesFilter(includePackages))
-	
+
 	@throws(classOf[ClassNotFoundException])
 	override final def loadClass(className: String, resolve: Boolean): Class[_] =
 	{
@@ -181,12 +181,14 @@ private class IncludePackagesFilter(include: Iterable[String]) extends PackageFi
 	def include(className: String): Boolean = matches(className)
 }
 
-private class LazyFrameworkLoader(runnerClassName: String, urls: Array[URL], parent: ClassLoader, grandparent: ClassLoader)
+private class LazyFrameworkLoader(runnerClassNames: Seq[String], urls: Array[URL], parent: ClassLoader, grandparent: ClassLoader)
 	extends LoaderBase(urls, parent) with NotNull
 {
+	def this(runnerClassName: String, urls: Array[URL], parent: ClassLoader, grandparent: ClassLoader) =
+		this(runnerClassName :: Nil, urls, parent, grandparent)
 	def doLoadClass(className: String): Class[_] =
 	{
-		if(Loaders.isNestedOrSelf(className, runnerClassName))
+		if(runnerClassNames.exists(name => Loaders.isNestedOrSelf(className, name)))
 			findClass(className)
 		else if(Loaders.isSbtClass(className)) // we circumvent the parent loader because we know that we want the
 			grandparent.loadClass(className)              // version of sbt that is currently the builder (not the project being built)

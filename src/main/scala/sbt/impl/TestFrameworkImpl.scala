@@ -30,13 +30,50 @@ private[sbt] class ScalaCheckRunner(val log: Logger, val listeners: Seq[TestRepo
 	private def testReport(pName: String, res: Test.Result) =
 	{
 		if(res.passed)
-			fire(PassedEvent(pName, Pretty.pretty(res)))
+			fire(PassedEvent(pName, pretty(res)))
 		else
-			fire(FailedEvent(pName, Pretty.pretty(res)))
+			fire(FailedEvent(pName, pretty(res)))
+	}
+	private def pretty(res: Test.Result): String =
+	{
+		try { pretty1_5(res) }
+		catch { case e: NoSuchMethodError => pretty1_6(res) }
+	}
+	private def pretty1_5(res: Test.Result): String = Pretty.pretty(res)
+	private def pretty1_6(res: Test.Result): String =
+	{
+		// the following is equivalent to: (Pretty.prettyTestRes(res))(Pretty.defaultParams)
+		// and is necessary because of binary incompatibility in Pretty between ScalaCheck 1.5 and 1.6
+		val loader = getClass.getClassLoader
+		val prettyObj = ModuleUtilities.getObject("org.scalacheck.Pretty", loader)
+		val prettyInst = prettyObj.getClass.getMethod("prettyTestRes", classOf[Test.Result]).invoke(prettyObj, res)
+		val defaultParams = prettyObj.getClass.getMethod("defaultParams").invoke(prettyObj)
+		prettyInst.getClass.getMethod("apply", Class.forName("org.scalacheck.Pretty$Params", true, loader)).invoke(prettyInst, defaultParams).toString
 	}
 }
 /** The test runner for ScalaTest suites. */
 private[sbt] class ScalaTestRunner(val log: Logger, val listeners: Seq[TestReportListener], val testLoader: ClassLoader) extends BasicTestRunner
+{
+	private[this] lazy val runner0_9 = get0_9Runner
+	private[this] lazy val runner1_0 = get1_0Runner
+	def runTest(testClassName: String): Result.Value =
+	{
+		try { runner0_9.runTest(testClassName) }
+		catch {
+			case e: NoClassDefFoundError if e.getMessage.contains("Reporter$class") =>
+				runner1_0.runTest(testClassName)
+		}
+	}
+
+	private[this] def get0_9Runner = new ScalaTestRunner0_9(log, listeners, testLoader)
+	private[this] def get1_0Runner =
+	{
+		val clz = Class.forName("sbt.impl.ScalaTestRunner1_0", true, getClass.getClassLoader)
+		val inst = clz.getConstructor(classOf[Logger], classOf[Seq[TestReportListener]], classOf[ClassLoader]).newInstance(log, listeners, testLoader)
+		inst.asInstanceOf[BasicTestRunner]
+	}
+}
+private[sbt] class ScalaTestRunner0_9(val log: Logger, val listeners: Seq[TestReportListener], val testLoader: ClassLoader) extends BasicTestRunner
 {
 	def runTest(testClassName: String): Result.Value =
 	{
@@ -51,7 +88,7 @@ private[sbt] class ScalaTestRunner(val log: Logger, val listeners: Seq[TestRepor
 		else
 			Result.Failed
 	}
-	
+
 	/** An implementation of Reporter for ScalaTest. */
 	private class ScalaTestReporter extends org.scalatest.Reporter with NotNull
 	{
@@ -68,13 +105,13 @@ private[sbt] class ScalaTestRunner(val log: Logger, val listeners: Seq[TestRepor
 			succeeded = false
 			error(report, "Test failed", Some(Result.Failed))
 		}
-		
+
 		override def infoProvided(report : Report) { info(report, "", None) }
-		
+
 		override def suiteStarting(report: Report) { info(report, "Suite starting", None) }
 		override def suiteCompleted(report: Report) { info(report, "Suite completed", None) }
 		override def suiteAborted(report: Report) { error(report, "Suite aborted", None) }
-		
+
 		override def runStarting(testCount: Int) { fire(MessageEvent("Run starting")) }
 		override def runStopped()
 		{
@@ -87,7 +124,7 @@ private[sbt] class ScalaTestRunner(val log: Logger, val listeners: Seq[TestRepor
 			error(report, "Run aborted", None)
 		}
 		override def runCompleted() { log.info("Run completed.") }
-		
+
 		private def error(report: Report, event: String, result: Option[Result.Value]) { logReport(report, event, result, Level.Error) }
 		private def info(report: Report, event: String, result: Option[Result.Value]) { logReport(report, event, result, Level.Info) }
 		private def logReport(report: Report, event: String, result: Option[Result.Value], level: Level.Value)
@@ -107,7 +144,7 @@ private[sbt] class ScalaTestRunner(val log: Logger, val listeners: Seq[TestRepor
 				case l => log.warn("Level not expected:" + l)
 			}
 		}
-		
+
 		var succeeded = true
 	}
 }
@@ -117,9 +154,14 @@ private[sbt] class SpecsRunner(val log: Logger, val listeners: Seq[TestReportLis
 	import org.specs.Specification
 	import org.specs.specification.{Example, Sus}
 
-	def runTest(testClassName: String): Result.Value =
+	def runTest(testClassName: String) = error("Use the two argument variant")
+	override def runTest(testClassName: String, isModule: Boolean): Result.Value =
 	{
-		val test = ModuleUtilities.getObject(testClassName, testLoader).asInstanceOf[Specification]
+		val test =
+			if(isModule)
+				ModuleUtilities.getObject(testClassName, testLoader).asInstanceOf[Specification]
+			else
+				Class.forName(testClassName, true, testLoader).asSubclass(classOf[Specification]).newInstance
 		val event = reportSpecification(test)
 		fire(event)
 		if(test.isFailing)
@@ -127,16 +169,16 @@ private[sbt] class SpecsRunner(val log: Logger, val listeners: Seq[TestReportLis
 		else
 			Result.Passed
 	}
-	
+
 	/* The following is closely based on org.specs.runner.OutputReporter,
 	* part of specs, which is Copyright 2007-2008 Eric Torreborre.
 	* */
-	
+
 	private def reportSpecification(spec: Specification): SpecificationReportEvent =
 	{
 		 // this is for binary compatibility between specs 1.4.x and 1.5.0: the ancestor of Specification containing these two methods changed
 		val reflectedSpec: { def systems: Seq[Sus]; def subSpecifications: Seq[Specification] } = spec
-		
+
 		return SpecificationReportEvent(spec.successes.size, spec.failures.size, spec.errors.size, spec.skipped.size, spec.pretty,
 			reportSystems(reflectedSpec.systems), reportSpecifications(reflectedSpec.subSpecifications))
 	}
@@ -156,7 +198,7 @@ private[sbt] class SpecsRunner(val log: Logger, val listeners: Seq[TestReportLis
 		{
 			class ElemDesc(e: Elem) { def desc = e.child }
 			implicit def elemToDesc(e: Elem): ElemDesc = new ElemDesc(e)
-			
+
 			for(description <- sus.literateDescription) yield
 			{
 				// for source compatibility between specs 1.4.x and 1.5.0:
@@ -166,7 +208,7 @@ private[sbt] class SpecsRunner(val log: Logger, val listeners: Seq[TestReportLis
 				// Elem.child is a Seq[Node]
 				// each has a map[T](f: Node => T): Seq[T] defined so we implicitly convert
 				// an Elem e to an intermediate object that has desc defined to be e.child
-				
+
 				//description.child.map(_.text) // Elem equivalent
 				description.desc.map(_.text)  // LiterateDescription
 			}

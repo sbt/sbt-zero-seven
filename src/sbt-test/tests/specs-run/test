@@ -1,0 +1,22 @@
+> update [success]
+
+> clean [success]
+$ delete src/ [success]
+$ copy-file changes/ClassFailModuleSuccess.scala src/test/scala/Test.scala [success]
+> test [failure]
+
+> clean [success]
+$ delete src/ [success]
+$ copy-file changes/ClassFailModuleFail.scala src/test/scala/Test.scala [success]
+> test [failure]
+
+> clean [success]
+$ delete src/ [success]
+$ copy-file changes/ClassSuccessModuleFail.scala src/test/scala/Test.scala [success]
+> test [failure]
+
+
+> clean [success]
+$ delete src/ [success]
+$ copy-file changes/ClassSuccessModuleSuccess.scala src/test/scala/Test.scala [success]
+> test [success]
