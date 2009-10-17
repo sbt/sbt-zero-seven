@@ -177,10 +177,12 @@ private[sbt] class SpecsRunner(val log: Logger, val listeners: Seq[TestReportLis
 	private def reportSpecification(spec: Specification): SpecificationReportEvent =
 	{
 		 // this is for binary compatibility between specs 1.4.x and 1.5.0: the ancestor of Specification containing these two methods changed
-		val reflectedSpec: { def systems: Seq[Sus]; def subSpecifications: Seq[Specification] } = spec
+		 def reflectSeq[T](name: String) = classOf[Specification].getMethod(name).invoke(spec).asInstanceOf[Seq[T]]
+		 val systems = reflectSeq[Sus]("systems")
+		 val subSpecifications = reflectSeq[Specification]("subSpecifications")
 
 		return SpecificationReportEvent(spec.successes.size, spec.failures.size, spec.errors.size, spec.skipped.size, spec.pretty,
-			reportSystems(reflectedSpec.systems), reportSpecifications(reflectedSpec.subSpecifications))
+			reportSystems(systems), reportSpecifications(subSpecifications))
 	}
 	private def reportSpecifications(specifications: Seq[Specification]): Seq[SpecificationReportEvent] =
 	{
@@ -205,7 +207,7 @@ private[sbt] class SpecsRunner(val log: Logger, val listeners: Seq[TestReportLis
 			//description.desc.map(_.text)  // LiterateDescription
 		def formatDescription(a: AnyRef) =
 		{
-			val toMap = 
+			val toMap =
 				try { call(a, "desc") }
 				catch { case e: Exception => call(a, "child") }
 			val mapText = (a: AnyRef) => a.getClass.getMethod("text").invoke(a)
