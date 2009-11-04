@@ -9,6 +9,6 @@ class Test(info: ProjectInfo) extends DefaultProject(info)
 	def scalaSnapshots = Resolver.url("Scala Tools Snapshots") artifacts(snapshotPattern) ivys(snapshotPattern) mavenStyle()
 	val scOnly = ModuleConfiguration("org.scala-lang", "*", "2.8.0-.*", scalaSnapshots)
 
-	val uniqueScala = "org.scala-lang" % "scala-compiler" % "2.8.0-20091017.011744-240"
+	val uniqueScala = "org.scala-lang" % "scala-compiler" % "2.8.0-20091102.024322-252"
 	val otherDep = "org.scala-tools.sxr" % "sxr_2.7.5" % "0.2.3"
 }
