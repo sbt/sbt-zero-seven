@@ -178,24 +178,23 @@ class Analyzer(val global: Global) extends Plugin
 			}
 		}
 	}
-	
+
 	private def classFile(sym: Symbol): Option[AbstractFile] =
 	{
 		import scala.tools.nsc.symtab.Flags
-		val name = sym.fullNameString(java.io.File.separatorChar) + (if (sym.hasFlag(Flags.MODULE)) "$" else "")
-		val entry = classPath.root.find(name, false)
-		if (entry ne null)
-			Some(entry.classFile)
-		else if(isTopLevelModule(sym))
-		{
-			val linked = sym.linkedClassOfModule
-			if(linked == NoSymbol)
-				None
+		val name = sym.fullNameString(File.separatorChar) + (if (sym.hasFlag(Flags.MODULE)) "$" else "")
+		finder.findClass(name) orElse {
+			if(isTopLevelModule(sym))
+			{
+				val linked = sym.linkedClassOfModule
+				if(linked == NoSymbol)
+					None
+				else
+					classFile(linked)
+			}
 			else
-				classFile(linked)
+				None
 		}
-		else
-			None
 	}
 	
 	private def isTopLevelModule(sym: Symbol): Boolean =
@@ -243,4 +242,39 @@ class Analyzer(val global: Global) extends Plugin
 	private def isStringArray(tpe: Type): Boolean = tpe.typeSymbol == StringArrayType.typeSymbol
 	private def isStringArray(sym: Symbol): Boolean = isStringArray(sym.tpe)
 	private def isUnitType(tpe: Type) = tpe.typeSymbol == definitions.UnitClass
+	// required because the 2.8 way to find a class is:
+	//   classPath.findClass(name).flatMap(_.binary)
+	// and the 2.7 way is:
+	//   val entry = classPath.root.find(name, false)
+	//   if(entry eq null) None else Some(entry.classFile)
+	private lazy val finder = try { new LegacyFinder } catch { case _ => new NewFinder }
+	private trait ClassFinder
+	{
+		def findClass(name: String): Option[AbstractFile]
+	}
+	private class NewFinder extends ClassFinder
+	{
+		def findClass(name: String): Option[AbstractFile] =
+			call[Option[AnyRef]](classPath, "findClass", classOf[String])(name).flatMap(extractClass)
+		private def extractClass(a: AnyRef) =
+			call[Option[AbstractFile]](a, "binary")()
+	}
+	private class LegacyFinder extends ClassFinder
+	{
+		private val root = call[AnyRef](classPath, "root")()
+		def findClass(name: String): Option[AbstractFile] =
+		{
+			val entry = call[AnyRef](root, "find", classOf[String], classOf[Boolean])(name, boolean2Boolean(false))
+			if (entry eq null)
+				None
+			else
+				Some( call[AbstractFile](entry, "classFile")() )
+		}
+	}
+	import scala.reflect.Manifest
+	private def call[T  <: AnyRef](on: AnyRef, name: String, tpes: Class[_]*)(args: AnyRef*)(implicit mf: Manifest[T]): T =
+	{
+		val result = on.getClass.getMethod(name, tpes : _*).invoke(on, args : _*)
+		mf.erasure.cast(result).asInstanceOf[T]
+	}
 }

@@ -409,7 +409,8 @@ private final class MultiScheduler[D, T](schedulers: (Scheduler[D], T)*) extends
 * is finished providing work, a final scheduler is run.*/
 private final class CompoundScheduler[D](multi: MultiScheduler[D, Option[FinalWork[D]]], finalWorkStrategy: ScheduleStrategy[D]) extends Scheduler[D]
 {
-	def run: Run = new Run
+	def run: Run = new RunImpl
+	private final class RunImpl extends Run
 	{
 		val multiRun = multi.run
 		val strategyRun = finalWorkStrategy.run

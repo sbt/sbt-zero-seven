@@ -500,7 +500,7 @@ final class ModuleIDConfigurable private[sbt] (moduleID: ModuleID) extends NotNu
 	def % (configurations: String): ModuleID =
 	{
 		nonEmpty(configurations, "Configurations")
-		import moduleID._
+		import moduleID.{configurations =>_ , _}
 		ModuleID(organization, name, revision, Some(configurations))
 	}
 }
