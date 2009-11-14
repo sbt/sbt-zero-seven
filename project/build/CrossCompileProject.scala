@@ -14,7 +14,7 @@ abstract class CrossCompileProject extends BasicScalaProject with MavenStyleScal
 	private val version2_7_5 = "2.7.5"
 	private val version2_7_6 = "2.7.6"
 	private val version2_7_7 = "2.7.7"
-	private val version2_8_0 = "2.8.0-20091106.025327-+"
+	private val version2_8_0 = "2.8.0.Beta1-RC1"//"2.8.0-20091106.025327-+"
 
 	private val base = "base"
 	private val st1_0 = "st1_0"
